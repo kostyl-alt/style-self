@@ -504,6 +504,23 @@
 
 ---
 
+## Sprint 23: 診断結果・オンボーディング改善
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/prompts/analyze.ts` に8フィールド追加（plainType / typeExplanation / recommendedColors / recommendedMaterials / recommendedSilhouettes / avoidElements / buyingPriority / dailyAdvice） | ✅ |
+| 2 | `styleStructure` 各軸に具体的な色名・素材名・シルエット名を含める指示を追加 | ✅ |
+| 3 | `avoid` → `avoidElements` に統合（具体的な色・素材・装飾・シルエット） | ✅ |
+| 4 | `types/index.ts` に新フィールドをオプショナルで追加・後方互換維持 | ✅ |
+| 5 | `lib/validators/analyze.ts` に新フィールドのバリデーション追加 | ✅ |
+| 6 | `/api/ai/analyze` の `maxTokens` を 3000 → 4000 に増加 | ✅ |
+| 7 | `ResultCard` の表示順を再設計（plainType→typeExplanation→coreIdentity小→似合う服→avoid→買い足し→今日のアドバイス→既存セクション） | ✅ |
+| 8 | Step 8（印象）：与えたい印象を日常語グループに刷新・避けたい印象を12項目フラットリストに変更・質問文変更 | ✅ |
+| 9 | Step 9（信念）：社会テーマのChipSelectを自由入力textareaに変更 | ✅ |
+| 10 | `middleware.ts` に環境変数ガード追加（Vercel本番エラー対策） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

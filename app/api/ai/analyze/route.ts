@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const rawResult = await callClaudeJSON<StyleDiagnosisResult>({
       systemPrompt: ANALYZE_SYSTEM_PROMPT,
       userMessage,
-      maxTokens: 3000,
+      maxTokens: 4000,
     });
     const result = validateAndFixStyleDiagnosis(rawResult);
 

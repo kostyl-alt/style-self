@@ -219,64 +219,58 @@ const COLOR_TONES: ChipOption[] = [
   { value: "ビビッド（高彩度・鮮やか）",    desc: "色そのものがメッセージ" },
 ];
 
-const SOCIAL_THEMES: ChipOption[] = [
-  { value: "境界",   desc: "自分と他者の間にある線" },
-  { value: "都市",   desc: "群衆と孤独が交差する場所" },
-  { value: "孤独",   desc: "ひとりであることの密度" },
-  { value: "儀式",   desc: "繰り返すことで意味が生まれる行為" },
-  { value: "匿名性", desc: "名前を消して溶け込む自由" },
-  { value: "反抗",   desc: "従わないことで存在する" },
-  { value: "祝祭",   desc: "日常が非日常に反転する瞬間" },
-  { value: "記憶",   desc: "過去が身体に刻まれていること" },
-  { value: "変容",   desc: "着ることで別の自分になる" },
+const DESIRED_IMPRESSION_GROUPS: ImpressionGroup[] = [
+  {
+    axis: "静かに・知的に",
+    items: [
+      { value: "なんか考えてそう",          desc: "思慮深さが自然ににじみ出る感じ" },
+      { value: "静かでかっこいい",          desc: "声を上げなくても存在感がある" },
+      { value: "ちゃんとしてる感じ",        desc: "きちんとした信頼感" },
+      { value: "目立ちたくない・溶け込みたい", desc: "街に馴染む自然な感じ" },
+      { value: "機能的・合理的に見える",    desc: "無駄がなく使いやすそう" },
+    ],
+  },
+  {
+    axis: "やさしく・親しみやすく",
+    items: [
+      { value: "話しかけやすそう",       desc: "近寄りやすい安心感" },
+      { value: "正直そう・誠実そう",     desc: "飾らないまっすぐさ" },
+      { value: "やさしそう",            desc: "温かみのある柔らかさ" },
+      { value: "頼れそう・安定感がある", desc: "どっしりした力強さ" },
+    ],
+  },
+  {
+    axis: "楽しそう・自由に",
+    items: [
+      { value: "楽しそう・明るい",       desc: "一緒にいると元気になれる感じ" },
+      { value: "自由でふわっとしてる",   desc: "年齢や肩書きを超えた軽やかさ" },
+      { value: "特別な日っぽい感じ",     desc: "非日常のワクワク感" },
+    ],
+  },
+  {
+    axis: "色っぽく・個性的に",
+    items: [
+      { value: "色っぽい・セクシー",     desc: "体の輪郭や色気を感じさせる" },
+      { value: "ミステリアスな感じ",     desc: "読めない・謎めいた雰囲気" },
+      { value: "個性的・人と違う感じ",   desc: "自分らしさがはっきり伝わる" },
+      { value: "存在感がある",           desc: "部屋に入った瞬間わかる密度" },
+    ],
+  },
 ];
 
-const IMPRESSION_GROUPS: ImpressionGroup[] = [
-  {
-    axis: "静・知・構",
-    items: [
-      { value: "知性",   desc: "思考の痕跡が服に出る" },
-      { value: "余白",   desc: "語らないことで語る" },
-      { value: "構造美", desc: "形の必然性" },
-      { value: "緊張感", desc: "服の中に張りと意図" },
-      { value: "匿名性", desc: "都市に溶ける自由" },
-      { value: "機能美", desc: "使われることで完成" },
-    ],
-  },
-  {
-    axis: "温・誠・柔",
-    items: [
-      { value: "静けさ",   desc: "声を上げない存在感" },
-      { value: "誠実さ",   desc: "飾らない真摯さ" },
-      { value: "繊細さ",   desc: "細部に宿る意図" },
-      { value: "柔らかさ", desc: "近づきやすさ・角を取る" },
-      { value: "力強さ",   desc: "揺るがない密度" },
-    ],
-  },
-  {
-    axis: "動・遊・解",
-    items: [
-      { value: "遊び心",  desc: "肩の力が抜けた、偶然を楽しむ感じ" },
-      { value: "陽気さ",  desc: "近づきたくなる、明るく弾む感じ" },
-      { value: "少年性",  desc: "年齢も性別も超えた、身軽な自由さ" },
-      { value: "祝祭感",  desc: "特別な日のための、高揚して溢れる感じ" },
-    ],
-  },
-  {
-    axis: "体・艶・毒",
-    items: [
-      { value: "官能",   desc: "体の輪郭を意識させる、静かな色気" },
-      { value: "退廃",   desc: "ほどける感じ、意図的に壊れていく美しさ" },
-      { value: "危うさ", desc: "安全でない感じ、裏切りのある存在感" },
-    ],
-  },
-  {
-    axis: "地・生・根",
-    items: [
-      { value: "土着性",  desc: "地面と繋がった、根のある重さ" },
-      { value: "存在感",  desc: "部屋に入った瞬間の密度" },
-    ],
-  },
+const AVOID_IMPRESSIONS: ChipOption[] = [
+  { value: "子どもっぽく見える" },
+  { value: "量産型に見える" },
+  { value: "安っぽく見える" },
+  { value: "頑張りすぎて見える" },
+  { value: "派手すぎる" },
+  { value: "地味すぎる" },
+  { value: "怖く見える" },
+  { value: "弱く見える" },
+  { value: "軽く見える" },
+  { value: "思想がなさそう" },
+  { value: "服に着られている感じ" },
+  { value: "普通すぎて記憶に残らない" },
 ];
 
 const BELIEF_EXAMPLES: { label: string; items: string[] }[] = [
@@ -523,25 +517,117 @@ function ResultCard({
   brands: BrandRecommendation[];
   brandsLoading: boolean;
 }) {
+  const hasRecommended = result.recommendedColors || result.recommendedMaterials || result.recommendedSilhouettes;
+
   return (
     <div className="space-y-8">
-      {/* Plain Summary */}
-      <div className="bg-gray-50 rounded-2xl p-6">
-        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Plain Summary</p>
-        <p className="text-base text-gray-800 leading-relaxed">{result.plainSummary}</p>
-      </div>
 
-      {/* Core Identity */}
-      <div className="text-center py-8 border-b border-gray-100">
-        <p className="text-xs tracking-widest text-gray-300 uppercase mb-4">Core Identity</p>
-        <h2 className="text-2xl font-light text-gray-900 leading-relaxed">{result.coreIdentity}</h2>
-      </div>
+      {/* ① あなたのタイプ + ② 意味 + 世界観コピー */}
+      {result.plainType ? (
+        <div className="bg-gray-50 rounded-2xl p-6">
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Your Type</p>
+          <p className="text-xl font-medium text-gray-900 leading-snug mb-3">{result.plainType}</p>
+          {result.typeExplanation && (
+            <p className="text-sm text-gray-600 leading-relaxed mb-4">{result.typeExplanation}</p>
+          )}
+          <p className="text-xs italic text-gray-400 leading-relaxed border-t border-gray-200 pt-3">{result.coreIdentity}</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-gray-50 rounded-2xl p-6">
+            <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Plain Summary</p>
+            <p className="text-base text-gray-800 leading-relaxed">{result.plainSummary}</p>
+          </div>
+          <div className="text-center py-8 border-b border-gray-100">
+            <p className="text-xs tracking-widest text-gray-300 uppercase mb-4">Core Identity</p>
+            <h2 className="text-2xl font-light text-gray-900 leading-relaxed">{result.coreIdentity}</h2>
+          </div>
+        </>
+      )}
 
-      {/* Why This Result */}
-      <div>
-        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Why This Result</p>
-        <p className="text-sm text-gray-600 leading-relaxed">{result.whyThisResult}</p>
-      </div>
+      {/* ③ 似合う服の方向性 */}
+      {hasRecommended && (
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">似合う服の方向性</p>
+          <div className="space-y-4">
+            {result.recommendedColors && result.recommendedColors.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">色</p>
+                <div className="flex flex-wrap gap-2">
+                  {result.recommendedColors.map((c, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-gray-50 text-sm text-gray-700 rounded-full border border-gray-100">{c}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {result.recommendedMaterials && result.recommendedMaterials.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">素材</p>
+                <div className="flex flex-wrap gap-2">
+                  {result.recommendedMaterials.map((m, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-gray-50 text-sm text-gray-700 rounded-full border border-gray-100">{m}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {result.recommendedSilhouettes && result.recommendedSilhouettes.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">シルエット・形</p>
+                <div className="flex flex-wrap gap-2">
+                  {result.recommendedSilhouettes.map((s, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-gray-50 text-sm text-gray-700 rounded-full border border-gray-100">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ④ 避けた方がいい要素 */}
+      {result.avoidElements && result.avoidElements.length > 0 && (
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">避けた方がいい要素</p>
+          <ul className="space-y-2">
+            {result.avoidElements.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                <span className="text-red-300 flex-shrink-0 mt-0.5">×</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* ⑤ 買い足すならこれ */}
+      {result.buyingPriority && result.buyingPriority.length > 0 && (
+        <div className="bg-gray-800 text-white rounded-2xl p-6">
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">買い足すならこれ</p>
+          <ul className="space-y-3">
+            {result.buyingPriority.map((item, i) => (
+              <li key={i} className="flex gap-3 text-sm">
+                <span className="text-gray-500 font-light flex-shrink-0">{i + 1}.</span>
+                <span className="text-gray-200 leading-relaxed">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* ⑥ 今日からできること */}
+      {result.dailyAdvice && result.dailyAdvice.length > 0 && (
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">今日からできること</p>
+          <ul className="space-y-2">
+            {result.dailyAdvice.map((item, i) => (
+              <li key={i} className="flex gap-3 text-sm text-gray-700">
+                <span className="text-gray-300 font-light flex-shrink-0">{i + 1}.</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Style Structure */}
       <div>
@@ -565,6 +651,12 @@ function ResultCard({
         </div>
       </div>
 
+      {/* Why This Result */}
+      <div>
+        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Why This Result</p>
+        <p className="text-sm text-gray-600 leading-relaxed">{result.whyThisResult}</p>
+      </div>
+
       {/* Input Mapping */}
       <div>
         <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Input Mapping</p>
@@ -579,19 +671,6 @@ function ResultCard({
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Avoid */}
-      <div>
-        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Avoid</p>
-        <ul className="space-y-2">
-          {result.avoid.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-              <span className="text-red-300 flex-shrink-0 mt-0.5">×</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
       </div>
 
       {/* Action Plan */}
@@ -678,7 +757,7 @@ export default function OnboardingPage() {
   const [avoidImpressions, setAvoidImpressions] = useState<string[]>([]);
   // Step 9: 信念・社会テーマ
   const [belief, setBelief] = useState("");
-  const [socialThemes, setSocialThemes] = useState<string[]>([]);
+  const [socialThemeFree, setSocialThemeFree] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -799,7 +878,7 @@ export default function OnboardingPage() {
         question: "服を着ることの意味・信念",
         answer: [
           belief.trim(),
-          socialThemes.length ? `（社会的テーマ: ${socialThemes.join("、")}）` : "",
+          socialThemeFree.trim() ? `（社会的テーマ: ${socialThemeFree.trim()}）` : "",
         ].filter(Boolean).join(" "),
       },
     ];
@@ -829,7 +908,7 @@ export default function OnboardingPage() {
     setDesiredImpressions([]);
     setAvoidImpressions([]);
     setBelief("");
-    setSocialThemes([]);
+    setSocialThemeFree("");
     setError(null);
     setBrands([]);
   }
@@ -1102,19 +1181,21 @@ export default function OnboardingPage() {
 
           {/* Step 8: 印象 */}
           {currentStep === 7 && (
-            <div className="space-y-6">
+            <div className="space-y-7">
               <div>
-                <p className="text-xs text-gray-500 mb-3">与えたい印象（複数可）</p>
+                <p className="text-sm text-gray-700 mb-1">初対面でどんな空気を出したいですか？</p>
+                <p className="text-xs text-gray-300 mb-3">複数選択可</p>
                 <GroupedChipSelect
-                  groups={IMPRESSION_GROUPS}
+                  groups={DESIRED_IMPRESSION_GROUPS}
                   selected={desiredImpressions}
                   onToggle={toggle(setDesiredImpressions)}
                 />
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-3">避けたい印象（任意）</p>
-                <GroupedChipSelect
-                  groups={IMPRESSION_GROUPS}
+                <p className="text-sm text-gray-700 mb-1">どう見られるのは嫌ですか？<span className="text-xs text-gray-300 ml-1">（任意）</span></p>
+                <p className="text-xs text-gray-300 mb-3">複数選択可</p>
+                <ChipSelect
+                  options={AVOID_IMPRESSIONS}
                   selected={avoidImpressions}
                   onToggle={toggle(setAvoidImpressions)}
                 />
@@ -1152,12 +1233,15 @@ export default function OnboardingPage() {
                 ))}
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-3">社会的・文化的テーマ（任意）</p>
-                <ChipSelect
-                  options={SOCIAL_THEMES}
-                  selected={socialThemes}
-                  onToggle={toggle(setSocialThemes)}
+                <p className="text-xs text-gray-500 mb-2">社会的・文化的テーマ（任意）</p>
+                <textarea
+                  value={socialThemeFree}
+                  onChange={(e) => setSocialThemeFree(e.target.value)}
+                  placeholder="例：境界・孤独・儀式・都市のノイズ・匿名性・機能美"
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
                 />
+                <p className="text-xs text-gray-300 mt-1.5">思い浮かばない場合は近い言葉を書いてください</p>
               </div>
             </div>
           )}

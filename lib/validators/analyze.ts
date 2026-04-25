@@ -25,6 +25,13 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
   if (!Array.isArray(result.nextBuyingRule)) result.nextBuyingRule = [];
   if (!Array.isArray(result.inputMapping))   result.inputMapping   = [];
 
+  if (result.avoidElements !== undefined && !Array.isArray(result.avoidElements))   result.avoidElements   = [];
+  if (result.recommendedColors !== undefined && !Array.isArray(result.recommendedColors))         result.recommendedColors         = [];
+  if (result.recommendedMaterials !== undefined && !Array.isArray(result.recommendedMaterials))   result.recommendedMaterials   = [];
+  if (result.recommendedSilhouettes !== undefined && !Array.isArray(result.recommendedSilhouettes)) result.recommendedSilhouettes = [];
+  if (result.buyingPriority !== undefined && !Array.isArray(result.buyingPriority)) result.buyingPriority = [];
+  if (result.dailyAdvice !== undefined && !Array.isArray(result.dailyAdvice))       result.dailyAdvice    = [];
+
   if (result.styleStructure) {
     const s = result.styleStructure;
     if (!s.color)      s.color      = "未設定";

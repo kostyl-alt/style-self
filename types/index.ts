@@ -284,6 +284,15 @@ export interface StyleDiagnosisResult {
   actionPlan: string[];
   nextBuyingRule: string[];
   styleAxis: StyleAxis;
+  // v2 fields (undefined in older results → sections hidden)
+  plainType?: string;
+  typeExplanation?: string;
+  recommendedColors?: string[];
+  recommendedMaterials?: string[];
+  recommendedSilhouettes?: string[];
+  avoidElements?: string[];
+  buyingPriority?: string[];
+  dailyAdvice?: string[];
 }
 
 export type StyleAnalysisAIResponse = StyleDiagnosisResult;
