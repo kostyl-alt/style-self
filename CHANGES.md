@@ -578,6 +578,21 @@
 
 ---
 
+## Sprint 28: トレンド翻訳機能
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/012_trends.sql` — trendsテーブル作成・RLS設定・2025SSシード5件 | ✅ |
+| 2 | `types/index.ts` — `Trend` / `TrendTranslationResult` / enum型追加 | ✅ |
+| 3 | `lib/prompts/trend-translate.ts` — 世界観を壊さない取り入れ方特化プロンプト | ✅ |
+| 4 | `app/api/trends/route.ts` — トレンド一覧GET（認証不要・public） | ✅ |
+| 5 | `app/api/ai/trend-translate/route.ts` — style_preference×トレンドをClaudeで翻訳 | ✅ |
+| 6 | `app/(app)/learn/page.tsx` — Today's Insight直後にTrend Translationセクション追加 | ✅ |
+| 7 | 翻訳結果をアコーディオン展開・compatibility色分け（高=緑・中=黄・低=赤） | ✅ |
+| 8 | 翻訳済み結果はキャッシュし再クリックで再表示（API再呼び出しなし） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { LearnInsight, InspirationCategory } from "@/types/index";
+import type { LearnInsight, InspirationCategory, Trend, TrendTranslationResult } from "@/types/index";
 
 interface BrandRow {
   id: string;
@@ -56,6 +56,27 @@ const TYPE_STYLE: Record<string, string> = {
   action:    "bg-emerald-50 text-emerald-600",
 };
 
+const CATEGORY_LABEL: Record<string, string> = {
+  silhouette: "シルエット",
+  color: "カラー",
+  material: "素材",
+  detail: "ディテール",
+};
+
+const COMPATIBILITY_STYLE: Record<string, string> = {
+  high:   "bg-emerald-50 text-emerald-700 border-emerald-200",
+  medium: "bg-amber-50 text-amber-700 border-amber-200",
+  low:    "bg-red-50 text-red-600 border-red-200",
+};
+
+const COMPATIBILITY_LABEL: Record<string, string> = {
+  high: "合いやすい", medium: "部分的に合う", low: "工夫が必要",
+};
+
+const ADAPTATION_LABEL: Record<string, string> = {
+  main: "メインで取り入れる", accent: "差し色・一点使い", minimal: "ニュアンスだけ参照",
+};
+
 const INSP_TABS: { value: "all" | InspirationCategory; label: string }[] = [
   { value: "all",      label: "すべて" },
   { value: "designer", label: "デザイナー" },
@@ -78,6 +99,12 @@ export default function LearnPage() {
   const [insightLoading, setInsightLoading] = useState(true);
   const [insightUnavailable, setInsightUnavailable] = useState(false);
 
+  const [trends, setTrends] = useState<Trend[]>([]);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+  const [translating, setTranslating] = useState<string | null>(null);
+  const [translations, setTranslations] = useState<Map<string, TrendTranslationResult>>(new Map());
+  const [expandedTrend, setExpandedTrend] = useState<string | null>(null);
+
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [brandsLoading, setBrandsLoading] = useState(true);
   const [selectedBrand, setSelectedBrand] = useState<BrandRow | null>(null);
@@ -88,6 +115,11 @@ export default function LearnPage() {
 
   useEffect(() => {
     loadInsight();
+    fetch("/api/trends")
+      .then((r) => r.json())
+      .then((d: { trends?: Trend[] }) => setTrends(d.trends ?? []))
+      .catch(() => {})
+      .finally(() => setTrendsLoading(false));
     fetch("/api/brands/list")
       .then((r) => r.json())
       .then((d: { brands?: BrandRow[] }) => setBrands(d.brands ?? []))
@@ -100,6 +132,27 @@ export default function LearnPage() {
       .finally(() => setInspLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleTranslate(trendId: string) {
+    if (translations.has(trendId)) {
+      setExpandedTrend((prev) => (prev === trendId ? null : trendId));
+      return;
+    }
+    setTranslating(trendId);
+    setExpandedTrend(trendId);
+    try {
+      const res = await fetch("/api/ai/trend-translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trendId }),
+      });
+      if (res.ok) {
+        const result = await res.json() as TrendTranslationResult;
+        setTranslations((prev) => new Map(prev).set(trendId, result));
+      }
+    } catch {}
+    setTranslating(null);
+  }
 
   function isValidInsightCache(parsed: InsightCache): boolean {
     const i = parsed.insight;
@@ -214,7 +267,112 @@ export default function LearnPage() {
           ) : null}
         </div>
 
-        {/* ── Section 2: ブランドフィロソフィー ── */}
+        {/* ── Section 2: 今季トレンドと世界観 ── */}
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-1">Trend Translation</p>
+          <h2 className="text-base font-light text-gray-800 mb-1">今季トレンドと世界観</h2>
+          <p className="text-xs text-gray-400 mb-4">世界観を壊さずにどこにどう取り入れるかを翻訳します</p>
+
+          {trendsLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border border-gray-100 rounded-2xl p-5 animate-pulse space-y-2">
+                  <div className="h-3 bg-gray-100 rounded w-1/4" />
+                  <div className="h-4 bg-gray-100 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {trends.map((trend) => {
+                const result = translations.get(trend.id);
+                const isExpanded = expandedTrend === trend.id;
+                const isLoading = translating === trend.id;
+
+                return (
+                  <div key={trend.id} className="border border-gray-100 rounded-2xl overflow-hidden">
+                    {/* カードヘッダー */}
+                    <div className="p-5 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">
+                          {CATEGORY_LABEL[trend.category] ?? trend.category}
+                        </span>
+                        <span className="text-xs text-gray-400">{trend.season}</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">{trend.keyword}</p>
+                      <p className="text-xs text-gray-500 leading-relaxed">{trend.description}</p>
+                      <button
+                        onClick={() => handleTranslate(trend.id)}
+                        disabled={isLoading}
+                        className="mt-1 w-full py-2 border border-gray-200 text-gray-600 rounded-xl text-xs hover:border-gray-400 hover:text-gray-800 transition-colors disabled:opacity-40"
+                      >
+                        {isLoading ? "翻訳中..." : result ? (isExpanded ? "閉じる" : "結果を見る") : "自分の世界観との相性を見る"}
+                      </button>
+                    </div>
+
+                    {/* 翻訳結果 */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-4">
+                        {isLoading ? (
+                          <div className="space-y-2 animate-pulse">
+                            <div className="h-3 bg-gray-100 rounded w-1/3" />
+                            <div className="h-12 bg-gray-100 rounded" />
+                            <div className="h-3 bg-gray-100 rounded w-1/2" />
+                          </div>
+                        ) : result ? (
+                          <>
+                            {/* 相性バッジ */}
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${COMPATIBILITY_STYLE[result.compatibility]}`}>
+                                {COMPATIBILITY_LABEL[result.compatibility]}
+                              </span>
+                              <span className="text-xs text-gray-400">{ADAPTATION_LABEL[result.adaptationLevel]}</span>
+                            </div>
+
+                            {/* 相性の理由 */}
+                            <p className="text-xs text-gray-600 leading-relaxed">{result.compatibilityReason}</p>
+
+                            {/* 取り入れ方 */}
+                            <div className="bg-gray-50 rounded-xl p-4 space-y-1">
+                              <p className="text-xs text-gray-400">取り入れ方</p>
+                              <p className="text-sm text-gray-800 leading-relaxed">{result.howToAdapt}</p>
+                            </div>
+
+                            {/* 具体的なアドバイス */}
+                            <div className="space-y-2">
+                              <p className="text-xs text-gray-400">具体的なアドバイス</p>
+                              {result.specificAdvice.map((advice, i) => (
+                                <div key={i} className="flex gap-2">
+                                  <span className="text-xs text-gray-300 flex-shrink-0 mt-0.5">{i + 1}.</span>
+                                  <p className="text-xs text-gray-700 leading-relaxed">{advice}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* 注意点 */}
+                            {result.avoidPoints.length > 0 && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs text-gray-400">やりすぎ注意</p>
+                                {result.avoidPoints.map((point, i) => (
+                                  <p key={i} className="text-xs text-gray-500 leading-relaxed pl-2 border-l-2 border-gray-200">
+                                    {point}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 3: ブランドフィロソフィー ── */}
         <div>
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">Brand Philosophy</p>
           {brandsLoading ? (
@@ -254,7 +412,7 @@ export default function LearnPage() {
           )}
         </div>
 
-        {/* ── Section 3: 偉大な参照 ── */}
+        {/* ── Section 4: 偉大な参照 ── */}
         <div>
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">Great References</p>
 

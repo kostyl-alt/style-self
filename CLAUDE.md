@@ -52,11 +52,14 @@ style-self/
 │   │   │   ├── analyze-item/route.ts # 画像AI解析（Sprint 21 Phase 3）
 │   │   │   ├── coordinate/route.ts   # コーデ提案AI
 │   │   │   ├── learn-insight/route.ts # 今日の気づき生成AI（Sprint 21 Phase 4）
+│   │   └── trend-translate/route.ts # トレンド世界観翻訳AI（Sprint 28）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
 │   │   │   ├── recommend/route.ts    # ブランド提案AI（Sprint 19）
 │   │   │   └── list/route.ts         # ブランド一覧取得（/learn用）
+│   │   ├── trends/
+│   │   │   └── route.ts              # トレンド一覧GET（Sprint 28）
 │   │   ├── inspirations/
 │   │   │   └── route.ts              # 偉大な参照一覧GET（Sprint 21 Phase 4）
 │   │   ├── coordinate/route.ts       # コーデ保存
@@ -106,7 +109,8 @@ style-self/
 │       ├── profile-fit.ts            # 推奨サイズ感AIプロンプト
 │       ├── purchase.ts               # 購入検討AI判定プロンプト
 │       ├── brand-recommend.ts        # ブランド提案AIプロンプト（Sprint 19）
-│       └── trends.ts                 # トレンド分析プロンプト（未使用）
+│       ├── trend-translate.ts        # トレンド世界観翻訳プロンプト（Sprint 28）
+│       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   └── migrations/
 │       ├── 001_initial_schema.sql    # 初期スキーマ（users / wardrobe_items / coordinates）
@@ -119,7 +123,8 @@ style-self/
 │       ├── 008_sprint13_style_analysis.sql # Sprint 13: users.style_analysis jsonb追加
 │       ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
 │       ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
-│       └── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
+│       ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
+│       └── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義

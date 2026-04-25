@@ -443,6 +443,35 @@ export interface BrandRecommendation {
   matchScore: number;
 }
 
+// ---- Trends ----
+
+export type TrendCategory = "silhouette" | "color" | "material" | "detail";
+export type TrendCompatibility = "high" | "medium" | "low";
+export type TrendAdaptationLevel = "main" | "accent" | "minimal";
+
+export interface Trend {
+  id: string;
+  season: string;
+  year: number;
+  keyword: string;
+  category: TrendCategory;
+  description: string;
+  applicableStyles: string[];
+  incompatibleStyles: string[];
+  adaptationHint: string | null;
+  displayOrder: number;
+}
+
+export interface TrendTranslationResult {
+  trendKeyword: string;
+  compatibility: TrendCompatibility;
+  compatibilityReason: string;
+  howToAdapt: string;
+  adaptationLevel: TrendAdaptationLevel;
+  specificAdvice: string[];
+  avoidPoints: string[];
+}
+
 // ---- Onboarding ----
 
 export interface OnboardingAnswer {
