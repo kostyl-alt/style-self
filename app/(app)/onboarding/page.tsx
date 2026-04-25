@@ -13,10 +13,6 @@ interface ChipOption {
   desc?: string;
 }
 
-interface ImpressionGroup {
-  axis: string;
-  items: ChipOption[];
-}
 
 interface MaterialDetail {
   touch: string;
@@ -74,24 +70,36 @@ const STEP3_Q3_OPTIONS = [
   "着回しやすさ",
 ];
 
-const MOOD_VIBES: ChipOption[] = [
-  { value: "なんか暗くてかっこいい感じ" },
-  { value: "ゆるっとしてるけど品がある感じ" },
-  { value: "街に溶け込む感じ・目立ちたくない" },
-  { value: "ちょっと変わってる・人と違う感じ" },
-  { value: "きれいめ・上品な感じ" },
-  { value: "スポーティ・動きやすい感じ" },
-  { value: "ナチュラル・自然体な感じ" },
-  { value: "懐かしい・古着っぽい感じ" },
-  { value: "個性的・アート系な感じ" },
-  { value: "セクシー・色気がある感じ" },
+const MOOD_CHIPS: ChipOption[] = [
+  { value: "落ち着いた" },
+  { value: "清潔感がある" },
+  { value: "シンプル" },
+  { value: "上品" },
+  { value: "ラフ" },
+  { value: "華やか" },
+  { value: "個性的" },
+  { value: "大人っぽい" },
+  { value: "かわいい" },
+  { value: "かっこいい" },
 ];
 
-const DREAM_STYLE_EXAMPLES = [
-  "映画の主人公みたいな感じ",
-  "カフェで本読んでそうな人",
-  "夜の街が似合う人",
-  "山が似合う人",
+const CLOTHING_ROLE_CHIPS: string[] = [
+  "自分らしさを出す",
+  "気分を上げる",
+  "人に良い印象を与える",
+  "体型をきれいに見せる",
+  "清潔感を出す",
+  "自信を持つ",
+  "趣味として楽しむ",
+];
+
+const INFLUENCE_HINTS: string[] = [
+  "好きなブランド名",
+  "好きな映画やドラマ",
+  "よく見るSNSの雰囲気",
+  "憧れる人",
+  "好きな時代の服",
+  "苦手な流行",
 ];
 
 const MATERIALS: ChipOption[] = [
@@ -210,88 +218,81 @@ const MATERIAL_DETAILS: Partial<Record<string, MaterialDetail>> = {
 };
 
 const COLOR_TONES: ChipOption[] = [
-  { value: "無彩色（白・グレー・黒）",      desc: "余白の言語" },
-  { value: "アースカラー（土・石・自然）",  desc: "素材感の色" },
-  { value: "ダークカラー（深みのある色）",  desc: "主張しない存在感" },
-  { value: "ライトカラー（淡い・霞んだ）",  desc: "霧のような存在感" },
-  { value: "くすみカラー（低彩度）",        desc: "主張しない洗練" },
-  { value: "バランス発色（中彩度）",        desc: "着ること自体が完成" },
-  { value: "ビビッド（高彩度・鮮やか）",    desc: "色そのものがメッセージ" },
+  { value: "無彩色（白・グレー・黒）",                  desc: "色味を抑えて、落ち着いて見せやすい" },
+  { value: "アースカラー（ベージュ・カーキ・ブラウン）", desc: "自然でやわらかい印象" },
+  { value: "ダークカラー（黒・ネイビー・深いグレー）",   desc: "引き締まって見えやすい" },
+  { value: "ライトカラー（白・淡い色）",                 desc: "明るく、軽い印象" },
+  { value: "くすみカラー",                               desc: "派手すぎず、落ち着いた色味" },
+  { value: "鮮やかな色",                                 desc: "明るく、印象に残りやすい" },
 ];
 
-const DESIRED_IMPRESSION_GROUPS: ImpressionGroup[] = [
-  {
-    axis: "静かに・知的に",
-    items: [
-      { value: "なんか考えてそう",          desc: "思慮深さが自然ににじみ出る感じ" },
-      { value: "静かでかっこいい",          desc: "声を上げなくても存在感がある" },
-      { value: "ちゃんとしてる感じ",        desc: "きちんとした信頼感" },
-      { value: "目立ちたくない・溶け込みたい", desc: "街に馴染む自然な感じ" },
-      { value: "機能的・合理的に見える",    desc: "無駄がなく使いやすそう" },
-    ],
-  },
-  {
-    axis: "やさしく・親しみやすく",
-    items: [
-      { value: "話しかけやすそう",       desc: "近寄りやすい安心感" },
-      { value: "正直そう・誠実そう",     desc: "飾らないまっすぐさ" },
-      { value: "やさしそう",            desc: "温かみのある柔らかさ" },
-      { value: "頼れそう・安定感がある", desc: "どっしりした力強さ" },
-    ],
-  },
-  {
-    axis: "楽しそう・自由に",
-    items: [
-      { value: "楽しそう・明るい",       desc: "一緒にいると元気になれる感じ" },
-      { value: "自由でふわっとしてる",   desc: "年齢や肩書きを超えた軽やかさ" },
-      { value: "特別な日っぽい感じ",     desc: "非日常のワクワク感" },
-    ],
-  },
-  {
-    axis: "色っぽく・個性的に",
-    items: [
-      { value: "色っぽい・セクシー",     desc: "体の輪郭や色気を感じさせる" },
-      { value: "ミステリアスな感じ",     desc: "読めない・謎めいた雰囲気" },
-      { value: "個性的・人と違う感じ",   desc: "自分らしさがはっきり伝わる" },
-      { value: "存在感がある",           desc: "部屋に入った瞬間わかる密度" },
-    ],
-  },
+const DESIRED_IMPRESSIONS: ChipOption[] = [
+  { value: "おしゃれに見える",     desc: "服や着こなしに気を使っている感じ" },
+  { value: "清潔感がある",         desc: "整っていて近づきやすい印象" },
+  { value: "大人っぽい",           desc: "落ち着きと余裕のある雰囲気" },
+  { value: "かっこいい",           desc: "シャープで凛とした存在感" },
+  { value: "かわいい",             desc: "愛らしさや柔らかさがにじみ出る感じ" },
+  { value: "色気がある",           desc: "体や表情から漂う色っぽさ" },
+  { value: "親しみやすい",         desc: "気取らない自然な温かさ" },
+  { value: "話しかけやすい",       desc: "壁を感じさせない開かれた雰囲気" },
+  { value: "信頼できる",           desc: "誠実さや安定感が伝わる感じ" },
+  { value: "センスがありそう",     desc: "独自の審美眼を持っている感じ" },
+  { value: "個性的",               desc: "人と違う自分らしさが際立つ感じ" },
+  { value: "余裕がある",           desc: "時間的・精神的なゆとりを感じさせる" },
+  { value: "高そうに見える",       desc: "品質や価値の高さが伝わる感じ" },
+  { value: "都会的",               desc: "洗練された都市生活者の雰囲気" },
+  { value: "自然体",               desc: "飾らない、あるがままの心地よさ" },
+  { value: "明るい",               desc: "エネルギーや前向きさが伝わる感じ" },
+  { value: "自由そう",             desc: "型にはまらないのびのびした感じ" },
+  { value: "強そう",               desc: "自分軸のある堂々とした存在感" },
+  { value: "ミステリアス",         desc: "全部見せない、謎めいた雰囲気" },
+  { value: "上品",                 desc: "育ちや品格が自然と滲み出る感じ" },
+  { value: "モードっぽい",         desc: "トレンドより芸術・前衛に近いスタイル" },
+  { value: "ストリートっぽい",     desc: "都市の路上で生まれたカルチャー感" },
+  { value: "スポーティー",         desc: "アクティブで機能的な清潔感" },
+  { value: "芸術的",               desc: "絵や彫刻のような、美的な存在感" },
+  { value: "知的",                 desc: "考えや教養が服ににじみ出る感じ" },
 ];
 
 const AVOID_IMPRESSIONS: ChipOption[] = [
-  { value: "子どもっぽく見える" },
-  { value: "量産型に見える" },
-  { value: "安っぽく見える" },
-  { value: "頑張りすぎて見える" },
-  { value: "派手すぎる" },
+  { value: "子どもっぽい" },
+  { value: "安っぽい" },
+  { value: "量産型" },
   { value: "地味すぎる" },
-  { value: "怖く見える" },
-  { value: "弱く見える" },
-  { value: "軽く見える" },
-  { value: "思想がなさそう" },
-  { value: "服に着られている感じ" },
-  { value: "普通すぎて記憶に残らない" },
+  { value: "派手すぎる" },
+  { value: "怖すぎる" },
+  { value: "弱そう" },
+  { value: "軽そう" },
+  { value: "清潔感がない" },
+  { value: "頑張りすぎ" },
+  { value: "無難すぎる" },
+  { value: "古くさい" },
+  { value: "野暮ったい" },
+  { value: "服に着られている" },
+  { value: "近寄りがたい" },
+  { value: "だらしない" },
+  { value: "個性がない" },
+  { value: "チャラい" },
+  { value: "重すぎる" },
+  { value: "暗すぎる" },
+  { value: "幼い" },
+  { value: "生活感が出すぎる" },
+  { value: "痛々しい" },
 ];
 
-const BELIEF_EXAMPLES: { label: string; items: string[] }[] = [
-  { label: "自己・内側", items: ["自分を守るもの", "自分を確かめる行為", "気分を変える道具"] },
-  { label: "関係・外側", items: ["好きな人に見せたいもの", "距離を置く境界線"] },
-  { label: "身体・感覚", items: ["皮膚を感じる瞬間", "軽くなりたい"] },
-  { label: "遊び・喜び", items: ["楽しむためだけにある", "テンションを上げるもの"] },
-];
 
 // ---- ステップ定義 ----
 
 const STEPS = [
-  { step: 1, question: "好きな時代・年代はありますか？",          hint: "複数選択可。自由記述欄もあります" },
-  { step: 2, question: "好きな場所・文化の雰囲気はありますか？",   hint: "複数選択可。特定の街・地区があれば自由記述に" },
-  { step: 3, question: "こんな時、どうしますか？",                   hint: "直感で答えてください" },
-  { step: 4, question: "あなたの感覚を探ってみましょう",           hint: "正解はありません。思いついたことをそのまま書いてください" },
-  { step: 5, question: "参考になる人物・作品・場所",               hint: "好きなアーティスト・映画・ブランド・場所など、なんでも" },
-  { step: 6, question: "素材と質感",                               hint: "触れたときに心地よい素材を選んでください（複数可）" },
-  { step: 7, question: "色とトーン",                               hint: "色そのものよりもトーン感・雰囲気で選んでください" },
-  { step: 8, question: "与えたい印象・避けたい印象",               hint: "他者の視線への意識を選んでください（複数可）" },
-  { step: 9, question: "服を着ることの意味",                       hint: "「服とは私にとって○○である」自由に書いてください" },
+  { step: 1, question: "好きな時代・年代はありますか？",       hint: "複数選択可。自由記述欄もあります" },
+  { step: 2, question: "好きな場所・文化の雰囲気はありますか？", hint: "複数選択可。特定の街・地区があれば自由記述に" },
+  { step: 3, question: "こんな時、どうしますか？",              hint: "直感で答えてください" },
+  { step: 4, question: "服の感覚を教えてください",              hint: "正解はありません。思いついたことをそのまま書いてください" },
+  { step: 5, question: "服はどんな役割をしていますか？",        hint: "自由に書いてください（補助として選択肢もあります）" },
+  { step: 6, question: "素材と質感",                            hint: "触れたときに心地よい素材を選んでください（複数可）" },
+  { step: 7, question: "色とトーン",                            hint: "惹かれるトーン・避けたいトーンを選んでください" },
+  { step: 8, question: "人からどう見られたいですか？",          hint: "自由に書いてください（補助として選択肢もあります）" },
+  { step: 9, question: "服の好みに影響しているもの",            hint: "好きなブランド、映画、音楽、街、時代、人物などがあれば" },
 ];
 
 // ---- サブコンポーネント ----
@@ -363,49 +364,6 @@ function ChipSelect({
   );
 }
 
-function GroupedChipSelect({
-  groups,
-  selected,
-  onToggle,
-}: {
-  groups: ImpressionGroup[];
-  selected: string[];
-  onToggle: (val: string) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      {groups.map((group) => (
-        <div key={group.axis}>
-          <p className="text-[10px] tracking-widest text-gray-300 mb-2">【{group.axis}】</p>
-          <div className="flex flex-wrap gap-2">
-            {group.items.map((opt) => {
-              const isSelected = selected.includes(opt.value);
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => onToggle(opt.value)}
-                  className={`flex flex-col items-start px-3 py-2 rounded-xl border transition-all text-left ${
-                    isSelected
-                      ? "bg-gray-800 text-white border-gray-800"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
-                  }`}
-                >
-                  <span className="text-sm leading-snug">{opt.value}</span>
-                  {opt.desc && (
-                    <span className="text-[10px] leading-tight mt-0.5 text-gray-400">
-                      {opt.desc}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function RadioSelect({
   options,
@@ -742,8 +700,8 @@ export default function OnboardingPage() {
   const [step4Q2, setStep4Q2] = useState("");
   const [step4Q3, setStep4Q3] = useState<string[]>([]);
   const [step4Q4, setStep4Q4] = useState("");
-  // Step 5: 参考になる人物・作品・場所
-  const [references, setReferences] = useState("");
+  // Step 5: 服の役割
+  const [clothingRole, setClothingRole] = useState("");
   // Step 6: 素材
   const [materials, setMaterials] = useState<string[]>([]);
   const [materialNote, setMaterialNote] = useState("");
@@ -753,11 +711,10 @@ export default function OnboardingPage() {
   const [avoidColorTones, setAvoidColorTones] = useState<string[]>([]);
   const [colorNote, setColorNote] = useState("");
   // Step 8: 印象
-  const [desiredImpressions, setDesiredImpressions] = useState<string[]>([]);
-  const [avoidImpressions, setAvoidImpressions] = useState<string[]>([]);
-  // Step 9: 信念・社会テーマ
-  const [belief, setBelief] = useState("");
-  const [socialThemeFree, setSocialThemeFree] = useState("");
+  const [desiredImpressionFree, setDesiredImpressionFree] = useState("");
+  const [avoidImpressionFree, setAvoidImpressionFree] = useState("");
+  // Step 9: 影響を受けているもの
+  const [references, setReferences] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -796,11 +753,11 @@ export default function OnboardingPage() {
       case 1: return places.length > 0 || placeNote.trim().length > 0;
       case 2: return step3Q1.length > 0 && step3Q2.length > 0 && step3Q3.length > 0;
       case 3: return step4Q1.trim().length > 0 || step4Q3.length > 0;
-      case 4: return references.trim().length > 0;
+      case 4: return clothingRole.trim().length > 0;
       case 5: return materials.length > 0;
       case 6: return colorTones.length > 0;
-      case 7: return desiredImpressions.length > 0;
-      case 8: return belief.trim().length > 0;
+      case 7: return desiredImpressionFree.trim().length > 0;
+      case 8: return references.trim().length > 0;
       default: return false;
     }
   }
@@ -844,8 +801,8 @@ export default function OnboardingPage() {
       },
       {
         step: 5,
-        question: "参考になる人物・作品・場所",
-        answer: references.trim(),
+        question: "服の役割",
+        answer: clothingRole.trim(),
       },
       {
         step: 6,
@@ -869,17 +826,14 @@ export default function OnboardingPage() {
         step: 8,
         question: "与えたい印象・避けたい印象",
         answer: [
-          `与えたい: ${desiredImpressions.join("、")}`,
-          avoidImpressions.length ? `避けたい: ${avoidImpressions.join("、")}` : "",
+          desiredImpressionFree.trim() ? `与えたい: ${desiredImpressionFree.trim()}` : "",
+          avoidImpressionFree.trim() ? `避けたい: ${avoidImpressionFree.trim()}` : "",
         ].filter(Boolean).join(" / "),
       },
       {
         step: 9,
-        question: "服を着ることの意味・信念",
-        answer: [
-          belief.trim(),
-          socialThemeFree.trim() ? `（社会的テーマ: ${socialThemeFree.trim()}）` : "",
-        ].filter(Boolean).join(" "),
+        question: "服の好みに影響しているもの",
+        answer: references.trim(),
       },
     ];
   }
@@ -898,17 +852,16 @@ export default function OnboardingPage() {
     setStep4Q2("");
     setStep4Q3([]);
     setStep4Q4("");
-    setReferences("");
+    setClothingRole("");
     setMaterials([]);
     setMaterialNote("");
     setSilhouetteHint([]);
     setColorTones([]);
     setAvoidColorTones([]);
     setColorNote("");
-    setDesiredImpressions([]);
-    setAvoidImpressions([]);
-    setBelief("");
-    setSocialThemeFree("");
+    setDesiredImpressionFree("");
+    setAvoidImpressionFree("");
+    setReferences("");
     setError(null);
     setBrands([]);
   }
@@ -1046,15 +999,15 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 4: スタイルの感覚・気分 */}
+          {/* Step 4: 服の感覚 */}
           {currentStep === 3 && (
             <div className="space-y-6">
               {/* Q1 */}
               <div>
                 <p className="text-sm text-gray-700 mb-1">
-                  最近、街で見かけて「いいな」と思った人の服装を思い出してください。どんな雰囲気でしたか？
+                  最近見て、良いと思った服装はありますか？
                 </p>
-                <p className="text-xs text-gray-300 mb-2">例：「なんか暗い色だけどかっこよかった」「ゆるっとしてたけど品があった」</p>
+                <p className="text-xs text-gray-300 mb-2">例：「黒のジャケットと細めのパンツがきれいだった」「シンプルだけど高そうに見えた」</p>
                 <FreeNote
                   value={step4Q1}
                   onChange={setStep4Q1}
@@ -1066,9 +1019,9 @@ export default function OnboardingPage() {
               {/* Q2 */}
               <div>
                 <p className="text-sm text-gray-700 mb-1">
-                  逆に「自分には無理だな」と思った服装はどんなものですか？<span className="text-xs text-gray-300 ml-1">（任意）</span>
+                  自分には合わないと思った服装はありますか？<span className="text-xs text-gray-300 ml-1">（任意）</span>
                 </p>
-                <p className="text-xs text-gray-300 mb-2">例：「派手すぎるもの」「きっちりしすぎるスーツ」</p>
+                <p className="text-xs text-gray-300 mb-2">例：「派手すぎる服」「きれいめすぎる服」</p>
                 <FreeNote
                   value={step4Q2}
                   onChange={setStep4Q2}
@@ -1079,11 +1032,11 @@ export default function OnboardingPage() {
 
               {/* Q3 */}
               <div>
-                <p className="text-sm text-gray-700 mb-3">
-                  自分が今一番着たい気分はどれに近いですか？<span className="text-xs text-gray-400 ml-1">（複数可）</span>
+                <p className="text-sm text-gray-700 mb-2">
+                  今どんな服を着たい気分ですか？<span className="text-xs text-gray-300 ml-1">（補助・複数可）</span>
                 </p>
                 <ChipSelect
-                  options={MOOD_VIBES}
+                  options={MOOD_CHIPS}
                   selected={step4Q3}
                   onToggle={toggle(setStep4Q3)}
                 />
@@ -1092,45 +1045,42 @@ export default function OnboardingPage() {
               {/* Q4 */}
               <div>
                 <p className="text-sm text-gray-700 mb-1">
-                  もし服に制限がなかったら、どんな雰囲気の人になりたいですか？<span className="text-xs text-gray-300 ml-1">（任意）</span>
+                  周りの目や予算を気にしなくていいなら、どんな服を着たいですか？<span className="text-xs text-gray-300 ml-1">（任意）</span>
                 </p>
+                <p className="text-xs text-gray-300 mb-2">例：「形がきれいなジャケットを着たい」「全身黒でまとめたい」</p>
                 <FreeNote
                   value={step4Q4}
                   onChange={setStep4Q4}
                   placeholder="自由に"
                   rows={2}
                 />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {DREAM_STYLE_EXAMPLES.map((ex) => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => setStep4Q4((prev) => prev ? `${prev} / ${ex}` : ex)}
-                      className="px-3 py-1.5 text-xs border border-gray-200 text-gray-400 rounded-full hover:border-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           )}
 
-          {/* Step 5: 参考になる人物・作品・場所 */}
+          {/* Step 5: 服の役割 */}
           {currentStep === 4 && (
-            <div className="space-y-3">
-              <textarea
-                value={references}
-                onChange={(e) => setReferences(e.target.value)}
-                placeholder="例：David Bowie / 映画『パリ、テキサス』/ RAF Simons初期 / 廃工場の質感"
-                rows={5}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
+            <div className="space-y-4">
+              <FreeNote
+                value={clothingRole}
+                onChange={setClothingRole}
+                placeholder="自由に書いてください"
+                rows={3}
               />
-              <div className="space-y-1 text-xs text-gray-300">
-                <p>· 好きなミュージシャン・アーティスト</p>
-                <p>· 好きな映画・ドラマのキャラクター</p>
-                <p>· 好きなブランド・デザイナー</p>
-                <p>· 美しいと思った場所・建築・風景</p>
+              <div>
+                <p className="text-xs text-gray-400 mb-2">補助（タップで追記）</p>
+                <div className="flex flex-wrap gap-2">
+                  {CLOTHING_ROLE_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setClothingRole((prev) => prev ? `${prev}・${chip}` : chip)}
+                      className="px-3 py-1.5 text-xs border border-gray-200 text-gray-500 rounded-full hover:border-gray-400 hover:text-gray-700 transition-colors"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -1183,65 +1133,73 @@ export default function OnboardingPage() {
           {currentStep === 7 && (
             <div className="space-y-7">
               <div>
-                <p className="text-sm text-gray-700 mb-1">初対面でどんな空気を出したいですか？</p>
-                <p className="text-xs text-gray-300 mb-3">複数選択可</p>
-                <GroupedChipSelect
-                  groups={DESIRED_IMPRESSION_GROUPS}
-                  selected={desiredImpressions}
-                  onToggle={toggle(setDesiredImpressions)}
+                <p className="text-sm text-gray-700 mb-2">人からどう見られるとしっくりきますか？</p>
+                <FreeNote
+                  value={desiredImpressionFree}
+                  onChange={setDesiredImpressionFree}
+                  placeholder="例：おしゃれ、清潔感がある、個性的、大人っぽい"
+                  rows={2}
                 />
+                <p className="text-xs text-gray-300 mb-2 mt-3">補助（タップで追記）</p>
+                <div className="flex flex-wrap gap-2">
+                  {DESIRED_IMPRESSIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setDesiredImpressionFree((prev) => prev ? `${prev}・${opt.value}` : opt.value)}
+                      className="px-3 py-1.5 text-xs border border-gray-200 text-gray-500 rounded-full hover:border-gray-400 hover:text-gray-700 transition-colors"
+                    >
+                      {opt.value}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
-                <p className="text-sm text-gray-700 mb-1">どう見られるのは嫌ですか？<span className="text-xs text-gray-300 ml-1">（任意）</span></p>
-                <p className="text-xs text-gray-300 mb-3">複数選択可</p>
-                <ChipSelect
-                  options={AVOID_IMPRESSIONS}
-                  selected={avoidImpressions}
-                  onToggle={toggle(setAvoidImpressions)}
+                <p className="text-sm text-gray-700 mb-2">人からどう見られると違和感がありますか？<span className="text-xs text-gray-300 ml-1">（任意）</span></p>
+                <FreeNote
+                  value={avoidImpressionFree}
+                  onChange={setAvoidImpressionFree}
+                  placeholder="例：子どもっぽい、地味すぎる、頑張りすぎ"
+                  rows={2}
                 />
+                <p className="text-xs text-gray-300 mb-2 mt-3">補助（タップで追記）</p>
+                <div className="flex flex-wrap gap-2">
+                  {AVOID_IMPRESSIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setAvoidImpressionFree((prev) => prev ? `${prev}・${opt.value}` : opt.value)}
+                      className="px-3 py-1.5 text-xs border border-gray-200 text-gray-500 rounded-full hover:border-gray-400 hover:text-gray-700 transition-colors"
+                    >
+                      {opt.value}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Step 9: 信念 */}
+          {/* Step 9: 影響を受けているもの */}
           {currentStep === 8 && (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <textarea
-                value={belief}
-                onChange={(e) => setBelief(e.target.value)}
-                placeholder="自由に書いてください..."
-                rows={4}
+                value={references}
+                onChange={(e) => setReferences(e.target.value)}
+                placeholder="好きなブランド名 / 好きな映画やドラマ / よく見るSNSの雰囲気 / 憧れる人 / 好きな時代の服"
+                rows={5}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
               />
-              <div className="space-y-2">
-                {BELIEF_EXAMPLES.map((group) => (
-                  <div key={group.label}>
-                    <p className="text-[10px] text-gray-300 mb-1.5">{group.label}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {group.items.map((ex) => (
-                        <button
-                          key={ex}
-                          type="button"
-                          onClick={() => setBelief((prev) => prev ? `${prev} / ${ex}` : ex)}
-                          className="px-3 py-1.5 text-xs border border-gray-200 text-gray-400 rounded-full hover:border-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                          {ex}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <div className="flex flex-wrap gap-2">
+                {INFLUENCE_HINTS.map((hint) => (
+                  <button
+                    key={hint}
+                    type="button"
+                    onClick={() => setReferences((prev) => prev ? `${prev} / ${hint}` : hint)}
+                    className="px-3 py-1.5 text-xs border border-gray-200 text-gray-400 rounded-full hover:border-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {hint}
+                  </button>
                 ))}
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">社会的・文化的テーマ（任意）</p>
-                <textarea
-                  value={socialThemeFree}
-                  onChange={(e) => setSocialThemeFree(e.target.value)}
-                  placeholder="例：境界・孤独・儀式・都市のノイズ・匿名性・機能美"
-                  rows={3}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
-                />
-                <p className="text-xs text-gray-300 mt-1.5">思い浮かばない場合は近い言葉を書いてください</p>
               </div>
             </div>
           )}
