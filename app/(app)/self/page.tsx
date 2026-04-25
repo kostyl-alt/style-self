@@ -6,7 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
-  Worldview, StyleDiagnosisResult,
+  StyleDiagnosisResult, StylePreference,
 } from "@/types/index";
 
 // ---- 型 ----
@@ -74,20 +74,31 @@ const BODY_PARTS: { value: BodyPart; label: string }[] = [
   { value: "hip",      label: "ヒップ" },
 ];
 
-// ---- 世界観の選択肢 ----
+// ---- 世界観編集の選択肢 ----
 
-const IMPRESSION_OPTIONS = [
-  "知性", "余白", "意図", "静けさ", "緊張感", "存在感",
-  "構造美", "清潔感", "力強さ", "繊細さ", "自由", "哲学",
-  "都会的", "自然体", "洗練", "個性的",
+const VIBE_OPTIONS = [
+  "落ち着いて見える", "清潔感がある", "大人っぽい", "かっこいい",
+  "かわいい", "上品", "ラフ", "シンプル",
+  "個性的", "自然体", "色を使いたい", "黒を中心にしたい",
+  "形をきれいに見せたい", "動きやすさを重視", "古着を取り入れたい", "目立ちすぎたくない",
 ];
-const AVOID_OPTIONS = [
-  "派手", "過剰な主張", "カジュアルすぎる", "甘すぎる",
-  "フォーマルすぎる", "トレンド重視", "ロゴ過多", "装飾過多",
+const AVOID_VIBE_OPTIONS = [
+  "派手すぎる", "子供っぽい", "野暮ったい", "近寄りがたい",
+  "だらしない", "チャラい", "重すぎる", "暗すぎる",
+  "生活感がある", "ロゴが多い", "装飾が多い", "フォーマルすぎる",
 ];
-const EMPTY_WORLDVIEW: Worldview = {
-  beliefs: [], targetPersona: "", stylePhilosophy: "",
-  desiredImpression: [], avoidImpression: [],
+const CLOTHING_ROLE_OPTIONS = [
+  "自分らしさを出す", "気分を上げる", "人に良い印象を与える",
+  "体型をきれいに見せる", "清潔感を出す", "自信を持つ", "趣味として楽しむ",
+];
+const EMPTY_PREFERENCE: StylePreference = {
+  likedColors: [], dislikedColors: [],
+  likedMaterials: [], dislikedMaterials: [],
+  likedSilhouettes: [], dislikedSilhouettes: [],
+  likedVibes: [], dislikedVibes: [],
+  culturalReferences: [],
+  targetImpressions: [], avoidImpressions: [],
+  clothingRole: [], ngElements: [],
 };
 
 // ---- 共通UIコンポーネント ----
@@ -444,38 +455,68 @@ function BodyTab() {
 
 // ---- 世界観編集タブ ----
 
+function TagInput({
+  tags, onAdd, onRemove, placeholder,
+}: { tags: string[]; onAdd: (v: string) => void; onRemove: (v: string) => void; placeholder: string }) {
+  const [input, setInput] = useState("");
+  function commit() {
+    const v = input.trim();
+    if (v && !tags.includes(v)) onAdd(v);
+    setInput("");
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          type="text" value={input} onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
+          placeholder={placeholder}
+          className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+        />
+        <button onClick={commit} className="px-3 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors">追加</button>
+      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <span key={t} className="flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+              {t}
+              <button onClick={() => onRemove(t)} className="text-gray-400 hover:text-gray-700 leading-none">×</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorldviewTab() {
-  const [worldview,   setWorldview]   = useState<Worldview>(EMPTY_WORLDVIEW);
-  const [beliefInput, setBeliefInput] = useState("");
-  const [loading,     setLoading]     = useState(true);
-  const [saving,      setSaving]      = useState(false);
-  const [saved,       setSaved]       = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [pref,    setPref]    = useState<StylePreference>(EMPTY_PREFERENCE);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/worldview")
       .then((r) => r.json())
-      .then((data: { worldview: Worldview | null }) => {
-        if (data.worldview) setWorldview({ ...EMPTY_WORLDVIEW, ...data.worldview });
+      .then((data: { stylePreference: StylePreference | null }) => {
+        if (data.stylePreference) setPref({ ...EMPTY_PREFERENCE, ...data.stylePreference });
       })
-      .catch(() => setError("世界観の読み込みに失敗しました"))
+      .catch(() => setError("設定の読み込みに失敗しました"))
       .finally(() => setLoading(false));
   }, []);
 
-  function addBelief() {
-    const trimmed = beliefInput.trim();
-    if (!trimmed || worldview.beliefs.includes(trimmed)) return;
-    setWorldview((w) => ({ ...w, beliefs: [...w.beliefs, trimmed] }));
-    setBeliefInput("");
-  }
-  function removeBelief(b: string) {
-    setWorldview((w) => ({ ...w, beliefs: w.beliefs.filter((x) => x !== b) }));
-  }
-  function toggleImpression(key: "desiredImpression" | "avoidImpression", value: string) {
-    setWorldview((w) => {
-      const current = w[key];
-      return { ...w, [key]: current.includes(value) ? current.filter((x) => x !== value) : [...current, value] };
+  function toggleChip(key: keyof StylePreference, value: string) {
+    setPref((p) => {
+      const current = p[key] as string[];
+      return { ...p, [key]: current.includes(value) ? current.filter((x) => x !== value) : [...current, value] };
     });
+  }
+  function addTag(key: keyof StylePreference, value: string) {
+    setPref((p) => ({ ...p, [key]: [...(p[key] as string[]), value] }));
+  }
+  function removeTag(key: keyof StylePreference, value: string) {
+    setPref((p) => ({ ...p, [key]: (p[key] as string[]).filter((x) => x !== value) }));
   }
 
   async function handleSave() {
@@ -484,7 +525,7 @@ function WorldviewTab() {
       const res = await fetch("/api/worldview", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ worldview }),
+        body: JSON.stringify({ stylePreference: pref }),
       });
       if (!res.ok) { const d = await res.json() as { error: string }; throw new Error(d.error); }
       setSaved(true);
@@ -498,82 +539,139 @@ function WorldviewTab() {
 
   return (
     <div className="space-y-4 py-4">
-      <Section title="信念キーワード" hint="Enterで追加">
-        <div className="flex gap-2">
-          <input type="text" value={beliefInput} onChange={(e) => setBeliefInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addBelief(); } }}
-            placeholder="例: 余白を大切にする"
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
-          <button onClick={addBelief}
-            className="px-4 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors">追加</button>
-        </div>
-        {worldview.beliefs.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {worldview.beliefs.map((b) => (
-              <span key={b} className="flex items-center gap-1.5 px-3 py-1 bg-gray-800 text-white text-sm rounded-full">
-                {b}
-                <button onClick={() => removeBelief(b)} className="text-gray-400 hover:text-white text-xs leading-none">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-      </Section>
-      <Section title="目指したい人物像">
-        <input type="text" value={worldview.targetPersona}
-          onChange={(e) => setWorldview((w) => ({ ...w, targetPersona: e.target.value }))}
-          placeholder="例: 建築家のような静けさを持つ人"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
-      </Section>
-      <Section title="ファッション哲学" hint="自由記述">
-        <textarea value={worldview.stylePhilosophy}
-          onChange={(e) => setWorldview((w) => ({ ...w, stylePhilosophy: e.target.value }))}
-          placeholder="例: 服は自己表現ではなく、環境との対話である"
-          rows={3}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 resize-none" />
-      </Section>
-      <Section title="与えたい印象" hint="複数選択可">
+      {/* 雰囲気 */}
+      <Section title="服で出したい雰囲気" hint="複数選択可">
         <div className="flex flex-wrap gap-2">
-          {IMPRESSION_OPTIONS.map((opt) => (
-            <button key={opt} onClick={() => toggleImpression("desiredImpression", opt)}
+          {VIBE_OPTIONS.map((opt) => (
+            <button key={opt} onClick={() => toggleChip("likedVibes", opt)}
               className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                worldview.desiredImpression.includes(opt)
+                pref.likedVibes.includes(opt)
+                  ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 text-gray-600 hover:border-gray-300"
+              }`}>{opt}</button>
+          ))}
+        </div>
+        <TagInput
+          tags={pref.targetImpressions}
+          onAdd={(v) => addTag("targetImpressions", v)}
+          onRemove={(v) => removeTag("targetImpressions", v)}
+          placeholder="その他（例：知的に見られたい）"
+        />
+      </Section>
+
+      {/* 避けたい見え方 */}
+      <Section title="避けたい見え方" hint="複数選択可">
+        <div className="flex flex-wrap gap-2">
+          {AVOID_VIBE_OPTIONS.map((opt) => (
+            <button key={opt} onClick={() => toggleChip("dislikedVibes", opt)}
+              className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                pref.dislikedVibes.includes(opt)
+                  ? "border-red-400 bg-red-50 text-red-600" : "border-gray-200 text-gray-600 hover:border-gray-300"
+              }`}>{opt}</button>
+          ))}
+        </div>
+        <TagInput
+          tags={pref.avoidImpressions}
+          onAdd={(v) => addTag("avoidImpressions", v)}
+          onRemove={(v) => removeTag("avoidImpressions", v)}
+          placeholder="その他（例：ギャル系に見られたくない）"
+        />
+      </Section>
+
+      {/* 色 */}
+      <Section title="好きな色 / 苦手な色">
+        <p className="text-xs text-gray-400 mb-1">好きな色</p>
+        <TagInput
+          tags={pref.likedColors}
+          onAdd={(v) => addTag("likedColors", v)}
+          onRemove={(v) => removeTag("likedColors", v)}
+          placeholder="例: 黒・ネイビー・オフホワイト"
+        />
+        <p className="text-xs text-gray-400 mt-3 mb-1">苦手な色</p>
+        <TagInput
+          tags={pref.dislikedColors}
+          onAdd={(v) => addTag("dislikedColors", v)}
+          onRemove={(v) => removeTag("dislikedColors", v)}
+          placeholder="例: 蛍光色・ピンク"
+        />
+      </Section>
+
+      {/* 素材 */}
+      <Section title="好きな素材 / 苦手な素材">
+        <p className="text-xs text-gray-400 mb-1">好きな素材</p>
+        <TagInput
+          tags={pref.likedMaterials}
+          onAdd={(v) => addTag("likedMaterials", v)}
+          onRemove={(v) => removeTag("likedMaterials", v)}
+          placeholder="例: コットン・リネン・ウール"
+        />
+        <p className="text-xs text-gray-400 mt-3 mb-1">苦手な素材</p>
+        <TagInput
+          tags={pref.dislikedMaterials}
+          onAdd={(v) => addTag("dislikedMaterials", v)}
+          onRemove={(v) => removeTag("dislikedMaterials", v)}
+          placeholder="例: ポリエステル・化繊"
+        />
+      </Section>
+
+      {/* シルエット */}
+      <Section title="好きな形 / 苦手な形">
+        <p className="text-xs text-gray-400 mb-1">好きな形</p>
+        <TagInput
+          tags={pref.likedSilhouettes}
+          onAdd={(v) => addTag("likedSilhouettes", v)}
+          onRemove={(v) => removeTag("likedSilhouettes", v)}
+          placeholder="例: オーバーサイズ・Iライン・ワイドパンツ"
+        />
+        <p className="text-xs text-gray-400 mt-3 mb-1">苦手な形</p>
+        <TagInput
+          tags={pref.dislikedSilhouettes}
+          onAdd={(v) => addTag("dislikedSilhouettes", v)}
+          onRemove={(v) => removeTag("dislikedSilhouettes", v)}
+          placeholder="例: タイトスカート・ピタTシャツ"
+        />
+      </Section>
+
+      {/* 参考 */}
+      <Section title="参考にしたいもの" hint="ブランド・映画・音楽・街・時代など">
+        <TagInput
+          tags={pref.culturalReferences}
+          onAdd={(v) => addTag("culturalReferences", v)}
+          onRemove={(v) => removeTag("culturalReferences", v)}
+          placeholder="例: 90年代グランジ・Lemaire・パリ"
+        />
+      </Section>
+
+      {/* 大事にしたいこと */}
+      <Section title="服を選ぶとき大事にしたいこと" hint="複数選択可">
+        <div className="flex flex-wrap gap-2">
+          {CLOTHING_ROLE_OPTIONS.map((opt) => (
+            <button key={opt} onClick={() => toggleChip("clothingRole", opt)}
+              className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                pref.clothingRole.includes(opt)
                   ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 text-gray-600 hover:border-gray-300"
               }`}>{opt}</button>
           ))}
         </div>
       </Section>
-      <Section title="避けたい印象" hint="複数選択可">
-        <div className="flex flex-wrap gap-2">
-          {AVOID_OPTIONS.map((opt) => (
-            <button key={opt} onClick={() => toggleImpression("avoidImpression", opt)}
-              className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                worldview.avoidImpression.includes(opt)
-                  ? "border-red-500 bg-red-50 text-red-600" : "border-gray-200 text-gray-600 hover:border-gray-300"
-              }`}>{opt}</button>
-          ))}
-        </div>
+
+      {/* NGな要素 */}
+      <Section title="NGな要素">
+        <TagInput
+          tags={pref.ngElements}
+          onAdd={(v) => addTag("ngElements", v)}
+          onRemove={(v) => removeTag("ngElements", v)}
+          placeholder="例: 大きなロゴ・派手な柄・スキニー"
+        />
       </Section>
+
       {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
       <button onClick={handleSave} disabled={saving}
         className={`w-full py-3.5 rounded-xl text-sm font-medium transition-colors ${
           saved ? "bg-gray-100 text-gray-500 cursor-default" : "bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40"
         }`}>
-        {saved ? "保存しました ✓" : saving ? "保存中..." : "世界観を保存する"}
+        {saved ? "保存しました ✓" : saving ? "保存中..." : "好みを保存する"}
       </button>
-      {(worldview.beliefs.length > 0 || worldview.stylePhilosophy) && (
-        <div className="bg-gray-800 text-white rounded-2xl p-5 space-y-3">
-          <p className="text-xs tracking-widest text-gray-400 uppercase">Your Worldview</p>
-          {worldview.beliefs.length > 0 && (
-            <p className="text-sm leading-relaxed">{worldview.beliefs.join(" / ")}</p>
-          )}
-          {worldview.stylePhilosophy && (
-            <p className="text-xs text-gray-400 leading-relaxed border-t border-gray-700 pt-3">{worldview.stylePhilosophy}</p>
-          )}
-          {worldview.desiredImpression.length > 0 && (
-            <p className="text-xs text-gray-400">目指す印象: {worldview.desiredImpression.join("・")}</p>
-          )}
-        </div>
-      )}
+      <p className="text-xs text-gray-400 text-center">保存するとコーデ提案・ブランド提案に自動で反映されます</p>
     </div>
   );
 }
