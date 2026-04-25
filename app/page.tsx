@@ -12,7 +12,7 @@ export default async function HomePage() {
       .select("onboarding_completed")
       .eq("id", user.id)
       .single() as unknown as { data: { onboarding_completed: boolean } | null };
-    redirect(data?.onboarding_completed ? "/closet" : "/onboarding");
+    redirect(data?.onboarding_completed ? "/self" : "/onboarding");
   }
 
   return (

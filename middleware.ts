@@ -47,7 +47,8 @@ export async function middleware(request: NextRequest) {
     }
 
     if (user && isAuthRoute) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
+      // DB check happens in app/page.tsx — redirect there to branch on onboarding_completed
+      return NextResponse.redirect(new URL("/", request.url));
     }
   } catch {
     // auth check failed → pass through
