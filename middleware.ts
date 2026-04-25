@@ -2,11 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // env vars missing → pass through without auth check
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -23,22 +31,26 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+    const { pathname } = request.nextUrl;
 
-  const appRoutes = ["/onboarding", "/self", "/discover", "/style", "/closet", "/learn"];
-  const authRoutes = ["/login", "/signup"];
+    const appRoutes = ["/onboarding", "/self", "/discover", "/style", "/closet", "/learn"];
+    const authRoutes = ["/login", "/signup"];
 
-  const isAppRoute = appRoutes.some((r) => pathname.startsWith(r));
-  const isAuthRoute = authRoutes.some((r) => pathname === r);
+    const isAppRoute = appRoutes.some((r) => pathname.startsWith(r));
+    const isAuthRoute = authRoutes.some((r) => pathname === r);
 
-  if (!user && isAppRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+    if (!user && isAppRoute) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
 
-  if (user && isAuthRoute) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
+    if (user && isAuthRoute) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+  } catch {
+    // auth check failed → pass through
   }
 
   return supabaseResponse;
