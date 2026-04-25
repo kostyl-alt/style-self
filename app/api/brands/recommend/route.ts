@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callClaudeJSON } from "@/lib/claude";
-import { BRAND_RECOMMEND_SYSTEM_PROMPT } from "@/lib/prompts/brand-recommend";
+import { buildBrandRecommendSystemPrompt } from "@/lib/prompts/brand-recommend";
 import { createServiceClient } from "@/lib/supabase";
-import type { Brand, BrandRecommendation, StyleDiagnosisResult } from "@/types/index";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import type { Brand, BrandRecommendation, StyleDiagnosisResult, StylePreference } from "@/types/index";
 import type { Database } from "@/types/database";
 
 type BrandRow = Database["public"]["Tables"]["brands"]["Row"];
@@ -50,16 +51,36 @@ export async function POST(request: NextRequest) {
     };
 
     let styleAnalysis = body.styleAnalysis;
+    let stylePreference: StylePreference | undefined;
 
-    if (!styleAnalysis && body.userId) {
+    const supabaseAuth = createSupabaseServerClient();
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+
+    if (user) {
       const supabase = createServiceClient();
       const { data } = await supabase
         .from("users")
-        .select("style_analysis")
+        .select("style_analysis, style_preference")
+        .eq("id", user.id)
+        .single() as unknown as { data: { style_analysis: unknown; style_preference: unknown } | null };
+      if (data?.style_analysis && !styleAnalysis) {
+        styleAnalysis = data.style_analysis as StyleDiagnosisResult;
+      }
+      if (data?.style_preference) {
+        stylePreference = data.style_preference as StylePreference;
+      }
+    } else if (!styleAnalysis && body.userId) {
+      const supabase = createServiceClient();
+      const { data } = await supabase
+        .from("users")
+        .select("style_analysis, style_preference")
         .eq("id", body.userId)
-        .single() as unknown as { data: { style_analysis: unknown } | null };
+        .single() as unknown as { data: { style_analysis: unknown; style_preference: unknown } | null };
       if (data?.style_analysis) {
         styleAnalysis = data.style_analysis as StyleDiagnosisResult;
+      }
+      if (data?.style_preference) {
+        stylePreference = data.style_preference as StylePreference;
       }
     }
 
@@ -109,7 +130,7 @@ ${candidateList}
 `.trim();
 
     const claudeResult = await callClaudeJSON<ClaudeRecommendResponse>({
-      systemPrompt: BRAND_RECOMMEND_SYSTEM_PROMPT,
+      systemPrompt: buildBrandRecommendSystemPrompt(stylePreference),
       userMessage,
       maxTokens: 2000,
     });

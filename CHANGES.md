@@ -547,6 +547,22 @@
 
 ---
 
+## Sprint 26: StylePreference 構造化データの保存・活用
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `types/index.ts` に `StylePreference` インターフェース追加・`StyleDiagnosisResult.preference` フィールド追加 | ✅ |
+| 2 | `lib/prompts/analyze.ts` の JSON スキーマに `preference` ブロック追加（13フィールド） | ✅ |
+| 3 | `lib/validators/analyze.ts` に preference フィールドのバリデーション追加 | ✅ |
+| 4 | `supabase/migrations/011_preference.sql` — `users.style_preference jsonb` カラム追加 | ✅ |
+| 5 | `app/api/ai/analyze/route.ts` で `result.preference` を `style_preference` としてDBに保存 | ✅ |
+| 6 | `lib/prompts/coordinate.ts` の `buildCoordinateSystemPrompt` に `stylePreference` パラメータ追加・注入 | ✅ |
+| 7 | `app/api/ai/coordinate/route.ts` で `style_preference` を SELECT・プロンプトに渡す | ✅ |
+| 8 | `lib/prompts/brand-recommend.ts` を `buildBrandRecommendSystemPrompt(stylePreference?)` 関数に変更・注入 | ✅ |
+| 9 | `app/api/brands/recommend/route.ts` で認証ユーザーから `style_preference` を取得・プロンプトに渡す | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

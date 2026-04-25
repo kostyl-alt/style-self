@@ -32,6 +32,24 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
   if (result.buyingPriority !== undefined && !Array.isArray(result.buyingPriority)) result.buyingPriority = [];
   if (result.dailyAdvice !== undefined && !Array.isArray(result.dailyAdvice))       result.dailyAdvice    = [];
 
+  if (result.preference !== undefined) {
+    const p = result.preference;
+    const ensureArray = (v: unknown) => (Array.isArray(v) ? v : []);
+    p.likedColors         = ensureArray(p.likedColors);
+    p.dislikedColors      = ensureArray(p.dislikedColors);
+    p.likedMaterials      = ensureArray(p.likedMaterials);
+    p.dislikedMaterials   = ensureArray(p.dislikedMaterials);
+    p.likedSilhouettes    = ensureArray(p.likedSilhouettes);
+    p.dislikedSilhouettes = ensureArray(p.dislikedSilhouettes);
+    p.likedVibes          = ensureArray(p.likedVibes);
+    p.dislikedVibes       = ensureArray(p.dislikedVibes);
+    p.culturalReferences  = ensureArray(p.culturalReferences);
+    p.targetImpressions   = ensureArray(p.targetImpressions);
+    p.avoidImpressions    = ensureArray(p.avoidImpressions);
+    p.clothingRole        = ensureArray(p.clothingRole);
+    p.ngElements          = ensureArray(p.ngElements);
+  }
+
   if (result.styleStructure) {
     const s = result.styleStructure;
     if (!s.color)      s.color      = "未設定";

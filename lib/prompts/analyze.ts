@@ -123,6 +123,21 @@ export const ANALYZE_SYSTEM_PROMPT = `
     "spaceFeeling": "minimal|layered|balanced|maximalist のいずれか",
     "materialPreference": "natural|synthetic|mixed|luxury|casual のいずれか",
     "summary": "（スタイル軸の要約、100字以内）"
+  },
+  "preference": {
+    "likedColors": ["好きな色・色トーン（具体的な色名で3〜5個）"],
+    "dislikedColors": ["苦手な色・色トーン（具体的な色名で1〜3個）"],
+    "likedMaterials": ["好きな素材（具体的な素材名で2〜4個）"],
+    "dislikedMaterials": ["苦手な素材（1〜3個、なければ空配列）"],
+    "likedSilhouettes": ["好きなシルエット・形（具体的に2〜4個）"],
+    "dislikedSilhouettes": ["苦手なシルエット（1〜3個、なければ空配列）"],
+    "likedVibes": ["好きな雰囲気・ムード（2〜4個）"],
+    "dislikedVibes": ["苦手な雰囲気（1〜3個、なければ空配列）"],
+    "culturalReferences": ["文化的参照（時代・場所・映画・ブランド名など、回答から抽出、2〜5個）"],
+    "targetImpressions": ["与えたい印象（回答から抽出、2〜4個）"],
+    "avoidImpressions": ["避けたい印象（回答から抽出、1〜3個、なければ空配列）"],
+    "clothingRole": ["服の役割（回答から抽出、1〜3個）"],
+    "ngElements": ["具体的なNG要素（大きなロゴ・派手な柄など、2〜4個）"]
   }
 }
 `.trim();

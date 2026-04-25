@@ -274,6 +274,22 @@ export interface InputMappingItem {
   effect: string;
 }
 
+export interface StylePreference {
+  likedColors: string[];
+  dislikedColors: string[];
+  likedMaterials: string[];
+  dislikedMaterials: string[];
+  likedSilhouettes: string[];
+  dislikedSilhouettes: string[];
+  likedVibes: string[];
+  dislikedVibes: string[];
+  culturalReferences: string[];
+  targetImpressions: string[];
+  avoidImpressions: string[];
+  clothingRole: string[];
+  ngElements: string[];
+}
+
 export interface StyleDiagnosisResult {
   plainSummary: string;
   coreIdentity: string;
@@ -293,6 +309,7 @@ export interface StyleDiagnosisResult {
   avoidElements?: string[];
   buyingPriority?: string[];
   dailyAdvice?: string[];
+  preference?: StylePreference;
 }
 
 export type StyleAnalysisAIResponse = StyleDiagnosisResult;

@@ -29,8 +29,9 @@ export async function POST(request: NextRequest) {
     if (userId) {
       const supabase = createServiceClient();
       await supabase.from("users").update({
-        style_axis:      result.styleAxis as unknown as Json,
-        style_analysis:  result as unknown as Json,
+        style_axis:        result.styleAxis as unknown as Json,
+        style_analysis:    result as unknown as Json,
+        style_preference:  (result.preference ?? null) as unknown as Json,
         onboarding_completed: true,
       } as never).eq("id", userId);
     }

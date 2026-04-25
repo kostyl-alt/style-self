@@ -118,7 +118,8 @@ style-self/
 │       ├── 007_sprint11_worldview.sql      # Sprint 11: users.worldview jsonb追加
 │       ├── 008_sprint13_style_analysis.sql # Sprint 13: users.style_analysis jsonb追加
 │       ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
-│       └── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
+│       ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
+│       └── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義

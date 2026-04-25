@@ -1,10 +1,31 @@
-export function buildCoordinateSystemPrompt(materialContext: string, colorContext: string): string {
+import type { StylePreference } from "@/types/index";
+
+export function buildCoordinateSystemPrompt(
+  materialContext: string,
+  colorContext: string,
+  stylePreference?: StylePreference
+): string {
   const sections: string[] = [BASE_COORDINATE_PROMPT];
   if (materialContext) {
     sections.push(`\n\n【素材辞書（本能・文化・感覚の参照情報）】\n${materialContext}`);
   }
   if (colorContext) {
     sections.push(`\n\n【色辞書（本能・温度感・重量感の参照情報）】\n${colorContext}`);
+  }
+  if (stylePreference) {
+    const lines: string[] = ["【ユーザーの好み（StylePreference）】"];
+    if (stylePreference.likedColors.length)         lines.push(`好きな色: ${stylePreference.likedColors.join("・")}`);
+    if (stylePreference.dislikedColors.length)      lines.push(`苦手な色: ${stylePreference.dislikedColors.join("・")}`);
+    if (stylePreference.likedMaterials.length)      lines.push(`好きな素材: ${stylePreference.likedMaterials.join("・")}`);
+    if (stylePreference.dislikedMaterials.length)   lines.push(`苦手な素材: ${stylePreference.dislikedMaterials.join("・")}`);
+    if (stylePreference.likedSilhouettes.length)    lines.push(`好きなシルエット: ${stylePreference.likedSilhouettes.join("・")}`);
+    if (stylePreference.dislikedSilhouettes.length) lines.push(`苦手なシルエット: ${stylePreference.dislikedSilhouettes.join("・")}`);
+    if (stylePreference.likedVibes.length)          lines.push(`好きな雰囲気: ${stylePreference.likedVibes.join("・")}`);
+    if (stylePreference.dislikedVibes.length)       lines.push(`苦手な雰囲気: ${stylePreference.dislikedVibes.join("・")}`);
+    if (stylePreference.targetImpressions.length)   lines.push(`与えたい印象: ${stylePreference.targetImpressions.join("・")}`);
+    if (stylePreference.avoidImpressions.length)    lines.push(`避けたい印象: ${stylePreference.avoidImpressions.join("・")}`);
+    if (stylePreference.ngElements.length)          lines.push(`NGな要素: ${stylePreference.ngElements.join("・")}`);
+    sections.push(`\n\n${lines.join("\n")}`);
   }
   return sections.join("");
 }
