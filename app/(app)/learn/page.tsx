@@ -307,7 +307,7 @@ export default function LearnPage() {
                         disabled={isLoading}
                         className="mt-1 w-full py-2 border border-gray-200 text-gray-600 rounded-xl text-xs hover:border-gray-400 hover:text-gray-800 transition-colors disabled:opacity-40"
                       >
-                        {isLoading ? "翻訳中..." : result ? (isExpanded ? "閉じる" : "結果を見る") : "自分の世界観との相性を見る"}
+                        {isLoading ? "確認中..." : result ? (isExpanded ? "閉じる" : "結果を見る") : "自分の好みと合うか見る"}
                       </button>
                     </div>
 
@@ -513,9 +513,9 @@ export default function LearnPage() {
                 <p className="text-sm text-gray-700 leading-relaxed">{selectedBrand.description}</p>
               </div>
 
-              {/* 世界観タグ */}
+              {/* スタイルタグ */}
               <div>
-                <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">World View</p>
+                <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Style Tags</p>
                 <div className="flex flex-wrap gap-1.5">
                   {selectedBrand.worldview_tags.map((tag) => (
                     <span key={tag} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{tag}</span>
@@ -540,7 +540,7 @@ export default function LearnPage() {
                 const matching = getMatchingTags(selectedBrand.worldview_tags, beliefKeywords);
                 return matching.length > 0 ? (
                   <div className="bg-emerald-50 rounded-xl p-4">
-                    <p className="text-xs tracking-widest text-emerald-600 uppercase mb-2">あなたの世界観との共鳴</p>
+                    <p className="text-xs tracking-widest text-emerald-600 uppercase mb-2">あなたの好みと重なる点</p>
                     <div className="flex flex-wrap gap-1.5">
                       {matching.map((tag) => (
                         <span key={tag} className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full">{tag}</span>

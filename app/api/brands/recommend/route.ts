@@ -37,6 +37,9 @@ interface ClaudeRecommendItem {
   reason: string;
   matchTags: string[];
   matchScore: number;
+  whyThisBrand?: string;
+  tryFirst?: string;
+  caution?: string | null;
 }
 
 interface ClaudeRecommendResponse {
@@ -132,7 +135,7 @@ ${candidateList}
     const claudeResult = await callClaudeJSON<ClaudeRecommendResponse>({
       systemPrompt: buildBrandRecommendSystemPrompt(stylePreference),
       userMessage,
-      maxTokens: 2000,
+      maxTokens: 2500,
     });
 
     const brandMap = new Map(brandRows.map((row) => [row.name, row]));
@@ -144,6 +147,9 @@ ${candidateList}
         reason: item.reason,
         matchTags: item.matchTags,
         matchScore: item.matchScore,
+        ...(item.whyThisBrand ? { whyThisBrand: item.whyThisBrand } : {}),
+        ...(item.tryFirst     ? { tryFirst: item.tryFirst }         : {}),
+        ...(item.caution !== undefined ? { caution: item.caution }  : {}),
       }));
 
     return NextResponse.json({ recommendations });

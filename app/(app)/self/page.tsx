@@ -679,9 +679,9 @@ function WorldviewTab() {
 // ---- メインページ ----
 
 const TABS: { value: SelfTab; label: string }[] = [
-  { value: "diagnosis", label: "世界観診断" },
+  { value: "diagnosis", label: "診断結果" },
   { value: "body",      label: "身体情報" },
-  { value: "worldview", label: "世界観編集" },
+  { value: "worldview", label: "好みの設定" },
 ];
 
 export default function SelfPage() {

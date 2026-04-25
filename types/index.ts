@@ -441,6 +441,9 @@ export interface BrandRecommendation {
   reason: string;
   matchTags: string[];
   matchScore: number;
+  whyThisBrand?: string;
+  tryFirst?: string;
+  caution?: string | null;
 }
 
 // ---- Trends ----

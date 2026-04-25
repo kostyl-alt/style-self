@@ -300,9 +300,8 @@ const STEPS = [
 function ProgressBar({ current, total }: { current: number; total: number }) {
   return (
     <div className="w-full mb-8">
-      <div className="flex justify-between text-xs text-gray-400 mb-2">
+      <div className="flex justify-start text-xs text-gray-400 mb-2">
         <span>Step {current} / {total}</span>
-        <span>{Math.round((current / total) * 100)}%</span>
       </div>
       <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
         <div
@@ -928,7 +927,7 @@ export default function OnboardingPage() {
       <div className="max-w-lg mx-auto px-6 py-16">
         <div className="mb-10">
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Style Diagnosis</p>
-          <h1 className="text-2xl font-light text-gray-900">あなたの世界観を<br />言語化しましょう</h1>
+          <h1 className="text-2xl font-light text-gray-900">あなたの服の方向性を<br />言語化しましょう</h1>
         </div>
 
         <ProgressBar current={currentStep + 1} total={totalSteps} />

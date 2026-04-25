@@ -593,6 +593,23 @@
 
 ---
 
+## Sprint 29: トレンド機能改善 + ブランド提案強化 + UI文言整理
+
+| # | 内容 | 状態 |
+|---|------|------|
+| A1 | `lib/prompts/trend-translate.ts` — 禁止ワードリスト明示・出力フォーマット強制 | ✅ |
+| A2 | compatibilityReason/howToAdapt/specificAdvice を具体的なアイテム・色・素材ベースに変更 | ✅ |
+| B1 | `lib/prompts/brand-recommend.ts` — `whyThisBrand` / `tryFirst` / `caution` フィールドを出力スキーマに追加 | ✅ |
+| B2 | `types/index.ts` — `BrandRecommendation` に3フィールド追加（optional） | ✅ |
+| B3 | `app/api/brands/recommend/route.ts` — 新フィールドをマッピング・maxTokens 2500に増量 | ✅ |
+| B4 | `components/BrandCard.tsx` — 診断との一致・まず試すなら・注意点を追加表示 | ✅ |
+| C1 | `self/page.tsx` — タブ名「世界観診断」→「診断結果」「世界観編集」→「好みの設定」 | ✅ |
+| C2 | `learn/page.tsx` — 「世界観タグ」→「スタイルタグ」「世界観との共鳴」→「好みと重なる点」「自分の世界観との相性を見る」→「自分の好みと合うか見る」 | ✅ |
+| C3 | `onboarding/page.tsx` — ヘッドコピー「あなたの世界観を言語化」→「あなたの服の方向性を言語化」 | ✅ |
+| D1 | `supabase/migrations/013_trends_evidence.sql` — trendsテーブルに根拠フィールド5カラム追加 | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

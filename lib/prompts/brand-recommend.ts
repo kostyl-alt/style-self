@@ -22,9 +22,12 @@ const BASE_BRAND_RECOMMEND_PROMPT = `
   "recommendations": [
     {
       "brandName": "（ブランド名、candidates に含まれる name と完全一致）",
-      "reason": "（このユーザーの世界観との一致理由、60字以内）",
+      "reason": "（一致理由、60字以内）",
       "matchTags": ["（一致したタグ1）", "（タグ2）"],
-      "matchScore": 1から5の整数
+      "matchScore": 1から5の整数,
+      "whyThisBrand": "診断内容のどこと合っているか（60字以内・具体的に。ユーザーの診断語を1語以上引用）",
+      "tryFirst": "試すなら何から（具体的なアイテムまたはカテゴリ、40字以内）",
+      "caution": "注意点・合わないシーン（30字以内）またはnull"
     }
   ]
 }

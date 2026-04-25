@@ -124,7 +124,8 @@ style-self/
 │       ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
 │       ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
 │       ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
-│       └── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
+│       ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
+│       └── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義
