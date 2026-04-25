@@ -1,0 +1,262 @@
+# CLAUDE.md — Style Self プロジェクト憲法
+
+## プロジェクト概要
+
+「持つ・選ぶ・組む・買う」を世界観を軸に一つの判断フローで扱えるワードローブOS。
+Next.js 14 + Supabase + Claude API で構築するファッションアプリ。
+
+---
+
+## 技術スタック
+
+| カテゴリ | 技術 |
+|---------|------|
+| フロントエンド | Next.js 14 App Router（TypeScript + TailwindCSS） |
+| バックエンド | Next.js Route Handlers（API Routes） |
+| DB / Auth / Storage | Supabase（PostgreSQL + Supabase Auth + Supabase Storage） |
+| AI | Anthropic Claude API（`claude-sonnet-4-6`） |
+| Supabase SSR | `@supabase/ssr` |
+| 外部API | 楽天市場 Ichiba Item Search API |
+
+---
+
+## フォルダ構成
+
+```
+style-self/
+├── app/
+│   ├── (app)/                        # 認証済みユーザー向けページ
+│   │   ├── layout.tsx                # (app)グループ共通レイアウト（BottomNav）
+│   │   ├── self/page.tsx             # SELF: 世界観診断・身体情報・世界観編集（3タブ統合）
+│   │   ├── discover/page.tsx         # DISCOVER: 抽象語・テーマ入力コーデ生成
+│   │   ├── style/page.tsx            # STYLE: コーデ生成・保存履歴画面
+│   │   ├── closet/page.tsx           # CLOSET: クローゼット管理画面
+│   │   ├── learn/page.tsx            # LEARN: ブランドフィロソフィー・センス育成
+│   │   ├── onboarding/page.tsx       # 世界観診断フロー（全画面・BottomNav非表示）
+│   │   ├── coordinate/page.tsx       # 旧ルート（/style にリダイレクト済み）
+│   │   ├── inspire/page.tsx          # 旧ルート（/discover にリダイレクト済み）
+│   │   ├── profile/page.tsx          # 旧ルート（/self にリダイレクト済み）
+│   │   ├── wardrobe/page.tsx         # 旧ルート（/closet にリダイレクト済み）
+│   │   └── worldview/page.tsx        # 旧ルート（/self にリダイレクト済み）
+│   ├── (auth)/                       # 未認証ユーザー向け
+│   │   ├── callback/route.ts         # 認証コールバック
+│   │   ├── layout.tsx
+│   │   ├── login/page.tsx
+│   │   └── signup/page.tsx
+│   ├── api/
+│   │   ├── admin/
+│   │   │   └── sync-rakuten/route.ts # 楽天商品同期API（管理者専用）
+│   │   ├── ai/
+│   │   │   ├── abstract-coordinate/route.ts # 抽象語→コーデ提案AI（2段階）
+│   │   │   ├── analyze/route.ts      # スタイル軸診断AI
+│   │   │   ├── analyze-item/route.ts # 画像AI解析（Sprint 21 Phase 3）
+│   │   │   ├── coordinate/route.ts   # コーデ提案AI
+│   │   │   ├── learn-insight/route.ts # 今日の気づき生成AI（Sprint 21 Phase 4）
+│   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
+│   │   │   └── purchase-check/route.ts # 購入検討AI判定
+│   │   ├── brands/
+│   │   │   ├── recommend/route.ts    # ブランド提案AI（Sprint 19）
+│   │   │   └── list/route.ts         # ブランド一覧取得（/learn用）
+│   │   ├── inspirations/
+│   │   │   └── route.ts              # 偉大な参照一覧GET（Sprint 21 Phase 4）
+│   │   ├── coordinate/route.ts       # コーデ保存
+│   │   ├── profile/route.ts          # プロフィール GET/PATCH
+│   │   ├── worldview/route.ts        # 世界観 GET/PATCH
+│   │   └── wardrobe/route.ts         # ワードローブCRUD + PATCH
+│   ├── layout.tsx
+│   └── page.tsx                      # トップ（認証状態でリダイレクト）
+├── components/
+│   ├── BottomNav.tsx                 # グローバルボトムナビ（5ページ対応）
+│   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
+│   ├── coordinate/
+│   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
+│   │   └── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント
+│   └── wardrobe/
+│       ├── AddItemModal.tsx          # アイテム登録モーダル
+│       ├── PurchaseCheckPanel.tsx    # 購入検討AI判定パネル
+│       └── WardrobeItemCard.tsx      # アイテムカード
+├── lib/
+│   ├── utils/
+│   │   └── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
+│   ├── dictionaries/
+│   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
+│   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
+│   │   ├── line.ts                   # ライン/シルエット辞書（10種）
+│   │   ├── ratio.ts                  # 比率辞書（8パターン）
+│   │   ├── index.ts                  # 全辞書 re-export
+│   │   └── inject.ts                 # getMaterialContext / getColorContext / getLineContext
+│   ├── claude.ts                     # Claude APIクライアント
+│   ├── rakuten.ts                    # 楽天APIクライアント
+│   ├── storage.ts                    # Supabase Storage操作
+│   ├── supabase-browser.ts           # Supabaseクライアント（Client Component用）
+│   ├── supabase-server.ts            # Supabaseクライアント（Route Handler用）
+│   ├── supabase.ts                   # Supabaseクライアント（service role）
+│   ├── validators/
+│   │   ├── coordinate.ts             # validateAndFixCoordinate（role/line/weight/structure/ratio整合）
+│   │   ├── analyze.ts                # validateAndFixStyleDiagnosis（styleAxis enum / 配列補完）
+│   │   ├── purchase-check.ts         # validateAndFixPurchaseCheck（score クランプ / source enum）
+│   │   └── analyze-item.ts           # validateAndFixItemAnalysis（category/color/taste フォールバック）
+│   └── prompts/
+│       ├── abstract-coordinate.ts    # 抽象語→デザイン変換・コーデ提案プロンプト
+│       ├── analyze.ts                # スタイル診断・相性判定プロンプト
+│       ├── analyze-item.ts           # 画像AI解析プロンプト（25色・カテゴリ・素材定義付き）
+│       ├── coordinate.ts             # コーデ生成プロンプト（buildCoordinateSystemPrompt）
+│       ├── learn-insight.ts          # 今日の気づき生成プロンプト（3タイプ×3テーマ）
+│       ├── normalize-product.ts      # 楽天商品属性正規化プロンプト
+│       ├── profile-fit.ts            # 推奨サイズ感AIプロンプト
+│       ├── purchase.ts               # 購入検討AI判定プロンプト
+│       ├── brand-recommend.ts        # ブランド提案AIプロンプト（Sprint 19）
+│       └── trends.ts                 # トレンド分析プロンプト（未使用）
+├── supabase/
+│   └── migrations/
+│       ├── 001_initial_schema.sql    # 初期スキーマ（users / wardrobe_items / coordinates）
+│       ├── 002_wardrobe_schema_update.sql  # Sprint 6: season→text[], 新カラム追加
+│       ├── 003_sprint7_wardrobe_update.sql # Sprint 7: taste→text[], status, worldview_*
+│       ├── 004_external_products.sql       # 楽天連携: external_productsテーブル
+│       ├── 005_sprint9_body_info.sql       # Sprint 9: users身体情報カラム追加
+│       ├── 006_sprint9_profile_update.sql  # Sprint 9改善: 詳細身体情報・fit_recommendation追加
+│       ├── 007_sprint11_worldview.sql      # Sprint 11: users.worldview jsonb追加
+│       ├── 008_sprint13_style_analysis.sql # Sprint 13: users.style_analysis jsonb追加
+│       ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
+│       └── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
+├── types/
+│   ├── database.ts                   # Supabase DBの型定義
+│   └── index.ts                      # アプリ全体の型定義
+├── middleware.ts                      # 認証ミドルウェア
+├── .env.local                        # 環境変数（gitignore済み）
+└── CLAUDE.md                         # このファイル
+```
+
+---
+
+## 環境変数
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Anthropic
+ANTHROPIC_API_KEY=
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# 楽天API
+RAKUTEN_APP_ID=        # UUIDまたは数字形式
+RAKUTEN_AFFILIATE_ID=
+RAKUTEN_ACCESS_KEY=    # 管理画面のアクセスキー（RAKUTEN_APP_IDより優先）
+```
+
+---
+
+## DBテーブル一覧
+
+| テーブル | 用途 |
+|---------|------|
+| `users` | ユーザープロフィール・スタイル軸 |
+| `wardrobe_items` | 手持ちアイテム（status / worldview_score / worldview_tags 含む） |
+| `coordinates` | 保存済みコーデ |
+| `external_products` | 楽天等の外部商品マスタ |
+| `brands` | ブランドマスタ（worldview_tags / era_tags / maniac_level など） |
+| `inspirations` | 偉大な参照コンテンツ（designer / look / artwork / film / book） |
+
+---
+
+## Supabaseクライアントの使い分け
+
+| ファイル | 使用箇所 |
+|---------|---------|
+| `supabase-server.ts` | Route Handlers（`app/api/`） |
+| `supabase-browser.ts` | Client Components（`"use client"`） |
+| `supabase.ts` | service role が必要な管理処理のみ |
+
+---
+
+## コーディングルール
+
+### 必須
+- `"use client"` はインタラクティブなコンポーネントにのみ付ける（Server Components がデフォルト）
+- Supabaseクエリは必ず `lib/` 経由（コンポーネント内に直接 supabase クライアントを書かない）
+- Claude API の呼び出しは `app/api/` ルートからのみ（クライアントサイドから直接叩かない）
+- 型定義は `types/index.ts`（アプリ型）と `types/database.ts`（DB型）に集約する
+- モデルは必ず `claude-sonnet-4-6` を使用する（`lib/claude.ts` の `MODEL` 定数で管理）
+
+### 禁止
+- `any` 型の使用禁止
+- `console.log` の残置禁止
+- Supabase v2 の `.insert()` / `.update()` の型エラー回避に `as never` キャストを使う（既存パターン踏襲）
+
+### コメント
+- コメントは「なぜそうするか」が非自明な場合のみ書く
+- コードが何をするかの説明コメントは書かない
+
+---
+
+## 作業の進め方ルール
+
+### ドキュメント更新ルール
+1. **新しいファイルを作成したら必ず `CLAUDE.md` のフォルダ構成に追記する**
+2. **実装が完了したら `CHANGES.md` の該当項目を ✅ に更新する**
+3. **想定外のファイル構成の変化があった場合は実装前に報告して確認を取る**
+4. マイグレーションSQLを作成したら `supabase/migrations/` に追加し、CLAUDE.mdのフォルダ構成にも記載する
+
+### 実装方針
+- 1項目ずつ確認しながら進める（一気に全部やらない）
+- 実装前に「何をどう変えるか」を短く宣言してから着手する
+- 型チェック（`npx tsc --noEmit`）を実装後に必ず実行する
+- バグ修正時はエラーメッセージを詳細化して次回のデバッグを容易にする
+
+---
+
+## よく使うコマンド
+
+```bash
+# 開発サーバー起動
+npm run dev
+
+# 型チェック
+npx tsc --noEmit
+
+# ビルド確認
+npm run build
+
+# 楽天商品同期（dryRun）
+curl -X POST http://localhost:3000/api/admin/sync-rakuten \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -d '{"brand": "BEAMS", "hits": 5, "dryRun": true}'
+
+# 楽天商品同期（本番）
+curl -X POST http://localhost:3000/api/admin/sync-rakuten \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -d '{"brand": "BEAMS", "hits": 20, "dryRun": false}'
+```
+
+---
+
+## 既知の注意事項
+
+### Supabase v2 型推論バグ
+`.insert()` / `.update()` が `never` 型になるケースがある。回避策：
+
+```typescript
+// Insert
+type FooInsert = Database["public"]["Tables"]["foo"]["Insert"];
+const data: FooInsert = { ... };
+supabase.from("foo").insert(data as never)
+
+// Update
+supabase.from("foo").update({ field: value } as never)
+```
+
+### Claude API レスポンスのJSONパース
+`callClaudeJSON` は `text.indexOf("{")` から `text.lastIndexOf("}")` を抽出してパースする。
+`maxTokens` が不足すると JSON が途中で切れてパースエラーになる。
+複雑なレスポンスは `maxTokens: 2048` 以上を指定する。
+
+### 楽天API 認証
+`RAKUTEN_ACCESS_KEY` を優先し、未設定の場合は `RAKUTEN_APP_ID` にフォールバック。
+現状 UUID形式のIDはAPIに拒否される問題あり（未解決）。
