@@ -1,4 +1,5 @@
-const RAKUTEN_API_BASE = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601";
+const RAKUTEN_API_BASE    = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601";
+const RAKUTEN_RANKING_BASE = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601";
 
 // ---- 楽天ファッション ジャンルID ----
 export const RAKUTEN_GENRE = {
@@ -107,6 +108,37 @@ function toRakutenProduct(item: RakutenItem): RakutenProduct {
     isAvailable:  item.availability === 1,
     rawCaption:   [item.catchcopy, item.itemCaption].filter(Boolean).join(" ").slice(0, 500),
   };
+}
+
+// ---- ランキング取得 ----
+export async function getRanking(
+  genreId: string,
+  hits: number = 30
+): Promise<RakutenProduct[]> {
+  const appId = process.env.RAKUTEN_ACCESS_KEY ?? process.env.RAKUTEN_APP_ID;
+  if (!appId) throw new Error("RAKUTEN_ACCESS_KEY または RAKUTEN_APP_ID が設定されていません");
+
+  const affiliateId = process.env.RAKUTEN_AFFILIATE_ID ?? "";
+
+  const query = new URLSearchParams({
+    applicationId: appId,
+    affiliateId,
+    format:        "json",
+    formatVersion: "2",
+    genreId,
+    hits:          String(Math.min(hits, 30)),
+  });
+
+  const url = `${RAKUTEN_RANKING_BASE}?${query.toString()}`;
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`楽天ランキングAPI エラー: ${res.status} ${text}`);
+  }
+
+  const data = await res.json() as RakutenSearchResponse;
+  return (data.Items ?? []).map((i) => toRakutenProduct(i.Item));
 }
 
 // ---- ブランド名で検索 ----

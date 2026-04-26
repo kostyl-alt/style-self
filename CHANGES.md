@@ -610,6 +610,16 @@
 
 ---
 
+## Sprint 30: 楽天ランキング自動トレンド取得
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/rakuten.ts` — `getRanking(genreId, hits)` 関数追加（楽天Ranking API使用） | ✅ |
+| 2 | `lib/prompts/trend-extract.ts` — 商品名リストからトレンド抽出プロンプト（3〜5件・JSON） | ✅ |
+| 3 | `app/api/admin/sync-trends/route.ts` — 管理者向けトレンド同期API（dryRun対応・Bearer認証） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

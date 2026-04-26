@@ -45,7 +45,8 @@ style-self/
 │   │   └── signup/page.tsx
 │   ├── api/
 │   │   ├── admin/
-│   │   │   └── sync-rakuten/route.ts # 楽天商品同期API（管理者専用）
+│   │   │   ├── sync-rakuten/route.ts # 楽天商品同期API（管理者専用）
+│   │   │   └── sync-trends/route.ts  # 楽天ランキング→トレンド自動同期（Sprint 30）
 │   │   ├── ai/
 │   │   │   ├── abstract-coordinate/route.ts # 抽象語→コーデ提案AI（2段階）
 │   │   │   ├── analyze/route.ts      # スタイル軸診断AI
@@ -110,6 +111,7 @@ style-self/
 │       ├── purchase.ts               # 購入検討AI判定プロンプト
 │       ├── brand-recommend.ts        # ブランド提案AIプロンプト（Sprint 19）
 │       ├── trend-translate.ts        # トレンド世界観翻訳プロンプト（Sprint 28）
+│       ├── trend-extract.ts          # 楽天商品名リスト→トレンド抽出プロンプト（Sprint 30）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   └── migrations/
