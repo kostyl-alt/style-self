@@ -1,5 +1,5 @@
 const RAKUTEN_API_BASE    = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
-const RAKUTEN_RANKING_BASE = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Ranking/20220601";
+const RAKUTEN_RANKING_BASE = "https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601";
 
 const RAKUTEN_HEADERS = {
   "Referer": process.env.NEXT_PUBLIC_APP_URL || "https://style-self.vercel.app",
@@ -127,6 +127,7 @@ export async function getRanking(
 
   const query = new URLSearchParams({
     applicationId: appId,
+    accessKey:     appId,
     affiliateId,
     format:        "json",
     formatVersion: "2",
