@@ -1,5 +1,10 @@
-const RAKUTEN_API_BASE    = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601";
-const RAKUTEN_RANKING_BASE = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601";
+const RAKUTEN_API_BASE    = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
+const RAKUTEN_RANKING_BASE = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Ranking/20220601";
+
+const RAKUTEN_HEADERS = {
+  "Referer": process.env.NEXT_PUBLIC_APP_URL || "https://style-self.vercel.app",
+  "Origin":  process.env.NEXT_PUBLIC_APP_URL || "https://style-self.vercel.app",
+};
 
 // ---- 楽天ファッション ジャンルID ----
 export const RAKUTEN_GENRE = {
@@ -79,7 +84,7 @@ async function fetchRakuten(params: Record<string, string>): Promise<RakutenSear
   });
 
   const url = `${RAKUTEN_API_BASE}?${query.toString()}`;
-  const res = await fetch(url, { next: { revalidate: 3600 } });
+  const res = await fetch(url, { next: { revalidate: 3600 }, headers: RAKUTEN_HEADERS });
 
   if (!res.ok) {
     const text = await res.text();
@@ -130,7 +135,7 @@ export async function getRanking(
   });
 
   const url = `${RAKUTEN_RANKING_BASE}?${query.toString()}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { cache: "no-store", headers: RAKUTEN_HEADERS });
 
   if (!res.ok) {
     const text = await res.text();
