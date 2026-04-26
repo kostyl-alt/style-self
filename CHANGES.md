@@ -620,6 +620,17 @@
 
 ---
 
+## Sprint 31: Vercel Cron 週次トレンド自動更新
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `vercel.json` 新規作成 — 毎週月曜 UTC 0:00（日本時間 9:00）に `/api/admin/sync-trends` を実行 | ✅ |
+| 2 | `app/api/admin/sync-trends/route.ts` — GET ハンドラ追加（Vercel Cron 用・常に本番実行） | ✅ |
+| 3 | 認証を2パターン対応: `CRON_SECRET`（Cron）/ `SUPABASE_SERVICE_ROLE_KEY`（手動） | ✅ |
+| 4 | ロジックを `runSync()` 関数に集約し GET/POST から共通呼び出し | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

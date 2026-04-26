@@ -5,9 +5,8 @@ import { callClaudeJSON } from "@/lib/claude";
 import { TREND_EXTRACT_SYSTEM_PROMPT } from "@/lib/prompts/trend-extract";
 import type { Database } from "@/types/database";
 
-// メンズファッション: 楽天の正ジャンルID
-const MENS_GENRE_ID    = "551177";
-const LADIES_GENRE_ID  = "100371";
+const MENS_GENRE_ID   = "551177";
+const LADIES_GENRE_ID = "100371";
 
 interface ExtractedTrend {
   keyword: string;
@@ -36,21 +35,25 @@ function getCurrentSeason(): string {
   return month >= 4 && month <= 9 ? `${year}SS` : `${year}AW`;
 }
 
-export async function POST(request: NextRequest) {
+function authenticate(request: NextRequest): { ok: boolean; isCron: boolean } {
   const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!authHeader || authHeader !== `Bearer ${serviceKey}`) {
-    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    return { ok: true, isCron: true };
   }
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) {
+    return { ok: true, isCron: false };
+  }
+  return { ok: false, isCron: false };
+}
 
-  const body = await request.json().catch(() => ({})) as { dryRun?: boolean; season?: string };
-  const dryRun = body.dryRun ?? true;
-  const season = body.season ?? getCurrentSeason();
+async function runSync(dryRun: boolean, season: string) {
   const year   = parseInt(season.slice(0, 4), 10);
-
   const errors: string[] = [];
 
-  // ── Step 1: ランキング取得 ──────────────────────────────────
+  // ── Step 1: ランキング取得 ─────────────────────────────────
   let ladiesItems: string[] = [];
   let mensItems:   string[] = [];
 
@@ -78,11 +81,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       error: "楽天APIから商品を取得できませんでした",
       errors,
-      hint: "APIキーが有効か確認してください（UUID形式・pk_形式は拒否される場合があります）",
+      hint: "APIキーが有効か確認してください",
     }, { status: 502 });
   }
 
-  // ── Step 2: Claude でトレンド抽出 ─────────────────────────
+  // ── Step 2: Claude でトレンド抽出 ────────────────────────
   const userMessage = [
     `【レディースファッション ランキング（${ladiesItems.length}件）】`,
     ladiesItems.slice(0, 30).map((n, i) => `${i + 1}. ${n}`).join("\n"),
@@ -108,7 +111,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "トレンドを抽出できませんでした", errors }, { status: 500 });
   }
 
-  // ── Step 3: dryRun の場合はここで返す ─────────────────────
+  // ── Step 3: dryRun の場合はここで返す ────────────────────
   if (dryRun) {
     return NextResponse.json({
       message: "dryRun完了（DBへの書き込みなし）",
@@ -120,11 +123,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // ── Step 4: Supabase に INSERT ─────────────────────────────
+  // ── Step 4: Supabase に INSERT ────────────────────────────
   const supabase = createAdminClient();
 
-  // 同シーズンの rakuten_api 由来レコードのみ削除して差し替え
-  // （手動登録: source_type IS NULL or 'manual' は保護）
   await supabase
     .from("trends" as never)
     .delete()
@@ -166,4 +167,27 @@ export async function POST(request: NextRequest) {
     inserted,
     errors,
   });
+}
+
+// Vercel Cron からの GET リクエスト（常に本番実行）
+export async function GET(request: NextRequest) {
+  const auth = authenticate(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  }
+  return runSync(false, getCurrentSeason());
+}
+
+// 手動実行用 POST リクエスト（dryRun 対応）
+export async function POST(request: NextRequest) {
+  const auth = authenticate(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({})) as { dryRun?: boolean; season?: string };
+  const dryRun = auth.isCron ? false : (body.dryRun ?? true);
+  const season = body.season ?? getCurrentSeason();
+
+  return runSync(dryRun, season);
 }

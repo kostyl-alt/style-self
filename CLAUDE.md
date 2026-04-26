@@ -131,6 +131,7 @@ style-self/
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義
+├── vercel.json                        # Vercel Cron設定（週次トレンド同期）
 ├── middleware.ts                      # 認証ミドルウェア
 ├── .env.local                        # 環境変数（gitignore済み）
 └── CLAUDE.md                         # このファイル

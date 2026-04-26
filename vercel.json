@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/sync-trends",
+      "schedule": "0 0 * * 1"
+    }
+  ]
+}
