@@ -143,8 +143,12 @@ export async function getRanking(
     throw new Error(`楽天ランキングAPI エラー: ${res.status} ${text}`);
   }
 
-  const data = await res.json() as RakutenSearchResponse;
-  return (data.Items ?? []).map((i) => toRakutenProduct(i.Item));
+  // 新API(openapi.rakuten.co.jp)は Items がフラット配列（旧APIは { Item: ... } ネスト）
+  const data = await res.json() as { Items?: (RakutenItem | { Item: RakutenItem })[] };
+  return (data.Items ?? []).map((i) => {
+    const item = "Item" in i ? i.Item : i as RakutenItem;
+    return toRakutenProduct(item);
+  });
 }
 
 // ---- ブランド名で検索 ----
