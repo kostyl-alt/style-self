@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
     errors.push(`レディースランキング取得失敗: ${msg}`);
   }
 
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   try {
     const products = await getRanking(MENS_GENRE_ID, 30);
     mensItems = products.map((p) => p.name).filter(Boolean);
