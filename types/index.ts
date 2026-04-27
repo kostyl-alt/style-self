@@ -514,6 +514,31 @@ export interface StyleConsultResponse {
   preferenceNote:  string;
 }
 
+// ---- Look Analysis (Sprint 34) ----
+
+export interface LookAnalysis {
+  silhouette:     string;
+  topBottomRatio: string;
+  weightCenter:   string;
+  lengthBalance:  string;
+  colorScheme:    string;
+  keyElements:    string[];
+  whyLooksGood:   string;
+}
+
+export interface PersonalAdaptation {
+  howToAdapt:     string;
+  adjustments:    string[];
+  itemsToFind:    string[];
+  avoidPoints:    string[];
+  preferenceNote: string;
+}
+
+export interface LookAnalysisResponse {
+  lookAnalysis:        LookAnalysis;
+  personalAdaptation:  PersonalAdaptation;
+}
+
 // ---- Onboarding ----
 
 export interface OnboardingAnswer {

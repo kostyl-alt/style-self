@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
-import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse } from "@/types/index";
+import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse } from "@/types/index";
 
 type StyleTab = "coordinate" | "consult" | "saved";
 
@@ -161,6 +161,108 @@ function ConsultTab() {
   const [result, setResult]     = useState<StyleConsultResponse | null>(null);
   const [error, setError]       = useState<string | null>(null);
 
+  // ---- 参考写真分析 (Sprint 34) ----
+  const [lookFile, setLookFile]         = useState<File | null>(null);
+  const [lookPreview, setLookPreview]   = useState<string | null>(null);
+  const [lookLoading, setLookLoading]   = useState(false);
+  const [lookResult, setLookResult]     = useState<LookAnalysisResponse | null>(null);
+  const [lookError, setLookError]       = useState<string | null>(null);
+  const lookInputRef = useRef<HTMLInputElement>(null);
+  const consultTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function handleLookFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setLookError(null);
+    setLookResult(null);
+    if (!file) {
+      setLookFile(null);
+      setLookPreview(null);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLookError("画像サイズは5MB以下にしてください");
+      setLookFile(null);
+      setLookPreview(null);
+      if (lookInputRef.current) lookInputRef.current.value = "";
+      return;
+    }
+    setLookFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setLookPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function clearLookFile() {
+    setLookFile(null);
+    setLookPreview(null);
+    setLookResult(null);
+    setLookError(null);
+    if (lookInputRef.current) lookInputRef.current.value = "";
+  }
+
+  async function resizeImage(file: File): Promise<{ base64: string; mediaType: string }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 1280;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像の読み込みに失敗しました")); };
+      img.src = url;
+    });
+  }
+
+  async function handleAnalyzeLook() {
+    if (!lookFile) return;
+    setLookLoading(true); setLookError(null); setLookResult(null);
+    try {
+      const { base64, mediaType } = await resizeImage(lookFile);
+      const res = await fetch("/api/ai/analyze-look", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, mediaType }),
+      });
+      const data = await res.json() as LookAnalysisResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "画像分析に失敗しました");
+      setLookResult(data);
+    } catch (err) {
+      setLookError(err instanceof Error ? err.message : "画像分析に失敗しました");
+    } finally {
+      setLookLoading(false);
+    }
+  }
+
+  function useAnalysisInConsultation() {
+    if (!lookResult) return;
+    const { topBottomRatio, weightCenter, whyLooksGood } = lookResult.lookAnalysis;
+    const { howToAdapt } = lookResult.personalAdaptation;
+    const text =
+      `参考写真を分析しました。\n` +
+      `上下比率：${topBottomRatio}\n` +
+      `重心：${weightCenter}\n` +
+      `なぜよく見えるか：${whyLooksGood}\n` +
+      `自分への取り入れ方：${howToAdapt}\n` +
+      `この比率・シルエットを自分の体型で再現したい。`;
+    setInput(text);
+    requestAnimationFrame(() => {
+      consultTextareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      consultTextareaRef.current?.focus();
+    });
+  }
+
   async function handleConsult() {
     if (!input.trim()) return;
     setLoading(true); setError(null); setResult(null);
@@ -182,6 +284,157 @@ function ConsultTab() {
 
   return (
     <div className="space-y-5">
+      {/* 参考写真から分析 (Sprint 34) */}
+      <div className="border border-gray-100 rounded-2xl p-5 space-y-4">
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-1">Reference Photo</p>
+          <p className="text-xs text-gray-500">参考にしたい人の写真から比率・シルエットを分析します（顔は分析対象外）</p>
+        </div>
+
+        {!lookPreview ? (
+          <button
+            type="button"
+            onClick={() => lookInputRef.current?.click()}
+            className="w-full py-8 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+          >
+            📷 写真を選ぶ（5MBまで）
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={lookPreview} alt="参考写真" className="w-full max-h-80 object-contain rounded-xl bg-gray-50" />
+              <button
+                type="button"
+                onClick={clearLookFile}
+                className="absolute top-2 right-2 w-8 h-8 bg-white/90 border border-gray-200 rounded-full text-gray-500 hover:bg-white hover:text-gray-800 transition-colors text-sm"
+              >
+                ×
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={handleAnalyzeLook}
+              disabled={lookLoading}
+              className="w-full py-3 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            >
+              {lookLoading ? "分析しています..." : "この写真を分析する"}
+            </button>
+          </div>
+        )}
+
+        <input
+          ref={lookInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleLookFileChange}
+          className="hidden"
+        />
+
+        {lookError && (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+            <p className="text-xs text-red-600">{lookError}</p>
+          </div>
+        )}
+
+        {lookLoading && (
+          <div className="text-center py-6 text-gray-300">
+            <div className="text-3xl mb-2 animate-pulse">📐</div>
+            <p className="text-xs">比率・シルエットを読み解いています</p>
+          </div>
+        )}
+
+        {lookResult && !lookLoading && (
+          <div className="space-y-4">
+            {/* lookAnalysis */}
+            <div className="bg-gray-800 text-white rounded-2xl p-5 space-y-3">
+              <p className="text-xs tracking-widest text-gray-400 uppercase">Look Analysis</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex gap-3"><span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">シルエット</span><span className="leading-relaxed">{lookResult.lookAnalysis.silhouette}</span></div>
+                <div className="flex gap-3"><span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">上下比率</span><span className="leading-relaxed">{lookResult.lookAnalysis.topBottomRatio}</span></div>
+                <div className="flex gap-3"><span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">重心</span><span className="leading-relaxed">{lookResult.lookAnalysis.weightCenter}</span></div>
+                <div className="flex gap-3"><span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">丈バランス</span><span className="leading-relaxed">{lookResult.lookAnalysis.lengthBalance}</span></div>
+                <div className="flex gap-3"><span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">色の使い方</span><span className="leading-relaxed">{lookResult.lookAnalysis.colorScheme}</span></div>
+              </div>
+              {lookResult.lookAnalysis.keyElements.length > 0 && (
+                <div className="pt-3 border-t border-gray-700">
+                  <p className="text-xs text-gray-400 mb-2">核となる要素</p>
+                  <ul className="space-y-1">
+                    {lookResult.lookAnalysis.keyElements.map((el, i) => (
+                      <li key={i} className="text-sm flex gap-2"><span className="text-gray-500">—</span><span>{el}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {lookResult.lookAnalysis.whyLooksGood && (
+                <div className="pt-3 border-t border-gray-700">
+                  <p className="text-xs text-gray-400 mb-2">なぜスタイルよく見えるか</p>
+                  <p className="text-sm leading-relaxed">{lookResult.lookAnalysis.whyLooksGood}</p>
+                </div>
+              )}
+            </div>
+
+            {/* personalAdaptation */}
+            <div className="border border-gray-200 rounded-2xl p-5 space-y-4">
+              <p className="text-xs tracking-widest text-gray-400 uppercase">Personal Adaptation</p>
+              {lookResult.personalAdaptation.howToAdapt && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">自分への取り入れ方</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{lookResult.personalAdaptation.howToAdapt}</p>
+                </div>
+              )}
+              {lookResult.personalAdaptation.adjustments.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">調整ポイント</p>
+                  <ol className="space-y-2">
+                    {lookResult.personalAdaptation.adjustments.map((a, i) => (
+                      <li key={i} className="flex gap-3 text-sm text-gray-700">
+                        <span className="flex-shrink-0 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-xs font-medium">{i + 1}</span>
+                        <span className="leading-relaxed">{a}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {lookResult.personalAdaptation.itemsToFind.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">探すべきアイテム</p>
+                  <ul className="space-y-1">
+                    {lookResult.personalAdaptation.itemsToFind.map((it, i) => (
+                      <li key={i} className="text-sm text-gray-700 flex gap-2"><span className="text-gray-400">•</span><span>{it}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {lookResult.personalAdaptation.avoidPoints.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                  <p className="text-xs text-amber-600 mb-2">避けるべき点</p>
+                  <ul className="space-y-1">
+                    {lookResult.personalAdaptation.avoidPoints.map((a, i) => (
+                      <li key={i} className="text-sm text-amber-800 flex gap-2"><span>—</span><span>{a}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {lookResult.personalAdaptation.preferenceNote && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">好みを活かした配慮</p>
+                  <p className="text-sm text-gray-700">{lookResult.personalAdaptation.preferenceNote}</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={useAnalysisInConsultation}
+              className="w-full py-3 border border-gray-800 text-gray-800 rounded-xl text-sm hover:bg-gray-800 hover:text-white transition-colors"
+            >
+              この分析を相談に使う ↓
+            </button>
+          </div>
+        )}
+      </div>
+
       <div>
         <p className="text-xs text-gray-500 mb-3">相談例（タップで入力）</p>
         <div className="flex flex-col gap-2">
@@ -196,6 +449,7 @@ function ConsultTab() {
       </div>
       <div>
         <textarea
+          ref={consultTextareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="例：低身長だけどロングコートをすっきり着たい。コンパクトに見えてしまうのが悩みです。"

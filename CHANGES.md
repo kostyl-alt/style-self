@@ -656,6 +656,18 @@
 
 ---
 
+## Sprint 34: 参考写真の比率・シルエット分析機能
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/claude.ts` — `callClaudeWithImage` に `userMessage` 引数追加（後方互換あり） | ✅ |
+| 2 | `types/index.ts` — `LookAnalysis` / `PersonalAdaptation` / `LookAnalysisResponse` 型追加 | ✅ |
+| 3 | `lib/prompts/analyze-look.ts` — 参考写真分析プロンプト（顔は分析対象外・体型/好みを文脈注入） | ✅ |
+| 4 | `app/api/ai/analyze-look/route.ts` — 参考写真分析API（POST・Vision・認証必須） | ✅ |
+| 5 | `app/(app)/style/page.tsx` — 着こなし相談タブに「参考写真を分析する」セクション追加（アップロード・分析結果表示・相談欄への自動投入） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

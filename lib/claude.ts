@@ -60,6 +60,7 @@ export async function callClaudeWithImage<T>(
   systemPrompt: string,
   base64: string,
   mediaType: ImageMediaType,
+  userMessage = "この画像のアイテムを解析してください。",
   maxTokens = 1024,
 ): Promise<T> {
   const message = await anthropic.messages.create({
@@ -75,7 +76,7 @@ export async function callClaudeWithImage<T>(
         },
         {
           type: "text",
-          text: "この画像のアイテムを解析してください。",
+          text: userMessage,
         },
       ],
     }],
