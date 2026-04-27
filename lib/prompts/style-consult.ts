@@ -1,4 +1,4 @@
-import type { BodyProfile, StylePreference } from "@/types/index";
+import type { BodyProfile } from "@/types/index";
 
 const BASE_STYLE_CONSULT_PROMPT = `
 あなたはファッションの着こなし相談員です。
