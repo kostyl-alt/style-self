@@ -645,6 +645,17 @@
 
 ---
 
+## Sprint 33: 着こなし相談機能
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `types/index.ts` — `StyleConsultAdjustments` / `StyleConsultResponse` 型追加 | ✅ |
+| 2 | `lib/prompts/style-consult.ts` — 着こなし相談プロンプト（body_profile・好み・診断を文脈注入） | ✅ |
+| 3 | `app/api/ai/style-consult/route.ts` — 着こなし相談API（POST・認証必須） | ✅ |
+| 4 | `app/(app)/style/page.tsx` — タブ構造に改修（コーデ提案・着こなし相談・保存履歴） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

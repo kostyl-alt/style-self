@@ -493,6 +493,27 @@ export interface TrendTranslationResult {
   avoidPoints: string[];
 }
 
+// ---- Style Consult ----
+
+export interface StyleConsultAdjustments {
+  silhouette:   string;
+  length:       string;
+  weightCenter: string;
+  color:        string;
+  material:     string;
+  shoes:        string;
+  accessories:  string;
+  sizing:       string;
+}
+
+export interface StyleConsultResponse {
+  analysis:        string;
+  adjustments:     StyleConsultAdjustments;
+  keyPoints:       string[];
+  avoidPoints:     string[];
+  preferenceNote:  string;
+}
+
 // ---- Onboarding ----
 
 export interface OnboardingAnswer {
