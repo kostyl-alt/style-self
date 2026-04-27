@@ -198,11 +198,7 @@ export default function CoordinateCard({
                   </p>
                 )}
                 <a
-                  href={buildZozoSearchUrl({
-                    keyword: item.name,
-                    category: item.category,
-                    color: item.color ?? undefined,
-                  })}
+                  href={buildZozoSearchUrl({ keyword: item.name })}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block mt-1 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"

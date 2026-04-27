@@ -30,9 +30,28 @@ export interface ZozoSearchParams {
   color?:    string;
 }
 
+// AI生成の詳細キーワードをZOZO検索でヒットしやすい短い語に正規化する。
+// 例: 「オーガンジー・シルクサテン（光沢面）」 → 「オーガンジー」
+//     「黒のセンタープレスワイドパンツ・くるぶし丈・ハイウエスト」 → 「黒のセンタープレスワイドパンツ」（30字でカット）
+export function toZozoKeyword(raw: string): string {
+  if (!raw) return "";
+  // 括弧内（全角・半角）を除去
+  let s = raw.replace(/[（(][^）)]*[）)]/g, "");
+  // 「・」「/」「×」で分割
+  const parts = s.split(/[・/×]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return raw.trim().slice(0, 30);
+  // 最初のセグメントを採用。短すぎる場合のみ2つ目まで連結
+  s = parts[0];
+  if (s.length < 6 && parts[1]) s = `${s} ${parts[1]}`;
+  // 30字以上は切り捨て
+  if (s.length > 30) s = s.slice(0, 30);
+  return s.trim();
+}
+
 export function buildZozoSearchUrl({ keyword, category, color }: ZozoSearchParams): string {
   const tokens: string[] = [];
-  if (keyword) tokens.push(keyword.trim());
+  const cleanedKeyword = toZozoKeyword(keyword);
+  if (cleanedKeyword) tokens.push(cleanedKeyword);
   if (category) {
     const jp = CATEGORY_KEYWORD_JP[category];
     if (jp && !tokens.some((t) => t.includes(jp))) tokens.push(jp);
