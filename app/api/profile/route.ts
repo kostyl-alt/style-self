@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { BodyInfo } from "@/types/index";
+import type { BodyInfo, BodyProfile } from "@/types/index";
 
 export async function GET() {
   try {
@@ -10,7 +10,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("users")
-      .select("display_name, height, weight, body_type, body_tendency, weight_center, shoulder_width, upper_body_thickness, muscle_type, leg_length, preferred_fit, style_impression, emphasize_parts, hide_parts, fit_recommendation")
+      .select("display_name, height, weight, body_type, body_tendency, weight_center, shoulder_width, upper_body_thickness, muscle_type, leg_length, preferred_fit, style_impression, emphasize_parts, hide_parts, fit_recommendation, body_profile")
       .eq("id", user.id)
       .single() as unknown as {
         data: {
@@ -29,6 +29,7 @@ export async function GET() {
           emphasize_parts: string[] | null;
           hide_parts: string[] | null;
           fit_recommendation: string | null;
+          body_profile: BodyProfile | null;
         } | null;
         error: { message: string } | null;
       };
@@ -53,7 +54,7 @@ export async function GET() {
       fitRecommendation:   data.fit_recommendation,
     };
 
-    return NextResponse.json({ displayName: data.display_name, bodyInfo });
+    return NextResponse.json({ displayName: data.display_name, bodyInfo, bodyProfile: data.body_profile ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -69,6 +70,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json() as {
       displayName?: string;
       bodyInfo?: Partial<BodyInfo>;
+      bodyProfile?: BodyProfile | null;
     };
 
     const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -89,6 +91,7 @@ export async function PATCH(request: NextRequest) {
       if (b.emphasizeParts     !== undefined) updateData.emphasize_parts     = b.emphasizeParts;
       if (b.hideParts          !== undefined) updateData.hide_parts          = b.hideParts;
     }
+    if (body.bodyProfile !== undefined) updateData.body_profile = body.bodyProfile;
 
     const { error } = await supabase
       .from("users")

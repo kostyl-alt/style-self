@@ -81,7 +81,8 @@ style-self/
 │       └── WardrobeItemCard.tsx      # アイテムカード
 ├── lib/
 │   ├── utils/
-│   │   └── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
+│   │   ├── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
+│   │   └── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -127,7 +128,8 @@ style-self/
 │       ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
 │       ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
 │       ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
-│       └── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
+│       ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
+│       └── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義

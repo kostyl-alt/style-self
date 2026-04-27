@@ -15,6 +15,7 @@ import type {
   ResolvedCoordinateItem,
   CoordinateGenerateResponse,
   StylePreference,
+  BodyProfile,
 } from "@/types/index";
 
 type WardrobeRow = Database["public"]["Tables"]["wardrobe_items"]["Row"];
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const { data: userData } = await supabase
       .from("users")
-      .select("style_axis, worldview, height, weight, body_type, body_tendency, weight_center, shoulder_width, style_preference")
+      .select("style_axis, worldview, height, weight, body_type, body_tendency, weight_center, shoulder_width, style_preference, body_profile")
       .eq("id", user.id)
       .single() as unknown as {
         data: {
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
           weight_center: string | null;
           shoulder_width: string | null;
           style_preference: unknown;
+          body_profile: BodyProfile | null;
         } | null;
       };
 
@@ -127,10 +129,12 @@ export async function POST(request: NextRequest) {
     const materials = Array.from(new Set(wardrobeItems.map((i) => i.material).filter((m): m is string => !!m)));
     const colors = Array.from(new Set(wardrobeItems.flatMap((i) => [i.color, i.subColor]).filter((c): c is string => !!c)));
     const stylePreference = userData?.style_preference as StylePreference | null | undefined;
+    const bodyProfile     = userData?.body_profile ?? undefined;
     const systemPrompt = buildCoordinateSystemPrompt(
       getMaterialContext(materials),
       getColorContext(colors),
-      stylePreference ?? undefined
+      stylePreference ?? undefined,
+      bodyProfile
     );
 
     const rawCoordinate = await callClaudeJSON<CoordinateAIResponse>({

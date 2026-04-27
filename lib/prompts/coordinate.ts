@@ -1,9 +1,11 @@
-import type { StylePreference } from "@/types/index";
+import type { StylePreference, BodyProfile } from "@/types/index";
+import { getBodyAdjustments } from "@/lib/utils/body-rules";
 
 export function buildCoordinateSystemPrompt(
   materialContext: string,
   colorContext: string,
-  stylePreference?: StylePreference
+  stylePreference?: StylePreference,
+  bodyProfile?: BodyProfile
 ): string {
   const sections: string[] = [BASE_COORDINATE_PROMPT];
   if (materialContext) {
@@ -25,6 +27,20 @@ export function buildCoordinateSystemPrompt(
     if (stylePreference.targetImpressions.length)   lines.push(`与えたい印象: ${stylePreference.targetImpressions.join("・")}`);
     if (stylePreference.avoidImpressions.length)    lines.push(`避けたい印象: ${stylePreference.avoidImpressions.join("・")}`);
     if (stylePreference.ngElements.length)          lines.push(`NGな要素: ${stylePreference.ngElements.join("・")}`);
+    sections.push(`\n\n${lines.join("\n")}`);
+  }
+  if (bodyProfile) {
+    const adj = getBodyAdjustments(bodyProfile);
+    const lines: string[] = [
+      "【体型・比率の制約（好みより優先して反映すること）】",
+      `身長: ${bodyProfile.height}cm`,
+      `体型: ${bodyProfile.bodyType} / 骨格: ${bodyProfile.skeletonType}`,
+    ];
+    if (adj.heightAdvice)                       lines.push(`身長アドバイス: ${adj.heightAdvice}`);
+    if (adj.weightCenterAdvice)                 lines.push(`重心アドバイス: ${adj.weightCenterAdvice}`);
+    if (adj.recommendedSilhouettes.length)      lines.push(`推奨シルエット: ${adj.recommendedSilhouettes.join("・")}`);
+    if (adj.avoidElements.length)               lines.push(`避けるべき要素: ${adj.avoidElements.join("・")}`);
+    if (bodyProfile.proportionNote)             lines.push(`補足: ${bodyProfile.proportionNote}`);
     sections.push(`\n\n${lines.join("\n")}`);
   }
   return sections.join("");

@@ -290,6 +290,24 @@ export interface StylePreference {
   ngElements: string[];
 }
 
+export type BodyConcern =
+  | "looks_young"
+  | "short_legs"
+  | "broad_shoulders"
+  | "wide_hips"
+  | "short_torso"
+  | "top_heavy"
+  | "bottom_heavy";
+
+export interface BodyProfile {
+  height: number;
+  weight?: number;
+  bodyType: "slim" | "standard" | "curvy" | "muscular";
+  skeletonType: "straight" | "wave" | "natural";
+  concerns: BodyConcern[];
+  proportionNote?: string;
+}
+
 export interface StyleDiagnosisResult {
   plainSummary: string;
   coreIdentity: string;

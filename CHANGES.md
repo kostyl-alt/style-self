@@ -631,6 +631,20 @@
 
 ---
 
+## Sprint 32: 体型・骨格・サイズ相談機能
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `types/index.ts` — `BodyConcern` / `BodyProfile` 型追加 | ✅ |
+| 2 | `supabase/migrations/014_body_profile.sql` — `users.body_profile jsonb` カラム追加 | ✅ |
+| 3 | `lib/utils/body-rules.ts` — `getBodyAdjustments()` ルールエンジン新規作成 | ✅ |
+| 4 | `app/(app)/self/page.tsx` — 身体情報タブに体型タイプ・骨格・悩み・補足メモを追加 | ✅ |
+| 5 | `app/api/profile/route.ts` — GET/PATCHに `body_profile` を追加 | ✅ |
+| 6 | `lib/prompts/coordinate.ts` — `buildCoordinateSystemPrompt()` に `bodyProfile?` 引数追加・制約ブロック注入 | ✅ |
+| 7 | `app/api/ai/coordinate/route.ts` — `body_profile` を SELECT してプロンプトに渡す | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

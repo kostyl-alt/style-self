@@ -6,7 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
-  StyleDiagnosisResult, StylePreference,
+  StyleDiagnosisResult, StylePreference, BodyProfile, BodyConcern,
 } from "@/types/index";
 
 // ---- 型 ----
@@ -254,11 +254,16 @@ function BodyTab() {
   const [saving,              setSaving]              = useState(false);
   const [saved,               setSaved]               = useState(false);
   const [error,               setError]               = useState<string | null>(null);
+  // BodyProfile fields
+  const [bpBodyType,          setBpBodyType]          = useState<BodyProfile["bodyType"] | "">("");
+  const [bpSkeletonType,      setBpSkeletonType]      = useState<BodyProfile["skeletonType"] | "">("");
+  const [bpConcerns,          setBpConcerns]          = useState<BodyConcern[]>([]);
+  const [bpProportionNote,    setBpProportionNote]    = useState("");
 
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
-      .then((data: { bodyInfo: BodyInfo }) => {
+      .then((data: { bodyInfo: BodyInfo; bodyProfile: BodyProfile | null }) => {
         const b = data.bodyInfo;
         setHeight(b.height != null ? String(b.height) : "");
         setWeight(b.weight != null ? String(b.weight) : "");
@@ -274,6 +279,12 @@ function BodyTab() {
         setEmphasizeParts(b.emphasizeParts ?? []);
         setHideParts(b.hideParts ?? []);
         setFitRecommendation(b.fitRecommendation ?? null);
+        if (data.bodyProfile) {
+          setBpBodyType(data.bodyProfile.bodyType ?? "");
+          setBpSkeletonType(data.bodyProfile.skeletonType ?? "");
+          setBpConcerns(data.bodyProfile.concerns ?? []);
+          setBpProportionNote(data.bodyProfile.proportionNote ?? "");
+        }
       })
       .catch(() => setError("プロフィールの読み込みに失敗しました"))
       .finally(() => setLoading(false));
@@ -295,10 +306,18 @@ function BodyTab() {
         legLength: legLength || null, preferredFit: preferredFit || null,
         styleImpression: styleImpression || null, emphasizeParts, hideParts,
       };
+      const bodyProfile: BodyProfile | null = (bpBodyType && bpSkeletonType) ? {
+        height:          height ? parseInt(height, 10) : 0,
+        weight:          weight ? parseInt(weight, 10) : undefined,
+        bodyType:        bpBodyType,
+        skeletonType:    bpSkeletonType,
+        concerns:        bpConcerns,
+        proportionNote:  bpProportionNote || undefined,
+      } : null;
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bodyInfo }),
+        body: JSON.stringify({ bodyInfo, bodyProfile }),
       });
       if (!res.ok) { const d = await res.json() as { error: string }; throw new Error(d.error); }
       setSaved(true);
@@ -427,6 +446,83 @@ function BodyTab() {
           ))}
         </div>
       </Section>
+
+      <div className="border-t border-gray-100 pt-4 mt-2">
+        <p className="text-xs text-gray-400 mb-3">以下はコーデ生成に使う体型・悩み情報です</p>
+        <div className="space-y-4">
+          <Section title="体型タイプ">
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: "slim",     label: "スリム",   desc: "細身・華奢" },
+                { value: "standard", label: "標準",     desc: "バランス型" },
+                { value: "curvy",    label: "曲線的",   desc: "メリハリある体型" },
+                { value: "muscular", label: "筋肉質",   desc: "ハリ感・ボリューム" },
+              ] as { value: BodyProfile["bodyType"]; label: string; desc: string }[]).map((t) => (
+                <ChoiceButton key={t.value} selected={bpBodyType === t.value} onClick={() => setBpBodyType(t.value)}>
+                  <span className="font-medium">{t.label}</span>
+                  <span className="block text-xs mt-0.5 opacity-70">{t.desc}</span>
+                </ChoiceButton>
+              ))}
+            </div>
+          </Section>
+          <Section title="骨格タイプ（体型診断ベース）">
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: "straight", label: "ストレート", desc: "上重心・ハリ感" },
+                { value: "wave",     label: "ウェーブ",   desc: "下重心・曲線" },
+                { value: "natural",  label: "ナチュラル", desc: "骨感・フレーム" },
+              ] as { value: BodyProfile["skeletonType"]; label: string; desc: string }[]).map((t) => (
+                <ChoiceButton key={t.value} selected={bpSkeletonType === t.value} onClick={() => setBpSkeletonType(t.value)}>
+                  <span className="font-medium">{t.label}</span>
+                  <span className="block text-xs mt-0.5 opacity-70">{t.desc}</span>
+                </ChoiceButton>
+              ))}
+            </div>
+          </Section>
+          <Section title="スタイルの悩み" hint="最大3つまで">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { value: "looks_young",     label: "子どもっぽく見える" },
+                { value: "short_legs",      label: "脚が短く見える" },
+                { value: "broad_shoulders", label: "肩幅が広い" },
+                { value: "wide_hips",       label: "腰回りが気になる" },
+                { value: "short_torso",     label: "胴が短い" },
+                { value: "top_heavy",       label: "上半身が重い" },
+                { value: "bottom_heavy",    label: "下半身が重い" },
+              ] as { value: BodyConcern; label: string }[]).map((t) => {
+                const selected = bpConcerns.includes(t.value);
+                const disabled = !selected && bpConcerns.length >= 3;
+                return (
+                  <PillButton
+                    key={t.value}
+                    selected={selected}
+                    onClick={() => {
+                      if (disabled) return;
+                      setBpConcerns(selected ? bpConcerns.filter((c) => c !== t.value) : [...bpConcerns, t.value]);
+                    }}
+                    className={disabled ? "opacity-30 cursor-not-allowed" : ""}
+                  >
+                    {t.label}
+                  </PillButton>
+                );
+              })}
+            </div>
+            {bpConcerns.length >= 3 && (
+              <p className="text-xs text-gray-400 mt-1">3つ選択済み（これ以上選択できません）</p>
+            )}
+          </Section>
+          <Section title="補足メモ" hint="任意">
+            <input
+              type="text"
+              value={bpProportionNote}
+              onChange={(e) => setBpProportionNote(e.target.value)}
+              placeholder="例：脚が特に短め、腕が長いなど"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+            />
+          </Section>
+        </div>
+      </div>
+
       {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
       <button
         onClick={handleSave} disabled={saving || generatingFit}
