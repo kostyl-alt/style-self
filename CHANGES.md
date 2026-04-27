@@ -668,6 +668,20 @@
 
 ---
 
+## Sprint 35: ZOZOTOWN購入導線 v1（検索リンク）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/utils/zozo-link.ts` — ZOZO検索URLビルダー新規作成（カテゴリ→日本語キーワード変換・色追加・アフィリエイトID対応） | ✅ |
+| 2 | `.env.local` — `NEXT_PUBLIC_ZOZO_AFFILIATE_ID` 環境変数を追加（ValueCommerce 承認後に値を設定） | ✅ |
+| 3 | `types/index.ts` — `StyleConsultResponse` に `itemsToFind: string[]` フィールド追加 | ✅ |
+| 4 | `lib/prompts/style-consult.ts` — 着こなし相談プロンプトに `itemsToFind` 出力を追加（ZOZO検索キーワードとして使える具体性で出力） | ✅ |
+| 5 | `app/api/ai/style-consult/route.ts` — レスポンスに `itemsToFind` を含める（配列ガード付き） | ✅ |
+| 6 | `components/coordinate/CoordinateCard.tsx` — 各コーデアイテムに「ZOZOで探す →」リンク追加 | ✅ |
+| 7 | `app/(app)/style/page.tsx` — 着こなし相談結果に「Items to Find」セクションを新設し、写真分析の `itemsToFind` と合わせて各項目に「ZOZOで探す →」リンクを追加 | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

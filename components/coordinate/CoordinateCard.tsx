@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SilhouetteDiagram from "./SilhouetteDiagram";
+import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
 import type {
   ResolvedCoordinateItem,
   CoordinateAIResponse,
@@ -196,6 +197,18 @@ export default function CoordinateCard({
                     → {reason}
                   </p>
                 )}
+                <a
+                  href={buildZozoSearchUrl({
+                    keyword: item.name,
+                    category: item.category,
+                    color: item.color ?? undefined,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-1 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
+                >
+                  ZOZOで探す →
+                </a>
               </div>
             </div>
           ))}

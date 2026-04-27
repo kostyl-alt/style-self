@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     const response: StyleConsultResponse = {
       analysis:       typeof raw.analysis === "string" ? raw.analysis : "",
       adjustments:    validateAdjustments((raw.adjustments ?? {}) as Record<string, unknown>),
-      keyPoints:      Array.isArray(raw.keyPoints)   ? (raw.keyPoints as string[])   : [],
+      keyPoints:      Array.isArray(raw.keyPoints)    ? (raw.keyPoints as string[])    : [],
+      itemsToFind:    Array.isArray(raw.itemsToFind)  ? (raw.itemsToFind as string[])  : [],
       avoidPoints:    Array.isArray(raw.avoidPoints)  ? (raw.avoidPoints as string[])  : [],
       preferenceNote: typeof raw.preferenceNote === "string" ? raw.preferenceNote : "",
     };

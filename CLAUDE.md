@@ -84,7 +84,8 @@ style-self/
 ├── lib/
 │   ├── utils/
 │   │   ├── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
-│   │   └── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
+│   │   ├── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
+│   │   └── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -163,6 +164,9 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 RAKUTEN_APP_ID=        # UUIDまたは数字形式
 RAKUTEN_AFFILIATE_ID=
 RAKUTEN_ACCESS_KEY=    # 管理画面のアクセスキー（RAKUTEN_APP_IDより優先）
+
+# ZOZOTOWN（Sprint 35 / Phase 1: ValueCommerce 承認後に値を設定）
+NEXT_PUBLIC_ZOZO_AFFILIATE_ID=
 ```
 
 ---

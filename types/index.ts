@@ -510,6 +510,7 @@ export interface StyleConsultResponse {
   analysis:        string;
   adjustments:     StyleConsultAdjustments;
   keyPoints:       string[];
+  itemsToFind:     string[];
   avoidPoints:     string[];
   preferenceNote:  string;
 }
