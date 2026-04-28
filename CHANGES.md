@@ -679,6 +679,19 @@
 | 5 | `app/api/ai/style-consult/route.ts` — レスポンスに `itemsToFind` を含める（配列ガード付き） | ✅ |
 | 6 | `components/coordinate/CoordinateCard.tsx` — 各コーデアイテムに「ZOZOで探す →」リンク追加 | ✅ |
 | 7 | `app/(app)/style/page.tsx` — 着こなし相談結果に「Items to Find」セクションを新設し、写真分析の `itemsToFind` と合わせて各項目に「ZOZOで探す →」リンクを追加 | ✅ |
+| 8 | `lib/utils/zozo-link.ts` — ZOZO の `p_keyv` が Shift-JIS percent-encoding を要求するため `encoding-japanese` で SJIS バイト列に変換してエンコードする方式へ修正（本番環境の文字化け解消） | ✅ |
+
+---
+
+## Sprint 36: 手持ちなしの理想コーデ提案機能
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `types/index.ts` — `VirtualCoordinateRole` / `VirtualCoordinateItem` / `VirtualCoordinateResponse` 型追加 | ✅ |
+| 2 | `lib/prompts/virtual-coordinate.ts` — 理想コーデ提案プロンプト（診断結果・好み・体型・世界観を文脈注入、未設定項目は標準体型として処理、抽象語禁止） | ✅ |
+| 3 | `app/api/ai/virtual-coordinate/route.ts` — 理想コーデ生成API（POST・認証必須・5アイテム上限・role/category ホワイトリストバリデーション） | ✅ |
+| 4 | `app/(app)/style/page.tsx` — 「理想のコーデ」タブ新規追加（4タブ構成：コーデ提案 / 理想のコーデ / 着こなし相談 / 保存履歴）、シーン選択→生成→各アイテムに「ZOZOで探す」リンク、コンセプト・着こなしポイント表示 | ✅ |
+| 5 | `app/(app)/style/page.tsx` — タブ幅対応（`flex-1 min-w-0` + `truncate` + `text-xs sm:text-sm`） | ✅ |
 
 ---
 

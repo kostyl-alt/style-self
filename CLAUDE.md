@@ -55,7 +55,8 @@ style-self/
 │   │   │   ├── learn-insight/route.ts # 今日の気づき生成AI（Sprint 21 Phase 4）
 │   │   ├── trend-translate/route.ts # トレンド世界観翻訳AI（Sprint 28）
 │   │   ├── style-consult/route.ts   # 着こなし相談AI（Sprint 33）
-│   │   └── analyze-look/route.ts    # 参考写真の比率・シルエット分析AI（Sprint 34）
+│   │   ├── analyze-look/route.ts    # 参考写真の比率・シルエット分析AI（Sprint 34）
+│   │   └── virtual-coordinate/route.ts # 理想コーデ提案AI（Sprint 36）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
@@ -118,6 +119,7 @@ style-self/
 │       ├── trend-extract.ts          # 楽天商品名リスト→トレンド抽出プロンプト（Sprint 30）
 │       ├── style-consult.ts          # 着こなし相談プロンプト（Sprint 33）
 │       ├── analyze-look.ts            # 参考写真分析プロンプト（Sprint 34）
+│       ├── virtual-coordinate.ts      # 理想コーデ提案プロンプト（Sprint 36）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   └── migrations/

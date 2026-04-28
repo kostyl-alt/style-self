@@ -4,9 +4,22 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
-import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse } from "@/types/index";
+import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse, VirtualCoordinateResponse } from "@/types/index";
 
-type StyleTab = "coordinate" | "consult" | "saved";
+type StyleTab = "coordinate" | "virtual" | "consult" | "saved";
+
+const VIRTUAL_ROLE_LABELS: Record<string, { label: string; style: string }> = {
+  base:   { label: "ベース",     style: "bg-gray-100 text-gray-500" },
+  main:   { label: "メイン",     style: "bg-gray-800 text-white" },
+  accent: { label: "アクセント", style: "bg-amber-100 text-amber-700" },
+};
+
+const VIRTUAL_CATEGORY_EMOJI: Record<string, string> = {
+  tops: "👕", bottoms: "👖", outerwear: "🧥", jacket: "🥼",
+  vest: "🦺", inner: "👚", dress: "👗", setup: "🩱",
+  shoes: "👟", bags: "👜", accessories: "💍",
+  hat: "🧢", jewelry: "📿", roomwear: "🏠", other: "🏷️",
+};
 
 const SCENES = [
   { value: "カジュアル", emoji: "☕", desc: "普段・休日" },
@@ -150,6 +163,146 @@ function CoordinateTab() {
             別のコーデを提案してもらう
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+// ---- 理想のコーデタブ (Sprint 36) ----
+function VirtualTab() {
+  const [scene, setScene]               = useState("カジュアル");
+  const [result, setResult]             = useState<VirtualCoordinateResponse | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+
+  async function handleGenerate() {
+    setIsGenerating(true); setError(null); setResult(null);
+    try {
+      const res = await fetch("/api/ai/virtual-coordinate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene }),
+      });
+      const data = await res.json() as VirtualCoordinateResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "理想コーデの生成に失敗しました");
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "理想コーデの生成に失敗しました");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gray-50 rounded-2xl p-4">
+        <p className="text-xs text-gray-500 leading-relaxed">
+          手持ち服がなくてもOK。診断結果と体型情報からあなたの理想のコーデを5アイテムで提案します。気に入ったアイテムは「ZOZOで探す」から購入できます。
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs text-gray-500 mb-3">シーンを選んでください</p>
+        <div className="grid grid-cols-3 gap-3">
+          {SCENES.map((s) => (
+            <button key={s.value}
+              onClick={() => { setScene(s.value); setResult(null); }}
+              className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all ${
+                scene === s.value ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              <span className="text-2xl">{s.emoji}</span>
+              <span className="text-xs font-medium">{s.value}</span>
+              <span className={`text-xs ${scene === s.value ? "text-gray-300" : "text-gray-400"}`}>{s.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={handleGenerate} disabled={isGenerating}
+        className="w-full py-4 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
+      >
+        {isGenerating ? "理想のコーデを設計しています..." : "理想のコーデを提案してもらう"}
+      </button>
+
+      {isGenerating && (
+        <div className="text-center py-10 text-gray-300">
+          <div className="text-4xl mb-3 animate-pulse">✨</div>
+          <p className="text-sm">あなたの体型・好みに合う理想を組み立てています</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
+      {result && !isGenerating && (
+        <div className="space-y-5">
+          {/* コンセプト */}
+          <div className="bg-gray-800 text-white rounded-2xl p-5">
+            <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Concept</p>
+            <p className="text-base leading-relaxed">{result.concept}</p>
+          </div>
+
+          {/* アイテム一覧 */}
+          <div className="space-y-3">
+            <p className="text-xs tracking-widest text-gray-400 uppercase">Items</p>
+            {result.items.map((item, i) => (
+              <div key={i} className="border border-gray-100 rounded-2xl p-4 space-y-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex-shrink-0 flex items-center justify-center text-2xl">
+                    {VIRTUAL_CATEGORY_EMOJI[item.category] ?? "🏷️"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full leading-none ${VIRTUAL_ROLE_LABELS[item.role]?.style ?? "bg-gray-100 text-gray-500"}`}>
+                        {VIRTUAL_ROLE_LABELS[item.role]?.label ?? item.role}
+                      </span>
+                      {item.color && (
+                        <span className="text-xs text-gray-400">{item.color}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-800 font-medium leading-tight">{item.name}</p>
+                    {item.reason && (
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">→ {item.reason}</p>
+                    )}
+                  </div>
+                </div>
+                <a
+                  href={buildZozoSearchUrl({ keyword: item.zozoKeyword || item.name })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
+                >
+                  ZOZOで探す →
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {/* 着こなしのポイント */}
+          {result.stylingTips.length > 0 && (
+            <div className="border border-gray-200 rounded-2xl p-5">
+              <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Styling Tips</p>
+              <ol className="space-y-2">
+                {result.stylingTips.map((tip, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-gray-700">
+                    <span className="flex-shrink-0 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-xs font-medium">{i + 1}</span>
+                    <span className="leading-relaxed">{tip}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <button onClick={handleGenerate}
+            className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+          >
+            別の理想コーデを提案してもらう
+          </button>
+        </div>
       )}
     </div>
   );
@@ -611,6 +764,7 @@ export default function StylePage() {
 
   const TABS: { value: StyleTab; label: string }[] = [
     { value: "coordinate", label: "コーデ提案" },
+    { value: "virtual",    label: "理想のコーデ" },
     { value: "consult",    label: "着こなし相談" },
     { value: "saved",      label: "保存履歴" },
   ];
@@ -627,7 +781,7 @@ export default function StylePage() {
         <div className="flex border-b border-gray-100 mb-6">
           {TABS.map((tab) => (
             <button key={tab.value} onClick={() => setActiveTab(tab.value)}
-              className={`flex-1 pb-3 text-sm transition-colors ${
+              className={`flex-1 min-w-0 pb-3 text-xs sm:text-sm transition-colors truncate ${
                 activeTab === tab.value
                   ? "text-gray-900 border-b-2 border-gray-800 font-medium"
                   : "text-gray-400 hover:text-gray-600"
@@ -639,6 +793,7 @@ export default function StylePage() {
         </div>
         {/* タブコンテンツ */}
         {activeTab === "coordinate" && <CoordinateTab />}
+        {activeTab === "virtual"    && <VirtualTab />}
         {activeTab === "consult"    && <ConsultTab />}
         {activeTab === "saved"      && <SavedTab />}
       </div>

@@ -540,6 +540,26 @@ export interface LookAnalysisResponse {
   personalAdaptation:  PersonalAdaptation;
 }
 
+// ---- Virtual Coordinate (Sprint 36) ----
+
+export type VirtualCoordinateRole = "main" | "base" | "accent";
+
+export interface VirtualCoordinateItem {
+  role:        VirtualCoordinateRole;
+  category:    string;
+  name:        string;
+  color:       string;
+  reason:      string;
+  zozoKeyword: string;
+}
+
+export interface VirtualCoordinateResponse {
+  scene:       string;
+  concept:     string;
+  items:       VirtualCoordinateItem[];
+  stylingTips: string[];
+}
+
 // ---- Onboarding ----
 
 export interface OnboardingAnswer {
