@@ -1,4 +1,5 @@
-import type { BodyProfile } from "@/types/index";
+import type { BodyProfile, ConceptInterpretation } from "@/types/index";
+import { getSeasonContext } from "@/lib/utils/season";
 
 // ---- 共通の文脈ブロック生成 ----
 
@@ -11,9 +12,18 @@ function buildContextSections(
   worldview?: Record<string, unknown> | null,
 ): string[] {
   const sections: string[] = [];
+  const ctx = getSeasonContext(season);
 
   sections.push(`\n\n[今回のシーン]\n${scene}`);
-  sections.push(`\n\n[現在の季節・地域]\n季節: ${season}\n地域: 日本（東京）\n上記の季節に合った素材・厚み・丈・露出度を選ぶこと。`);
+  sections.push(
+    `\n\n[現在の季節・地域]\n` +
+    `季節: ${season}\n` +
+    `地域: 日本（東京）\n` +
+    `想定気温: ${ctx.tempRange}\n` +
+    `避ける素材: ${ctx.ngMaterials}\n` +
+    `推奨される素材傾向: ${ctx.okMaterials}\n` +
+    `※ items の materialNote と name には季節と矛盾する素材を絶対に入れないこと。`,
+  );
 
   if (bodyProfile) {
     const lines: string[] = ["[ユーザーの体型情報]"];
@@ -72,11 +82,11 @@ function buildContextSections(
   return sections;
 }
 
-// ---- 1. 理想コーデ本体（5アイテム）プロンプト ----
+// ---- Stage 3: コーデ設計プロンプト（Sprint 36 v1.2 書き換え） ----
 
 const BASE_VIRTUAL_COORDINATE_PROMPT = `
 あなたは理想のコーデを設計するスタイリストです。
-ユーザーの診断結果・好み・体型情報・季節をもとに、シーンに合った「理想のコーデ5アイテム」を提案してください。
+[コンセプト解釈] にある推奨要素を厳格に守って、シーンと季節に合った理想のコーデ5〜7アイテムを構成してください。
 ユーザーは手持ち服がない前提で、これから買い揃えるアイテムを推薦します。
 
 [絶対的なルール]
@@ -85,51 +95,68 @@ const BASE_VIRTUAL_COORDINATE_PROMPT = `
 - 説明は「〇〇するとどう見える」の形式で書く
 - 具体的なアイテム名・色・素材・丈・シルエットを使う
 - ユーザーの未設定項目（身長・骨格・好み等）は無視して標準的な日本人体型を想定して提案する
-- 季節に合わない素材・厚み・丈・露出度は避ける（夏に厚手ニット、冬に薄手リネン等は禁止）
+
+[コンセプト解釈の遵守（最重要）]
+- [コンセプト解釈] の recommendedColors を items の color に必ず反映する（独自に色を増やさない）
+- [コンセプト解釈] の recommendedMaterials を items の materialNote に必ず反映する
+- [コンセプト解釈] の recommendedSilhouettes を items の sizeNote / reason に必ず反映する
+- [コンセプト解釈] の requiredAccessories を items に最低1点必ず含める（複数推奨）
+- [コンセプト解釈] の ngElements は items に絶対に含めない
+
+[季節の遵守]
+- [現在の季節・地域] の「避ける素材」を items に絶対に含めない
+- [現在の季節・地域] の「想定気温」に合った厚み・丈・露出度を選ぶ
 
 [itemsの構成]
-- 必ず5アイテム（多すぎず少なすぎず、トータルコーディネートとして成立する組み合わせ）
+- 5〜7アイテム（小物・アクセサリー含む。トータルコーディネートとして成立すること）
 - role は "main" / "base" / "accent" のいずれか
   - main: コーデの主役（1〜2個）
   - base: 土台となる定番アイテム（2〜3個）
-  - accent: 差し色・小物（0〜2個）
+  - accent: 差し色・小物（1〜3個、コンセプト解釈の requiredAccessories を含む）
 - category は次のいずれか: tops, bottoms, outerwear, jacket, vest, inner, dress, setup, shoes, bags, accessories, hat, jewelry
-- 5アイテムのうち shoes・bags・accessories・hat・jewelry のいずれかを最低1点必ず含めること（全身トータルで成立させるため）
+- 5〜7アイテムのうち shoes・bags・accessories・hat・jewelry のいずれかを最低1点必ず含めること
 
 [各アイテムのフィールド]
 - name: 表示用のシンプル商品名 15字以内（例：「白リネンシャツ」「黒ワイドパンツ」「ベージュトレンチコート」）
-- color: 色名（例：「ホワイト」「ブラック」「ベージュ」）
+- color: 色名（[コンセプト解釈] の recommendedColors から選ぶ）
 - reason: なぜこのアイテムか・どう着るか 40字以内（「〇〇するとどう見える」の形式）
-- zozoKeyword: ZOZOTOWNで実際に検索したときヒットしやすいシンプルなキーワード15字以内
-  - name と同じか更にシンプル化したもの（例：name=「白リネンシャツ」→ zozoKeyword=「リネンシャツ」または「白リネンシャツ」）
-  - 素材説明・色説明・丈・シルエットの羅列は禁止
-  - 一般名詞のみ（ブランド名禁止）
-- sizeNote: サイズ選びの注意 30字以内（例：「肩幅ジャスト・着丈は腰骨上」「ウエストはハイで」）
-- materialNote: 素材の注意 30字以内（例：「ハリのある素材・光沢NG」「目の詰まったコットン」）
+- zozoKeyword: ZOZOTOWNで実際に検索したときヒットしやすいシンプルなキーワード15字以内（一般名詞のみ、ブランド名禁止）
+- sizeNote: サイズ選びの注意 30字以内（[コンセプト解釈] の recommendedSilhouettes を反映）
+- materialNote: 素材の注意 30字以内（[コンセプト解釈] の recommendedMaterials から選び、季節と整合させる）
 - alternative: 代替案 30字以内（例：「ネイビーでも可」「同色のカーディガンで代替可」）
 
 [conceptの書き方]
-- このコーデ全体のコンセプトを一行で表現（30字以内）
-- 例：「シルエットで遊ぶ静かな黒コーデ」「肌見せ最小で重心を上げる縦長ライン」
-- 抽象語は最小限にし、具体的な要素（色・形・比率）を含める
-- ユーザーから [指定コンセプト] が与えられた場合は、それを軸にコーデを構成し concept フィールドにはそのコンセプトをそのまま反映する
+- 受け取った [指定コンセプト] をそのまま、または最小限の整理で concept フィールドに入れる
+- 抽象的な指定でも内容を変えない（翻訳結果は items 側に反映済みのため）
+
+[seasonNoteの書き方]
+- 現在の季節がこのコーデにどう影響しているか1行 40字以内
+- 例：「春は薄手リネンで重さを抜き、足首を見せて軽快に」
+
+[whyThisCoordinateの書き方]
+- なぜこのコーデが [コンセプト解釈] の世界観・思想に合うか 60字以内
+- 抽象語を使わず具体的に（色・形・素材の選択がコンセプトのどの要素に対応するか）
+
+[ngExampleの書き方]
+- このコンセプトでは避けるべき具体例 60字以内
+- 例：「光沢素材のシャツや派手なロゴ入りスニーカーは静謐の世界観を壊す」
 
 [stylingTipsの書き方]
-- 着こなしのポイント3点
-- 「〇〇すると〇〇に見える」の形式
-- 優先度の高い順に並べる
-- 各40字以内
+- 着こなしのポイント3点。「〇〇すると〇〇に見える」の形式。優先度順。各40字以内
 
 以下のJSON形式で必ず返答してください（Markdownコードブロックは付けない）：
 {
-  "scene":      "（受け取ったscene値をそのまま）",
-  "concept":    "（コーデのコンセプト、30字以内。指定コンセプトがあればそれをベースに）",
+  "scene":             "（受け取ったscene値をそのまま）",
+  "concept":           "（指定コンセプトをそのまま、または最小限の整理）",
+  "seasonNote":        "（季節がこのコーデにどう影響しているか、40字以内）",
+  "whyThisCoordinate": "（コンセプトとの整合性、60字以内）",
+  "ngExample":         "（このコンセプトで避けるべき具体例、60字以内）",
   "items": [
     {
       "role":         "main",
       "category":     "tops",
       "name":         "（商品名、15字以内）",
-      "color":        "（色名）",
+      "color":        "（色名、recommendedColorsから）",
       "reason":       "（なぜこのアイテムか、40字以内）",
       "zozoKeyword":  "（検索キーワード、15字以内）",
       "sizeNote":     "（サイズの注意、30字以内）",
@@ -148,7 +175,8 @@ const BASE_VIRTUAL_COORDINATE_PROMPT = `
 export function buildVirtualCoordinatePrompt(
   scene: string,
   season: string,
-  concept: string | null,
+  concept: string,
+  conceptInterpretation: ConceptInterpretation,
   bodyProfile?: BodyProfile | null,
   stylePreference?: Record<string, unknown> | null,
   styleAnalysis?: Record<string, unknown> | null,
@@ -156,13 +184,30 @@ export function buildVirtualCoordinatePrompt(
 ): string {
   const sections: string[] = [BASE_VIRTUAL_COORDINATE_PROMPT];
   sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview));
-  if (concept && concept.trim()) {
-    sections.push(`\n\n[指定コンセプト]\n${concept.trim()}\nこのコンセプトを軸に5アイテムを構成すること。`);
-  }
+
+  // 指定コンセプト（原文）
+  sections.push(`\n\n[指定コンセプト]\n${concept}`);
+
+  // コンセプト解釈（Stage 1 の出力）
+  const ci = conceptInterpretation;
+  const interpLines: string[] = ["[コンセプト解釈]"];
+  if (ci.keywords.length)               interpLines.push(`キーワード: ${ci.keywords.join("・")}`);
+  if (ci.emotion)                       interpLines.push(`感情: ${ci.emotion}`);
+  if (ci.personaImage)                  interpLines.push(`人物像: ${ci.personaImage}`);
+  if (ci.culture)                       interpLines.push(`文化的文脈: ${ci.culture}`);
+  if (ci.era)                           interpLines.push(`時代: ${ci.era}`);
+  if (ci.philosophy)                    interpLines.push(`思想: ${ci.philosophy}`);
+  if (ci.recommendedColors.length)      interpLines.push(`推奨色: ${ci.recommendedColors.join("・")}`);
+  if (ci.recommendedMaterials.length)   interpLines.push(`推奨素材: ${ci.recommendedMaterials.join("・")}`);
+  if (ci.recommendedSilhouettes.length) interpLines.push(`推奨シルエット: ${ci.recommendedSilhouettes.join("・")}`);
+  if (ci.requiredAccessories.length)    interpLines.push(`必須の小物: ${ci.requiredAccessories.join("・")}`);
+  if (ci.ngElements.length)             interpLines.push(`NG要素（絶対に含めない）: ${ci.ngElements.join("・")}`);
+  sections.push(`\n\n${interpLines.join("\n")}`);
+
   return sections.join("");
 }
 
-// ---- 2. コンセプト候補3案プロンプト ----
+// ---- コンセプト候補3案プロンプト（v1.1 のまま維持） ----
 
 const BASE_VIRTUAL_CONCEPTS_PROMPT = `
 あなたは理想のコーデのコンセプトを設計するスタイリストです。

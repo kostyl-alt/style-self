@@ -328,7 +328,7 @@ function VirtualTab() {
             {concepts.map((c, i) => (
               <button
                 key={i}
-                onClick={() => generateCoordinate(c.title)}
+                onClick={() => generateCoordinate(c.description ? `${c.title}（${c.description}）` : c.title)}
                 disabled={isLoading}
                 className="w-full text-left border border-gray-200 hover:border-gray-800 rounded-2xl p-5 transition-colors disabled:opacity-40"
               >
@@ -368,9 +368,36 @@ function VirtualTab() {
   // ---- Stage 3: コーデ結果 ----
   if (!result) return null;
 
+  return <VirtualResult result={result} season={season} scene={scene} priorityIndex={priorityIndex} onReset={resetToInput} />;
+}
+
+function VirtualResult({
+  result,
+  season,
+  scene,
+  priorityIndex,
+  onReset,
+}: {
+  result:        VirtualCoordinateResponse;
+  season:        string;
+  scene:         string;
+  priorityIndex: number;
+  onReset:       () => void;
+}) {
+  const [showInterpretation, setShowInterpretation] = useState(false);
+  const ci = result.conceptInterpretation;
+
+  const interpretationHasContent =
+    ci.keywords.length > 0 ||
+    ci.recommendedColors.length > 0 ||
+    ci.recommendedMaterials.length > 0 ||
+    ci.recommendedSilhouettes.length > 0 ||
+    ci.requiredAccessories.length > 0 ||
+    ci.ngElements.length > 0;
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
           {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
         </span>
@@ -381,7 +408,103 @@ function VirtualTab() {
       <div className="bg-gray-800 text-white rounded-2xl p-5">
         <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Concept</p>
         <p className="text-base leading-relaxed">{result.concept}</p>
+        {result.whyThisCoordinate && (
+          <p className="text-xs text-gray-300 mt-3 pt-3 border-t border-gray-700 leading-relaxed">
+            {result.whyThisCoordinate}
+          </p>
+        )}
       </div>
+
+      {/* コンセプトの解釈（折りたたみ） */}
+      {interpretationHasContent && (
+        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setShowInterpretation((v) => !v)}
+            className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-xs tracking-widest text-gray-400 uppercase">Concept Interpretation</span>
+            <span className="text-xs text-gray-400">{showInterpretation ? "閉じる ▲" : "開く ▼"}</span>
+          </button>
+          {showInterpretation && (
+            <div className="px-5 pb-5 space-y-3 text-sm">
+              {ci.keywords.length > 0 && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">キーワード</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.keywords.join("・")}</span>
+                </div>
+              )}
+              {ci.emotion && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">感情</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.emotion}</span>
+                </div>
+              )}
+              {ci.personaImage && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">人物像</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.personaImage}</span>
+                </div>
+              )}
+              {ci.culture && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">文化的文脈</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.culture}</span>
+                </div>
+              )}
+              {ci.era && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">時代</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.era}</span>
+                </div>
+              )}
+              {ci.philosophy && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">思想</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.philosophy}</span>
+                </div>
+              )}
+              {ci.recommendedColors.length > 0 && (
+                <div className="flex gap-3 pt-2 border-t border-gray-100">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">推奨色</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.recommendedColors.join("・")}</span>
+                </div>
+              )}
+              {ci.recommendedMaterials.length > 0 && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">推奨素材</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.recommendedMaterials.join("・")}</span>
+                </div>
+              )}
+              {ci.recommendedSilhouettes.length > 0 && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">推奨シルエット</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.recommendedSilhouettes.join("・")}</span>
+                </div>
+              )}
+              {ci.requiredAccessories.length > 0 && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-gray-400 w-24 pt-0.5">必須の小物</span>
+                  <span className="text-gray-700 leading-relaxed">{ci.requiredAccessories.join("・")}</span>
+                </div>
+              )}
+              {ci.ngElements.length > 0 && (
+                <div className="flex gap-3">
+                  <span className="flex-shrink-0 text-xs text-amber-600 w-24 pt-0.5">NG要素</span>
+                  <span className="text-amber-800 leading-relaxed">{ci.ngElements.join("・")}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 季節の考慮点 */}
+      {result.seasonNote && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <p className="text-xs text-blue-600 mb-1">{SEASON_EMOJI[season] ?? "🗓️"} 季節の考慮</p>
+          <p className="text-sm text-blue-900 leading-relaxed">{result.seasonNote}</p>
+        </div>
+      )}
 
       {/* アイテム一覧 */}
       <div className="space-y-3">
@@ -473,7 +596,15 @@ function VirtualTab() {
         </div>
       )}
 
-      <button onClick={resetToInput}
+      {/* NG例 */}
+      {result.ngExample && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+          <p className="text-xs tracking-widest text-amber-600 uppercase mb-2">NG Example</p>
+          <p className="text-sm text-amber-800 leading-relaxed">{result.ngExample}</p>
+        </div>
+      )}
+
+      <button onClick={onReset}
         className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
       >
         別の理想コーデを提案してもらう

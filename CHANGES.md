@@ -706,6 +706,19 @@
 | 10 | `app/api/ai/virtual-coordinate/concepts/route.ts` — コンセプト候補3案を返す新規API（POST・認証必須・1500トークン） | ✅ |
 | 11 | `app/(app)/style/page.tsx` — VirtualTab を3ステージ構成に書き換え（input → concepts → result）、コンセプトテキストエリア追加、季節バッジ表示、各アイテムに `sizeNote` / `materialNote` / `alternative` 行を追加（空文字は非表示）、role=main の最初のアイテムを `bg-amber-50` でハイライトし「⭐ まず買うべき1点」バッジ表示 | ✅ |
 
+### v1.2（季節バグ修正・多段プロンプト化・コンセプト翻訳・新出力フィールド）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 12 | `lib/utils/season.ts` — **重大バグ修正**: `Intl.DateTimeFormat("ja-JP", {month:"numeric"})` が "4月" を返し `Number("4月")=NaN` で全月「冬」と誤判定していた問題を `en-US` ロケールに変更して解消。`SEASON_CONTEXT`（季節別の想定気温・避ける素材・推奨素材）を追加 | ✅ |
+| 13 | `types/index.ts` — `ConceptInterpretation` 型新規（keywords/emotion/personaImage/culture/era/philosophy/recommendedColors/recommendedMaterials/recommendedSilhouettes/requiredAccessories/ngElements）。`VirtualCoordinateResponse` に `conceptInterpretation` / `seasonNote` / `whyThisCoordinate` / `ngExample` の4フィールドを追加 | ✅ |
+| 14 | `lib/prompts/concept-translate.ts` — Stage 1 コンセプト翻訳プロンプト新規。抽象/文化/哲学的入力（マルクス・アウレリウス、Yohji Yamamoto 等）を色・素材・シルエット・小物・NG要素に翻訳。抽象語禁止ルールはこのステージでは外す | ✅ |
+| 15 | `lib/prompts/normalize-interpretation.ts` — Stage 1 出力の正規化ヘルパー新規（型ガード・要素数キャップ） | ✅ |
+| 16 | `lib/prompts/virtual-coordinate.ts` — Stage 3 として書き換え。`conceptInterpretation` を文脈として受領し「recommendedColorsに必ず従う・ngElementsを絶対に含めない・requiredAccessoriesを最低1点」を厳格ルール化。アイテム数を 5〜7 に拡張、`seasonNote`/`whyThisCoordinate`/`ngExample` 出力を追加 | ✅ |
+| 17 | `app/api/ai/virtual-coordinate/translate/route.ts` — Stage 1 単体API新規（POST・認証必須・1500トークン）。翻訳結果のみが必要なクライアントから利用可能 | ✅ |
+| 18 | `app/api/ai/virtual-coordinate/route.ts` — Stage 1（翻訳）→ Stage 3（コーデ設計）を内部チェーン化。クライアントから見れば1リクエストで全結果取得。`concept` を必須化、不在なら 400 | ✅ |
+| 19 | `app/(app)/style/page.tsx` — VirtualResult 子コンポーネントに分離し、折りたたみ可能な「コンセプトの解釈」セクション（デフォルト閉）、`whyThisCoordinate`（コンセプトカード下部）、`seasonNote`（青いバナー）、`ngExample`（琥珀色バナー）を追加。コンセプト候補選択時は `title（description）` 形式で結合して翻訳に渡す | ✅ |
+
 ---
 
 ## 既知の未解決問題

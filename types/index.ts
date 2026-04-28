@@ -557,12 +557,32 @@ export interface VirtualCoordinateItem {
   alternative:  string;
 }
 
+// Sprint 36 v1.2: コンセプト翻訳結果
+export interface ConceptInterpretation {
+  keywords:                string[];
+  emotion:                 string;
+  personaImage:            string;
+  culture:                 string;
+  era:                     string;
+  philosophy:              string;
+  recommendedColors:       string[];
+  recommendedMaterials:    string[];
+  recommendedSilhouettes:  string[];
+  requiredAccessories:     string[];
+  ngElements:              string[];
+}
+
 export interface VirtualCoordinateResponse {
-  scene:       string;
-  season:      string;       // Sprint 36 v1.1: JST 判定の "春" / "夏" / "秋" / "冬"
-  concept:     string;
-  items:       VirtualCoordinateItem[];
-  stylingTips: string[];
+  scene:                 string;
+  season:                string;       // Sprint 36 v1.1: JST 判定の "春" / "夏" / "秋" / "冬"
+  concept:               string;
+  // Sprint 36 v1.2 追加
+  conceptInterpretation: ConceptInterpretation;
+  seasonNote:            string;
+  whyThisCoordinate:     string;
+  ngExample:             string;
+  items:                 VirtualCoordinateItem[];
+  stylingTips:           string[];
 }
 
 export interface VirtualConceptCandidate {

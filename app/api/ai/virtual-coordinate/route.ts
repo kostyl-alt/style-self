@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaudeJSON } from "@/lib/claude";
 import { buildVirtualCoordinatePrompt } from "@/lib/prompts/virtual-coordinate";
+import { buildConceptTranslatePrompt } from "@/lib/prompts/concept-translate";
+import { normalizeInterpretation } from "@/lib/prompts/normalize-interpretation";
 import { getSeasonJST } from "@/lib/utils/season";
 import type {
   BodyProfile,
+  ConceptInterpretation,
   VirtualCoordinateItem,
   VirtualCoordinateResponse,
   VirtualCoordinateRole,
@@ -15,7 +18,8 @@ const VALID_CATEGORIES = new Set([
   "tops", "bottoms", "outerwear", "jacket", "vest", "inner", "dress", "setup",
   "shoes", "bags", "accessories", "hat", "jewelry", "roomwear", "other",
 ]);
-const MAX_ITEMS = 5;
+const MIN_ITEMS = 5;
+const MAX_ITEMS = 7;
 const MAX_STYLING_TIPS = 3;
 
 function asString(v: unknown): string {
@@ -52,16 +56,26 @@ function normalizeItem(raw: unknown): VirtualCoordinateItem {
   };
 }
 
-function normalize(raw: Record<string, unknown>, scene: string, season: string): VirtualCoordinateResponse {
+function normalize(
+  raw: Record<string, unknown>,
+  scene: string,
+  season: string,
+  concept: string,
+  conceptInterpretation: ConceptInterpretation,
+): VirtualCoordinateResponse {
   const items = Array.isArray(raw.items)
     ? raw.items.slice(0, MAX_ITEMS).map(normalizeItem).filter((it) => it.name)
     : [];
   return {
     scene,
     season,
-    concept:     asString(raw.concept),
+    concept:               asString(raw.concept) || concept,
+    conceptInterpretation,
+    seasonNote:            asString(raw.seasonNote),
+    whyThisCoordinate:     asString(raw.whyThisCoordinate),
+    ngExample:             asString(raw.ngExample),
     items,
-    stylingTips: asStringArray(raw.stylingTips, MAX_STYLING_TIPS),
+    stylingTips:           asStringArray(raw.stylingTips, MAX_STYLING_TIPS),
   };
 }
 
@@ -75,8 +89,12 @@ export async function POST(request: NextRequest) {
     if (!scene?.trim()) {
       return NextResponse.json({ error: "シーンを指定してください" }, { status: 400 });
     }
+    if (!concept?.trim()) {
+      return NextResponse.json({ error: "コンセプトを指定してください" }, { status: 400 });
+    }
 
     const season = getSeasonJST();
+    const trimmedConcept = concept.trim();
 
     const { data: userData } = await supabase
       .from("users")
@@ -91,27 +109,49 @@ export async function POST(request: NextRequest) {
         } | null;
       };
 
-    const systemPrompt = buildVirtualCoordinatePrompt(
+    // ---- Stage 1: コンセプト翻訳 ----
+    const translatePrompt = buildConceptTranslatePrompt(
+      trimmedConcept,
       scene,
       season,
-      concept ?? null,
+      userData?.body_profile,
+      userData?.style_preference,
+    );
+
+    const rawInterp = await callClaudeJSON<Record<string, unknown>>({
+      systemPrompt: translatePrompt,
+      userMessage:  `「${trimmedConcept}」を${season}・${scene}向けのファッション要素に翻訳してください。`,
+      maxTokens:    1500,
+    });
+
+    const conceptInterpretation = normalizeInterpretation(rawInterp);
+
+    // ---- Stage 3: コーデ設計 ----
+    const coordPrompt = buildVirtualCoordinatePrompt(
+      scene,
+      season,
+      trimmedConcept,
+      conceptInterpretation,
       userData?.body_profile,
       userData?.style_preference,
       userData?.style_analysis,
       userData?.worldview,
     );
 
-    const userMessage = concept?.trim()
-      ? `シーン「${scene}」かつコンセプト「${concept.trim()}」で、季節に合った理想のコーデを5アイテムで提案してください。`
-      : `シーン「${scene}」かつ${season}の季節に合った理想のコーデを5アイテムで提案してください。`;
-
-    const raw = await callClaudeJSON<Record<string, unknown>>({
-      systemPrompt,
-      userMessage,
-      maxTokens: 3500,
+    const rawCoord = await callClaudeJSON<Record<string, unknown>>({
+      systemPrompt: coordPrompt,
+      userMessage:  `シーン「${scene}」、季節「${season}」、コンセプト「${trimmedConcept}」で、コンセプト解釈に厳格に従った理想のコーデを5〜7アイテムで設計してください。`,
+      maxTokens:    4000,
     });
 
-    return NextResponse.json(normalize(raw, scene, season));
+    const response = normalize(rawCoord, scene, season, trimmedConcept, conceptInterpretation);
+
+    // 最低アイテム数を満たさない場合は警告（クライアント側で扱う）
+    if (response.items.length < MIN_ITEMS) {
+      console.warn(`virtual-coordinate: only ${response.items.length} items returned (expected ${MIN_ITEMS}-${MAX_ITEMS})`);
+    }
+
+    return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "理想コーデの生成に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });
