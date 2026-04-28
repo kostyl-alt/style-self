@@ -5,13 +5,17 @@ import { buildVirtualCoordinatePrompt } from "@/lib/prompts/virtual-coordinate";
 import { buildConceptTranslatePrompt } from "@/lib/prompts/concept-translate";
 import { normalizeInterpretation } from "@/lib/prompts/normalize-interpretation";
 import { getSeasonJST } from "@/lib/utils/season";
+import { mergeRulesToInterpretation, rowToKnowledgeRule } from "@/lib/utils/knowledge-merge";
 import type {
   BodyProfile,
   ConceptInterpretation,
+  ConceptSource,
+  KnowledgeRule,
   VirtualCoordinateItem,
   VirtualCoordinateResponse,
   VirtualCoordinateRole,
 } from "@/types/index";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const VALID_ROLES = new Set<VirtualCoordinateRole>(["main", "base", "accent"]);
 const VALID_CATEGORIES = new Set([
@@ -21,6 +25,7 @@ const VALID_CATEGORIES = new Set([
 const MIN_ITEMS = 5;
 const MAX_ITEMS = 7;
 const MAX_STYLING_TIPS = 3;
+const KNOWLEDGE_LOOKUP_LIMIT = 5;
 
 function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -62,6 +67,8 @@ function normalize(
   season: string,
   concept: string,
   conceptInterpretation: ConceptInterpretation,
+  conceptSource: ConceptSource,
+  matchedRuleKeywords: string[],
 ): VirtualCoordinateResponse {
   const items = Array.isArray(raw.items)
     ? raw.items.slice(0, MAX_ITEMS).map(normalizeItem).filter((it) => it.name)
@@ -76,7 +83,54 @@ function normalize(
     ngExample:             asString(raw.ngExample),
     items,
     stylingTips:           asStringArray(raw.stylingTips, MAX_STYLING_TIPS),
+    conceptSource,
+    matchedRuleKeywords,
   };
+}
+
+// 知識ベースを検索して、ヒットしたルールをマージする。
+// 入力 concept にマッチするキーワードを複数試行（例: 全文 + 個別単語）。
+async function lookupKnowledgeRules(
+  supabase: SupabaseClient,
+  concept: string,
+): Promise<KnowledgeRule[]> {
+  // concept をスペース・読点・全角スペースで分割し、長さ2以上の語のみ採用
+  const tokens = concept
+    .split(/[\s　、。・／/]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+  // 全文も含めて検索（順序: 全文を先頭にすることで完全一致を優先）
+  const queries = Array.from(new Set([concept.trim(), ...tokens]));
+
+  const allRows = new Map<string, Record<string, unknown>>();
+
+  await Promise.all(
+    queries.map(async (q) => {
+      const [byKeyword, byAlias] = await Promise.all([
+        supabase
+          .from("knowledge_rules")
+          .select("*")
+          .ilike("concept_keyword", `%${q}%`)
+          .order("weight", { ascending: false })
+          .limit(KNOWLEDGE_LOOKUP_LIMIT),
+        supabase
+          .from("knowledge_rules")
+          .select("*")
+          .contains("aliases", [q])
+          .order("weight", { ascending: false })
+          .limit(KNOWLEDGE_LOOKUP_LIMIT),
+      ]);
+      const keywordRows = (byKeyword.data ?? []) as unknown as Record<string, unknown>[];
+      const aliasRows   = (byAlias.data   ?? []) as unknown as Record<string, unknown>[];
+      for (const row of keywordRows) allRows.set(row.id as string, row);
+      for (const row of aliasRows)   allRows.set(row.id as string, row);
+    }),
+  );
+
+  // 上限まで weight 降順で
+  const rules = Array.from(allRows.values()).map(rowToKnowledgeRule);
+  rules.sort((a, b) => b.weight - a.weight);
+  return rules.slice(0, KNOWLEDGE_LOOKUP_LIMIT);
 }
 
 export async function POST(request: NextRequest) {
@@ -109,22 +163,34 @@ export async function POST(request: NextRequest) {
         } | null;
       };
 
-    // ---- Stage 1: コンセプト翻訳 ----
-    const translatePrompt = buildConceptTranslatePrompt(
-      trimmedConcept,
-      scene,
-      season,
-      userData?.body_profile,
-      userData?.style_preference,
-    );
+    // ---- Stage 1: 知識ベース検索 → なければ Claude 翻訳にフォールバック ----
+    let conceptInterpretation: ConceptInterpretation;
+    let conceptSource: ConceptSource;
+    let matchedRuleKeywords: string[] = [];
 
-    const rawInterp = await callClaudeJSON<Record<string, unknown>>({
-      systemPrompt: translatePrompt,
-      userMessage:  `「${trimmedConcept}」を${season}・${scene}向けのファッション要素に翻訳してください。`,
-      maxTokens:    1500,
-    });
+    const matchedRules = await lookupKnowledgeRules(supabase, trimmedConcept);
+    if (matchedRules.length > 0) {
+      conceptInterpretation = mergeRulesToInterpretation(matchedRules);
+      conceptSource = "knowledge_base";
+      matchedRuleKeywords = matchedRules.map((r) => r.conceptKeyword);
+    } else {
+      const translatePrompt = buildConceptTranslatePrompt(
+        trimmedConcept,
+        scene,
+        season,
+        userData?.body_profile,
+        userData?.style_preference,
+      );
 
-    const conceptInterpretation = normalizeInterpretation(rawInterp);
+      const rawInterp = await callClaudeJSON<Record<string, unknown>>({
+        systemPrompt: translatePrompt,
+        userMessage:  `「${trimmedConcept}」を${season}・${scene}向けのファッション要素に翻訳してください。`,
+        maxTokens:    1500,
+      });
+
+      conceptInterpretation = normalizeInterpretation(rawInterp);
+      conceptSource = "ai_generated";
+    }
 
     // ---- Stage 3: コーデ設計 ----
     const coordPrompt = buildVirtualCoordinatePrompt(
@@ -144,9 +210,16 @@ export async function POST(request: NextRequest) {
       maxTokens:    4000,
     });
 
-    const response = normalize(rawCoord, scene, season, trimmedConcept, conceptInterpretation);
+    const response = normalize(
+      rawCoord,
+      scene,
+      season,
+      trimmedConcept,
+      conceptInterpretation,
+      conceptSource,
+      matchedRuleKeywords,
+    );
 
-    // 最低アイテム数を満たさない場合は警告（クライアント側で扱う）
     if (response.items.length < MIN_ITEMS) {
       console.warn(`virtual-coordinate: only ${response.items.length} items returned (expected ${MIN_ITEMS}-${MAX_ITEMS})`);
     }

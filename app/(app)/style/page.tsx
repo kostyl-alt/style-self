@@ -402,6 +402,15 @@ function VirtualResult({
           {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
         </span>
         <span className="text-xs text-gray-400">シーン: {scene}</span>
+        {result.conceptSource === "knowledge_base" && (
+          <span
+            className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full"
+            title={`知識ベースの判断ルール: ${result.matchedRuleKeywords.join("・")}`}
+          >
+            📚 出典: {result.matchedRuleKeywords.slice(0, 2).join("・")}
+            {result.matchedRuleKeywords.length > 2 ? ` 他${result.matchedRuleKeywords.length - 2}件` : ""}
+          </span>
+        )}
       </div>
 
       {/* コンセプト */}

@@ -572,6 +572,8 @@ export interface ConceptInterpretation {
   ngElements:              string[];
 }
 
+export type ConceptSource = "knowledge_base" | "ai_generated";
+
 export interface VirtualCoordinateResponse {
   scene:                 string;
   season:                string;       // Sprint 36 v1.1: JST 判定の "春" / "夏" / "秋" / "冬"
@@ -583,6 +585,9 @@ export interface VirtualCoordinateResponse {
   ngExample:             string;
   items:                 VirtualCoordinateItem[];
   stylingTips:           string[];
+  // Sprint 37 追加: コンセプト解釈の出典
+  conceptSource:         ConceptSource;
+  matchedRuleKeywords:   string[];     // 知識ベースでマッチしたルールの concept_keyword 一覧
 }
 
 export interface VirtualConceptCandidate {
@@ -594,6 +599,58 @@ export interface VirtualConceptsResponse {
   scene:    string;
   season:   string;
   concepts: VirtualConceptCandidate[];
+}
+
+// ---- Knowledge Base (Sprint 37) ----
+
+export type KnowledgeSourceType = "url" | "memo" | "image" | "book" | "video" | "lookbook" | "expert_note";
+export type KnowledgeVisibility = "private" | "public" | "admin";
+
+export interface KnowledgeSource {
+  id:            string;
+  userId:        string | null;
+  title:         string;
+  sourceType:    KnowledgeSourceType;
+  url:           string | null;
+  contentText:   string | null;
+  imageUrl:      string | null;
+  author:        string | null;
+  citationNote:  string | null;
+  summary:       string | null;
+  visibility:    KnowledgeVisibility;
+  isAnalyzed:    boolean;
+  analyzedAt:    string | null;
+  analyzedBy:    string | null;
+  createdAt:     string;
+  updatedAt:     string;
+}
+
+export interface KnowledgeRule {
+  id:                       string;
+  sourceId:                 string | null;
+  userId:                   string | null;
+  conceptKeyword:           string;
+  aliases:                  string[];
+  emotion:                  string | null;
+  personaImage:             string | null;
+  culturalContext:          string | null;
+  era:                      string | null;
+  philosophy:               string | null;
+  recommendedColors:        string[];
+  recommendedMaterials:     string[];
+  recommendedSilhouettes:   string[];
+  requiredAccessories:      string[];
+  ngElements:               string[];
+  weight:                   number;
+  visibility:               KnowledgeVisibility;
+  isActive:                 boolean;
+  createdAt:                string;
+  updatedAt:                string;
+}
+
+export interface KnowledgeRulesResponse {
+  rules:    KnowledgeRule[];
+  matched:  boolean;
 }
 
 // ---- Onboarding ----

@@ -56,9 +56,11 @@ style-self/
 │   │   ├── trend-translate/route.ts # トレンド世界観翻訳AI（Sprint 28）
 │   │   ├── style-consult/route.ts   # 着こなし相談AI（Sprint 33）
 │   │   ├── analyze-look/route.ts    # 参考写真の比率・シルエット分析AI（Sprint 34）
-│   │   ├── virtual-coordinate/route.ts           # 理想コーデ提案AI・Stage1→Stage3チェーン（Sprint 36 / v1.2）
+│   │   ├── virtual-coordinate/route.ts           # 理想コーデ提案AI・知識ベースlookup→Stage3（Sprint 36 / 37）
 │   │   ├── virtual-coordinate/concepts/route.ts  # 理想コーデのコンセプト候補3案AI（Sprint 36 v1.1）
 │   │   └── virtual-coordinate/translate/route.ts # コンセプト翻訳AI（Sprint 36 v1.2 単体利用も可能）
+│   ├── knowledge/
+│   │   └── rules/route.ts          # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
@@ -89,7 +91,8 @@ style-self/
 │   │   ├── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
 │   │   ├── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
 │   │   ├── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
-│   │   └── season.ts                 # JST季節判定（Sprint 36 v1.1）
+│   │   ├── season.ts                 # JST季節判定（Sprint 36 v1.1）
+│   │   └── knowledge-merge.ts        # knowledge_rules→ConceptInterpretation変換・マージ（Sprint 37）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -141,7 +144,8 @@ style-self/
 │       ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
 │       ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
 │       ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
-│       └── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
+│       ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
+│       └── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義
@@ -188,6 +192,8 @@ NEXT_PUBLIC_ZOZO_AFFILIATE_ID=
 | `external_products` | 楽天等の外部商品マスタ |
 | `brands` | ブランドマスタ（worldview_tags / era_tags / maniac_level など） |
 | `inspirations` | 偉大な参照コンテンツ（designer / look / artwork / film / book） |
+| `knowledge_sources` | 知識ベースの一次情報（Sprint 37：URL/メモ/画像/書籍） |
+| `knowledge_rules` | 知識ベースの判断ルール（Sprint 37：concept_keyword→推奨色/素材/シルエット/小物/NG） |
 
 ---
 

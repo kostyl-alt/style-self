@@ -721,6 +721,20 @@
 
 ---
 
+## Sprint 37: 知識ベースMVP（信頼できる一次情報と判断ルールに基づくコーデ生成）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/015_knowledge.sql` — `knowledge_sources` / `knowledge_rules` 2テーブル新規。RLS（自分・public・admin の閲覧）、GIN インデックス（concept_keyword の全文検索 + aliases の配列検索）、updated_at トリガ | ✅ |
+| 2 | `supabase/seeds/015_knowledge_rules_seed.sql` — 初期15件のadminシード（ストア派・Yohji Yamamoto・Margiela・Rick Owens・Auralee・90年代グランジ・Y2K・KPOPアイドル・シティポップ・マルクス・アウレリウス・禅・ブルータリズム建築・ノルディックミニマル・サイバーパンク・90年代アメカジ） | ✅ |
+| 3 | `types/index.ts` — `KnowledgeSourceType` / `KnowledgeVisibility` / `KnowledgeSource` / `KnowledgeRule` / `KnowledgeRulesResponse` / `ConceptSource` 型追加。`VirtualCoordinateResponse` に `conceptSource` / `matchedRuleKeywords` を追加 | ✅ |
+| 4 | `lib/utils/knowledge-merge.ts` — DB行→`KnowledgeRule`変換（`rowToKnowledgeRule`）、複数ルールを1つの`ConceptInterpretation`にマージ（`mergeRulesToInterpretation`、weight降順・配列フィールドはユニオン・単一フィールドは最高weightから採用） | ✅ |
+| 5 | `app/api/knowledge/rules/route.ts` — GET エンドポイント（`?keyword=` 必須・`limit` 任意1〜20）。concept_keyword の ILIKE 部分一致 + aliases 配列の完全一致を並列検索しマージ。完全一致 > エイリアス完全一致 > 前方一致 > 部分一致でソート、weight 降順を tiebreaker に | ✅ |
+| 6 | `app/api/ai/virtual-coordinate/route.ts` — 知識ベース lookup を Stage 1 の前段に挿入。コンセプト全文＋分割語の組み合わせで複数キーワード検索、ヒットしたルールを `mergeRulesToInterpretation` で統合し Claude Stage 1 をスキップ。未ヒット時のみ Claude Stage 1 にフォールバック。レスポンスに `conceptSource: "knowledge_base" \| "ai_generated"` と `matchedRuleKeywords[]` を含める | ✅ |
+| 7 | `app/(app)/style/page.tsx` — VirtualResult のヘッダーに「📚 出典: [ルール名]」のエメラルドバッジを追加（`conceptSource === "knowledge_base"` の場合のみ表示・hoverで全ルール名をtooltip表示） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |
