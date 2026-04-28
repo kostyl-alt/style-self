@@ -545,19 +545,35 @@ export interface LookAnalysisResponse {
 export type VirtualCoordinateRole = "main" | "base" | "accent";
 
 export interface VirtualCoordinateItem {
-  role:        VirtualCoordinateRole;
-  category:    string;
-  name:        string;
-  color:       string;
-  reason:      string;
-  zozoKeyword: string;
+  role:         VirtualCoordinateRole;
+  category:     string;
+  name:         string;
+  color:        string;
+  reason:       string;
+  zozoKeyword:  string;
+  // Sprint 36 v1.1
+  sizeNote:     string;
+  materialNote: string;
+  alternative:  string;
 }
 
 export interface VirtualCoordinateResponse {
   scene:       string;
+  season:      string;       // Sprint 36 v1.1: JST 判定の "春" / "夏" / "秋" / "冬"
   concept:     string;
   items:       VirtualCoordinateItem[];
   stylingTips: string[];
+}
+
+export interface VirtualConceptCandidate {
+  title:       string;
+  description: string;
+}
+
+export interface VirtualConceptsResponse {
+  scene:    string;
+  season:   string;
+  concepts: VirtualConceptCandidate[];
 }
 
 // ---- Onboarding ----

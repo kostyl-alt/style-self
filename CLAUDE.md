@@ -56,7 +56,8 @@ style-self/
 │   │   ├── trend-translate/route.ts # トレンド世界観翻訳AI（Sprint 28）
 │   │   ├── style-consult/route.ts   # 着こなし相談AI（Sprint 33）
 │   │   ├── analyze-look/route.ts    # 参考写真の比率・シルエット分析AI（Sprint 34）
-│   │   └── virtual-coordinate/route.ts # 理想コーデ提案AI（Sprint 36）
+│   │   ├── virtual-coordinate/route.ts          # 理想コーデ提案AI（Sprint 36）
+│   │   └── virtual-coordinate/concepts/route.ts # 理想コーデのコンセプト候補3案AI（Sprint 36 v1.1）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
@@ -86,7 +87,8 @@ style-self/
 │   ├── utils/
 │   │   ├── silhouette-map.ts         # 文字列→SVG数値マッピング（topVolume/bottomVolume/ratio）
 │   │   ├── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
-│   │   └── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
+│   │   ├── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
+│   │   └── season.ts                 # JST季節判定（Sprint 36 v1.1）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）

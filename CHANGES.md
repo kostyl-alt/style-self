@@ -685,6 +685,8 @@
 
 ## Sprint 36: 手持ちなしの理想コーデ提案機能
 
+### v1（基本機能）
+
 | # | 内容 | 状態 |
 |---|------|------|
 | 1 | `types/index.ts` — `VirtualCoordinateRole` / `VirtualCoordinateItem` / `VirtualCoordinateResponse` 型追加 | ✅ |
@@ -692,6 +694,17 @@
 | 3 | `app/api/ai/virtual-coordinate/route.ts` — 理想コーデ生成API（POST・認証必須・5アイテム上限・role/category ホワイトリストバリデーション） | ✅ |
 | 4 | `app/(app)/style/page.tsx` — 「理想のコーデ」タブ新規追加（4タブ構成：コーデ提案 / 理想のコーデ / 着こなし相談 / 保存履歴）、シーン選択→生成→各アイテムに「ZOZOで探す」リンク、コンセプト・着こなしポイント表示 | ✅ |
 | 5 | `app/(app)/style/page.tsx` — タブ幅対応（`flex-1 min-w-0` + `truncate` + `text-xs sm:text-sm`） | ✅ |
+
+### v1.1（改善：季節注入・コンセプト入力・アイテム情報充実・小物必須・UI改善）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 6 | `lib/utils/season.ts` — JST季節判定ユーティリティ新規（4-6月=春・7-9月=夏・10-11月=秋・12-3月=冬、Asia/Tokyo明示） | ✅ |
+| 7 | `types/index.ts` — `VirtualCoordinateItem` に `sizeNote` / `materialNote` / `alternative` 追加、`VirtualCoordinateResponse` に `season` 追加、`VirtualConceptCandidate` / `VirtualConceptsResponse` 型追加 | ✅ |
+| 8 | `lib/prompts/virtual-coordinate.ts` — 季節・地域（日本固定）・指定コンセプトを文脈注入、3新フィールド出力指示、shoes/bags/accessories/hat/jewelry を最低1点必須化、コンセプト候補3案生成プロンプト `buildVirtualConceptsPrompt` を追加 | ✅ |
+| 9 | `app/api/ai/virtual-coordinate/route.ts` — JST季節を自動判定、`concept?` パラメータ受領、新3フィールドを正規化、`season` をレスポンスに含める | ✅ |
+| 10 | `app/api/ai/virtual-coordinate/concepts/route.ts` — コンセプト候補3案を返す新規API（POST・認証必須・1500トークン） | ✅ |
+| 11 | `app/(app)/style/page.tsx` — VirtualTab を3ステージ構成に書き換え（input → concepts → result）、コンセプトテキストエリア追加、季節バッジ表示、各アイテムに `sizeNote` / `materialNote` / `alternative` 行を追加（空文字は非表示）、role=main の最初のアイテムを `bg-amber-50` でハイライトし「⭐ まず買うべき1点」バッジ表示 | ✅ |
 
 ---
 

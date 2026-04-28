@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
-import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse, VirtualCoordinateResponse } from "@/types/index";
+import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse, VirtualCoordinateResponse, VirtualConceptsResponse, VirtualConceptCandidate } from "@/types/index";
 
 type StyleTab = "coordinate" | "virtual" | "consult" | "saved";
 
@@ -19,6 +19,10 @@ const VIRTUAL_CATEGORY_EMOJI: Record<string, string> = {
   vest: "🦺", inner: "👚", dress: "👗", setup: "🩱",
   shoes: "👟", bags: "👜", accessories: "💍",
   hat: "🧢", jewelry: "📿", roomwear: "🏠", other: "🏷️",
+};
+
+const SEASON_EMOJI: Record<string, string> = {
+  "春": "🌸", "夏": "☀️", "秋": "🍂", "冬": "❄️",
 };
 
 const SCENES = [
@@ -168,142 +172,312 @@ function CoordinateTab() {
   );
 }
 
-// ---- 理想のコーデタブ (Sprint 36) ----
+// ---- 理想のコーデタブ (Sprint 36 v1.1) ----
+type VirtualStage = "input" | "concepts" | "result";
+
 function VirtualTab() {
+  const [stage, setStage]               = useState<VirtualStage>("input");
   const [scene, setScene]               = useState("カジュアル");
+  const [conceptInput, setConceptInput] = useState("");
+  const [concepts, setConcepts]         = useState<VirtualConceptCandidate[]>([]);
+  const [season, setSeason]             = useState("");
   const [result, setResult]             = useState<VirtualCoordinateResponse | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading]       = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
-  async function handleGenerate() {
-    setIsGenerating(true); setError(null); setResult(null);
+  function resetToInput() {
+    setStage("input");
+    setConcepts([]);
+    setResult(null);
+    setError(null);
+  }
+
+  async function handleStart() {
+    setIsLoading(true); setError(null); setResult(null); setConcepts([]);
+    const trimmedConcept = conceptInput.trim();
+    try {
+      if (trimmedConcept) {
+        // コンセプト入力済 → Stage 3 直行
+        await generateCoordinate(trimmedConcept);
+      } else {
+        // コンセプト未入力 → Stage 2: 候補3案
+        const res = await fetch("/api/ai/virtual-coordinate/concepts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene }),
+        });
+        const data = await res.json() as VirtualConceptsResponse & { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "コンセプト候補の生成に失敗しました");
+        setConcepts(data.concepts);
+        setSeason(data.season);
+        setStage("concepts");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成に失敗しました");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function generateCoordinate(concept: string) {
+    setIsLoading(true); setError(null);
     try {
       const res = await fetch("/api/ai/virtual-coordinate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene }),
+        body: JSON.stringify({ scene, concept }),
       });
       const data = await res.json() as VirtualCoordinateResponse & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "理想コーデの生成に失敗しました");
       setResult(data);
+      setSeason(data.season);
+      setStage("result");
     } catch (err) {
       setError(err instanceof Error ? err.message : "理想コーデの生成に失敗しました");
     } finally {
-      setIsGenerating(false);
+      setIsLoading(false);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-gray-50 rounded-2xl p-4">
-        <p className="text-xs text-gray-500 leading-relaxed">
-          手持ち服がなくてもOK。診断結果と体型情報からあなたの理想のコーデを5アイテムで提案します。気に入ったアイテムは「ZOZOで探す」から購入できます。
-        </p>
-      </div>
+  // 「まず買うべき1点」 = role==="main" の最初、なければ items[0]
+  const priorityIndex = result
+    ? (() => {
+        const idx = result.items.findIndex((it) => it.role === "main");
+        return idx >= 0 ? idx : 0;
+      })()
+    : -1;
 
-      <div>
-        <p className="text-xs text-gray-500 mb-3">シーンを選んでください</p>
-        <div className="grid grid-cols-3 gap-3">
-          {SCENES.map((s) => (
-            <button key={s.value}
-              onClick={() => { setScene(s.value); setResult(null); }}
-              className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all ${
-                scene === s.value ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
-              }`}
-            >
-              <span className="text-2xl">{s.emoji}</span>
-              <span className="text-xs font-medium">{s.value}</span>
-              <span className={`text-xs ${scene === s.value ? "text-gray-300" : "text-gray-400"}`}>{s.desc}</span>
-            </button>
-          ))}
+  // ---- Stage 1: 入力 ----
+  if (stage === "input") {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-50 rounded-2xl p-4">
+          <p className="text-xs text-gray-500 leading-relaxed">
+            手持ち服がなくてもOK。診断結果と体型情報から、季節とシーンに合う理想のコーデを5アイテムで提案します。気に入ったアイテムは「ZOZOで探す」から購入できます。
+          </p>
         </div>
-      </div>
 
-      <button onClick={handleGenerate} disabled={isGenerating}
-        className="w-full py-4 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
-      >
-        {isGenerating ? "理想のコーデを設計しています..." : "理想のコーデを提案してもらう"}
-      </button>
-
-      {isGenerating && (
-        <div className="text-center py-10 text-gray-300">
-          <div className="text-4xl mb-3 animate-pulse">✨</div>
-          <p className="text-sm">あなたの体型・好みに合う理想を組み立てています</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
-
-      {result && !isGenerating && (
-        <div className="space-y-5">
-          {/* コンセプト */}
-          <div className="bg-gray-800 text-white rounded-2xl p-5">
-            <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Concept</p>
-            <p className="text-base leading-relaxed">{result.concept}</p>
-          </div>
-
-          {/* アイテム一覧 */}
-          <div className="space-y-3">
-            <p className="text-xs tracking-widest text-gray-400 uppercase">Items</p>
-            {result.items.map((item, i) => (
-              <div key={i} className="border border-gray-100 rounded-2xl p-4 space-y-2">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex-shrink-0 flex items-center justify-center text-2xl">
-                    {VIRTUAL_CATEGORY_EMOJI[item.category] ?? "🏷️"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full leading-none ${VIRTUAL_ROLE_LABELS[item.role]?.style ?? "bg-gray-100 text-gray-500"}`}>
-                        {VIRTUAL_ROLE_LABELS[item.role]?.label ?? item.role}
-                      </span>
-                      {item.color && (
-                        <span className="text-xs text-gray-400">{item.color}</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-800 font-medium leading-tight">{item.name}</p>
-                    {item.reason && (
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">→ {item.reason}</p>
-                    )}
-                  </div>
-                </div>
-                <a
-                  href={buildZozoSearchUrl({ keyword: item.zozoKeyword || item.name })}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
-                >
-                  ZOZOで探す →
-                </a>
-              </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-3">シーンを選んでください</p>
+          <div className="grid grid-cols-3 gap-3">
+            {SCENES.map((s) => (
+              <button key={s.value}
+                onClick={() => setScene(s.value)}
+                className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all ${
+                  scene === s.value ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
+                }`}
+              >
+                <span className="text-2xl">{s.emoji}</span>
+                <span className="text-xs font-medium">{s.value}</span>
+                <span className={`text-xs ${scene === s.value ? "text-gray-300" : "text-gray-400"}`}>{s.desc}</span>
+              </button>
             ))}
           </div>
+        </div>
 
-          {/* 着こなしのポイント */}
-          {result.stylingTips.length > 0 && (
-            <div className="border border-gray-200 rounded-2xl p-5">
-              <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Styling Tips</p>
-              <ol className="space-y-2">
-                {result.stylingTips.map((tip, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-gray-700">
-                    <span className="flex-shrink-0 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-xs font-medium">{i + 1}</span>
-                    <span className="leading-relaxed">{tip}</span>
-                  </li>
-                ))}
-              </ol>
+        <div>
+          <p className="text-xs text-gray-500 mb-2">コンセプト（任意）</p>
+          <textarea
+            value={conceptInput}
+            onChange={(e) => setConceptInput(e.target.value)}
+            placeholder="例：黒を中心にした静かな大人っぽさ／シンプルで動きやすい休日の服"
+            rows={2}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 resize-none"
+          />
+          <p className="text-xs text-gray-400 mt-1">未入力ならAIがコンセプト候補を3つ提案します</p>
+        </div>
+
+        <button onClick={handleStart} disabled={isLoading}
+          className="w-full py-4 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
+        >
+          {isLoading ? (conceptInput.trim() ? "理想のコーデを設計しています..." : "コンセプト候補を考えています...") : "理想のコーデを提案してもらう"}
+        </button>
+
+        {isLoading && (
+          <div className="text-center py-10 text-gray-300">
+            <div className="text-4xl mb-3 animate-pulse">✨</div>
+            <p className="text-sm">あなたの体型・好みに合う理想を組み立てています</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---- Stage 2: コンセプト候補選択 ----
+  if (stage === "concepts") {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+            {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
+          </span>
+          <span className="text-xs text-gray-400">シーン: {scene}</span>
+        </div>
+
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Choose a Concept</p>
+          <p className="text-xs text-gray-500 mb-4">気になるコンセプトを選んでください。選んだ方向性で5アイテムを設計します。</p>
+
+          <div className="space-y-3">
+            {concepts.map((c, i) => (
+              <button
+                key={i}
+                onClick={() => generateCoordinate(c.title)}
+                disabled={isLoading}
+                className="w-full text-left border border-gray-200 hover:border-gray-800 rounded-2xl p-5 transition-colors disabled:opacity-40"
+              >
+                <p className="text-sm font-medium text-gray-900 mb-1">{c.title}</p>
+                {c.description && (
+                  <p className="text-xs text-gray-500 leading-relaxed">{c.description}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading && (
+          <div className="text-center py-6 text-gray-300">
+            <div className="text-3xl mb-2 animate-pulse">✨</div>
+            <p className="text-xs">選んだコンセプトでコーデを設計中</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={resetToInput}
+          disabled={isLoading}
+          className="w-full py-3 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
+        >
+          ← 戻る
+        </button>
+      </div>
+    );
+  }
+
+  // ---- Stage 3: コーデ結果 ----
+  if (!result) return null;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+          {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
+        </span>
+        <span className="text-xs text-gray-400">シーン: {scene}</span>
+      </div>
+
+      {/* コンセプト */}
+      <div className="bg-gray-800 text-white rounded-2xl p-5">
+        <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">Concept</p>
+        <p className="text-base leading-relaxed">{result.concept}</p>
+      </div>
+
+      {/* アイテム一覧 */}
+      <div className="space-y-3">
+        <p className="text-xs tracking-widest text-gray-400 uppercase">Items</p>
+        {result.items.map((item, i) => {
+          const isPriority = i === priorityIndex;
+          return (
+            <div
+              key={i}
+              className={`rounded-2xl space-y-3 ${
+                isPriority
+                  ? "bg-amber-50 border border-amber-200 p-5"
+                  : "border border-gray-100 p-4"
+              }`}
+            >
+              {isPriority && (
+                <p className="text-xs font-medium text-amber-700 flex items-center gap-1">
+                  <span>⭐</span><span>まず買うべき1点</span>
+                </p>
+              )}
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white flex-shrink-0 flex items-center justify-center text-2xl">
+                  {VIRTUAL_CATEGORY_EMOJI[item.category] ?? "🏷️"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full leading-none ${VIRTUAL_ROLE_LABELS[item.role]?.style ?? "bg-gray-100 text-gray-500"}`}>
+                      {VIRTUAL_ROLE_LABELS[item.role]?.label ?? item.role}
+                    </span>
+                    {item.color && (
+                      <span className="text-xs text-gray-400">{item.color}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-800 font-medium leading-tight">{item.name}</p>
+                  {item.reason && (
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">→ {item.reason}</p>
+                  )}
+                </div>
+              </div>
+
+              {(item.sizeNote || item.materialNote || item.alternative) && (
+                <div className="space-y-1 pt-2 border-t border-gray-100">
+                  {item.sizeNote && (
+                    <div className="text-xs text-gray-600 flex gap-2">
+                      <span className="flex-shrink-0">📏</span>
+                      <span><span className="text-gray-400">サイズ：</span>{item.sizeNote}</span>
+                    </div>
+                  )}
+                  {item.materialNote && (
+                    <div className="text-xs text-gray-600 flex gap-2">
+                      <span className="flex-shrink-0">🧵</span>
+                      <span><span className="text-gray-400">素材：</span>{item.materialNote}</span>
+                    </div>
+                  )}
+                  {item.alternative && (
+                    <div className="text-xs text-gray-600 flex gap-2">
+                      <span className="flex-shrink-0">🔄</span>
+                      <span><span className="text-gray-400">代替：</span>{item.alternative}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <a
+                href={buildZozoSearchUrl({ keyword: item.zozoKeyword || item.name })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2"
+              >
+                ZOZOで探す →
+              </a>
             </div>
-          )}
+          );
+        })}
+      </div>
 
-          <button onClick={handleGenerate}
-            className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
-          >
-            別の理想コーデを提案してもらう
-          </button>
+      {/* 着こなしのポイント */}
+      {result.stylingTips.length > 0 && (
+        <div className="border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Styling Tips</p>
+          <ol className="space-y-2">
+            {result.stylingTips.map((tip, i) => (
+              <li key={i} className="flex gap-3 text-sm text-gray-700">
+                <span className="flex-shrink-0 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-xs font-medium">{i + 1}</span>
+                <span className="leading-relaxed">{tip}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
+
+      <button onClick={resetToInput}
+        className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+      >
+        別の理想コーデを提案してもらう
+      </button>
     </div>
   );
 }

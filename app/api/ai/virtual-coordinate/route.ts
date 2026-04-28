@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaudeJSON } from "@/lib/claude";
 import { buildVirtualCoordinatePrompt } from "@/lib/prompts/virtual-coordinate";
+import { getSeasonJST } from "@/lib/utils/season";
 import type {
   BodyProfile,
   VirtualCoordinateItem,
@@ -39,21 +40,25 @@ function normalizeCategory(v: unknown): string {
 function normalizeItem(raw: unknown): VirtualCoordinateItem {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
-    role:        normalizeRole(r.role),
-    category:    normalizeCategory(r.category),
-    name:        asString(r.name),
-    color:       asString(r.color),
-    reason:      asString(r.reason),
-    zozoKeyword: asString(r.zozoKeyword) || asString(r.name),
+    role:         normalizeRole(r.role),
+    category:     normalizeCategory(r.category),
+    name:         asString(r.name),
+    color:        asString(r.color),
+    reason:       asString(r.reason),
+    zozoKeyword:  asString(r.zozoKeyword) || asString(r.name),
+    sizeNote:     asString(r.sizeNote),
+    materialNote: asString(r.materialNote),
+    alternative:  asString(r.alternative),
   };
 }
 
-function normalize(raw: Record<string, unknown>, scene: string): VirtualCoordinateResponse {
+function normalize(raw: Record<string, unknown>, scene: string, season: string): VirtualCoordinateResponse {
   const items = Array.isArray(raw.items)
     ? raw.items.slice(0, MAX_ITEMS).map(normalizeItem).filter((it) => it.name)
     : [];
   return {
     scene,
+    season,
     concept:     asString(raw.concept),
     items,
     stylingTips: asStringArray(raw.stylingTips, MAX_STYLING_TIPS),
@@ -66,10 +71,12 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
 
-    const { scene } = await request.json() as { scene: string };
+    const { scene, concept } = await request.json() as { scene: string; concept?: string };
     if (!scene?.trim()) {
       return NextResponse.json({ error: "シーンを指定してください" }, { status: 400 });
     }
+
+    const season = getSeasonJST();
 
     const { data: userData } = await supabase
       .from("users")
@@ -86,19 +93,25 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = buildVirtualCoordinatePrompt(
       scene,
+      season,
+      concept ?? null,
       userData?.body_profile,
       userData?.style_preference,
       userData?.style_analysis,
       userData?.worldview,
     );
 
+    const userMessage = concept?.trim()
+      ? `シーン「${scene}」かつコンセプト「${concept.trim()}」で、季節に合った理想のコーデを5アイテムで提案してください。`
+      : `シーン「${scene}」かつ${season}の季節に合った理想のコーデを5アイテムで提案してください。`;
+
     const raw = await callClaudeJSON<Record<string, unknown>>({
       systemPrompt,
-      userMessage: `シーン「${scene}」の理想のコーデを5アイテムで提案してください。`,
-      maxTokens: 3000,
+      userMessage,
+      maxTokens: 3500,
     });
 
-    return NextResponse.json(normalize(raw, scene));
+    return NextResponse.json(normalize(raw, scene, season));
   } catch (err) {
     const message = err instanceof Error ? err.message : "理想コーデの生成に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });
