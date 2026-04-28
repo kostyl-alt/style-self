@@ -3,6 +3,13 @@
 // Phase 1: シンプルなキーワード検索URLを生成する。
 // アフィリエイトIDは NEXT_PUBLIC_ZOZO_AFFILIATE_ID から読む。
 // ValueCommerce 提携承認後は本ファイルの実装のみを VC のクリック計測URLに差し替える。
+//
+// 注意: ZOZOTOWN の検索パラメータ p_keyv は Shift-JIS percent-encoding を要求する。
+// UTF-8 percent-encoding (encodeURIComponent) を渡すと結果ページで日本語が文字化けする
+// （「白シャツ」→「逋ｽ繧ｷ繝｣繝」のように UTF-8 バイトが Shift-JIS として解釈される）。
+// そのため encoding-japanese で Shift-JIS バイト列を生成してからパーセントエンコードする。
+
+import Encoding from "encoding-japanese";
 
 export interface ZozoSearchParams {
   keyword:   string;
@@ -28,12 +35,20 @@ export function toZozoKeyword(raw: string): string {
   return s.trim();
 }
 
+// Unicode 文字列を Shift-JIS バイト列に変換し、各バイトをパーセントエンコードする。
+function shiftJisPercentEncode(s: string): string {
+  const unicodeArray = Encoding.stringToCode(s);
+  const sjisBytes = Encoding.convert(unicodeArray, { to: "SJIS", from: "UNICODE" });
+  return Array.from(sjisBytes)
+    .map((b) => "%" + b.toString(16).padStart(2, "0").toUpperCase())
+    .join("");
+}
+
 export function buildZozoSearchUrl(params: ZozoSearchParams): string {
   const keyword = toZozoKeyword(params.keyword);
   if (!keyword) return "https://zozo.jp/search/";
 
-  // encodeURIComponent で UTF-8 パーセントエンコード（スペースは %20）
-  const encoded = encodeURIComponent(keyword);
+  const encoded = shiftJisPercentEncode(keyword);
   const base = `https://zozo.jp/search/?p_keyv=${encoded}`;
 
   // TODO: ValueCommerce 提携承認後は VC のクリック計測URL（https://ck.jp.ap.valuecommerce.com/...）でラップする方式に置換する。

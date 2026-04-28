@@ -12,11 +12,13 @@
     "@anthropic-ai/sdk": "^0.90.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.3",
+    "encoding-japanese": "^2.2.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18"
   },
   "devDependencies": {
+    "@types/encoding-japanese": "^2.2.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
