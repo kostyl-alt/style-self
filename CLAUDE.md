@@ -295,6 +295,11 @@ curl -X POST http://localhost:3000/api/admin/sync-rakuten \
 
 ## 既知の注意事項
 
+### 楽天API認証 (Sprint 40で解決)
+新エンドポイント `openapi.rakuten.co.jp/ichibams/...` は `accessKey` クエリ必須・レスポンスは `Items` フラット配列。
+旧仕様は `applicationId` のみ + `Items: [{Item: ...}]` ネスト。
+`lib/rakuten.ts` の `fetchRakuten` は両方を併送・両形式を吸収する設計済み。
+
 ### Supabase v2 型推論バグ
 `.insert()` / `.update()` が `never` 型になるケースがある。回避策：
 

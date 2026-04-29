@@ -74,6 +74,7 @@ async function fetchRakuten(params: Record<string, string>): Promise<RakutenSear
 
   const query = new URLSearchParams({
     applicationId: appId,
+    accessKey:     appId,        // 新API（openapi.rakuten.co.jp/ichibams/...）は accessKey を必須
     affiliateId,
     format:        "json",
     formatVersion: "2",
@@ -91,7 +92,15 @@ async function fetchRakuten(params: Record<string, string>): Promise<RakutenSear
     throw new Error(`楽天API エラー: ${res.status} ${text}`);
   }
 
-  return res.json() as Promise<RakutenSearchResponse>;
+  // 新API（openapi.rakuten.co.jp/ichibams/...）は Items がフラット配列、
+  // 旧API（app.rakuten.co.jp/...）は { Item: ... } ネスト。両方を吸収する。
+  const data = await res.json() as Partial<RakutenSearchResponse> & {
+    Items?: (RakutenItem | { Item: RakutenItem })[];
+  };
+  const items = (data.Items ?? []).map((i) =>
+    "Item" in i ? (i as { Item: RakutenItem }) : { Item: i as RakutenItem },
+  );
+  return { ...data, Items: items } as RakutenSearchResponse;
 }
 
 // ---- レスポンス → RakutenProduct 変換 ----
