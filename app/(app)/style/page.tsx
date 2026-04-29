@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
+import ProductMatchList from "@/components/coordinate/ProductMatchList";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
-import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse, VirtualCoordinateResponse, VirtualConceptsResponse, VirtualConceptCandidate } from "@/types/index";
+import type { CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse, LookAnalysisResponse, VirtualCoordinateResponse, VirtualConceptsResponse, VirtualConceptCandidate, ProductMatch, ProductMatchResponse } from "@/types/index";
 
 type StyleTab = "coordinate" | "virtual" | "consult" | "saved";
 
@@ -387,6 +388,24 @@ function VirtualResult({
   const [showInterpretation, setShowInterpretation] = useState(false);
   const ci = result.conceptInterpretation;
 
+  // Sprint 40: 商品マッチング（コーデ表示後に非同期取得）
+  const [matches, setMatches]             = useState<ProductMatch[] | null>(null);
+  const [matchLoading, setMatchLoading]   = useState(false);
+
+  useEffect(() => {
+    if (!result.items?.length) return;
+    setMatchLoading(true);
+    fetch("/api/products/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: result.items }),
+    })
+      .then((r) => r.json())
+      .then((data: ProductMatchResponse) => setMatches(data.matches ?? []))
+      .catch(() => setMatches([]))
+      .finally(() => setMatchLoading(false));
+  }, [result.items]);
+
   const interpretationHasContent =
     ci.keywords.length > 0 ||
     ci.recommendedColors.length > 0 ||
@@ -585,6 +604,12 @@ function VirtualResult({
               >
                 ZOZOで探す →
               </a>
+
+              {/* Sprint 40: 楽天商品マッチ */}
+              <ProductMatchList
+                products={matches?.find((m) => m.itemIndex === i)?.products ?? []}
+                isLoading={matchLoading}
+              />
             </div>
           );
         })}

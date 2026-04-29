@@ -781,6 +781,22 @@
 | 3 | `middleware.ts` — `/admin/*` 経路に email allowlist ガード追加（最優先で実行）。未認証は /login、未認可は / にリダイレクト。大文字小文字は両側 lowerCase 正規化 | ✅ |
 | 4 | `.env.local` / `CLAUDE.md` — `ADMIN_EMAILS` 環境変数を追加（カンマ区切り、`NEXT_PUBLIC_` 禁止＝サーバーのみ参照） | ✅ |
 
+---
+
+## Sprint 40: 楽天商品マッチング Phase A（理想のコーデに実商品を併載）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/rakuten.ts` — 既知の楽天API認証エラーを解消。`fetchRakuten` に `accessKey` クエリ併送、レスポンスのフラット/ネスト両形式を吸収（ランキングAPIと同パターン） | ✅ |
+| 2 | 楽天商品データを 80件同期（Auralee/COMOLI/YAECA/Margaret Howell × 各20件） | ✅ |
+| 3 | `lib/utils/color-aliases.ts` — 色名の表記揺れマップ新規（白↔ホワイト等、15カノニカル名×複数エイリアス）。`isColorMatch()` ヘルパー含む | ✅ |
+| 4 | `lib/utils/product-match.ts` — スコアリング関数 `scoreProduct()`、`buildMatchReason()`、`pickProductUrl()`、`rowToExternalProduct()`、`FALLBACK_CATEGORIES` 定数 | ✅ |
+| 5 | `types/index.ts` — `ExternalProduct` / `MatchedProduct` / `ProductMatch` / `ProductMatchResponse` 型追加 | ✅ |
+| 6 | `app/api/products/match/route.ts` — POSTマッチングAPI新規。`is_available=true` AND `image_url IS NOT NULL` AND `name NOT ILIKE '%中古%'` AND カテゴリ一致でプール30件取得→JSスコアリング→上位3件返却。0件時は近隣カテゴリへフォールバック検索。items全件 `Promise.all` 並列処理 | ✅ |
+| 7 | `components/coordinate/ProductMatchCard.tsx` — 商品単体カード新規。4:5アスペクト画像・ブランド・商品名(line-clamp-2)・価格・マッチ理由バッジ・「詳細を見る」ボタン（affiliate_url 優先で新タブ） | ✅ |
+| 8 | `components/coordinate/ProductMatchList.tsx` — 横スクロール（snap-x snap-mandatory）3件並びリスト新規。loading/empty/loaded の3状態対応、空マッチ時は「該当商品が見つかりませんでした」表示 | ✅ |
+| 9 | `app/(app)/style/page.tsx` — VirtualResult に matches state + useEffect 追加。コーデ表示後に非同期で `/api/products/match` を呼び、各アイテム下（ZOZOリンク直後）に `ProductMatchList` を挿入 | ✅ |
+
 **運用メモ**:
 - `ADMIN_EMAILS` はローカルでは空のまま（コミット後に手動で設定）
 - Vercel 本番環境にも同じ env var を設定する必要あり（Dashboard → Settings → Environment Variables）

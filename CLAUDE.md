@@ -71,6 +71,8 @@ style-self/
 │   │   │   ├── route.ts                              # AI履歴取得 GET（Sprint 39）
 │   │   │   └── [id]/route.ts                         # AI履歴削除 DELETE（Sprint 39）
 │   │   ├── inspirations/route.ts                     # 偉大な参照一覧GET（Sprint 21 Phase 4）
+│   │   ├── products/
+│   │   │   └── match/route.ts                        # 楽天商品マッチング POST（Sprint 40）
 │   │   ├── knowledge/
 │   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
@@ -87,7 +89,9 @@ style-self/
 │   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
 │   ├── coordinate/
 │   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
-│   │   └── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント
+│   │   ├── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント
+│   │   ├── ProductMatchCard.tsx      # 楽天商品単体カード（Sprint 40）
+│   │   └── ProductMatchList.tsx     # アイテム1件分の商品候補リスト・横スクロール（Sprint 40）
 │   ├── knowledge/
 │   │   ├── KnowledgeTab.tsx          # ナレッジタブ本体（Sprint 38）
 │   │   └── AddSourceModal.tsx        # 情報源追加モーダル（Sprint 38）
@@ -106,7 +110,9 @@ style-self/
 │   │   ├── season.ts                 # JST季節判定（Sprint 36 v1.1）
 │   │   ├── knowledge-merge.ts        # knowledge_rules→ConceptInterpretation変換・マージ（Sprint 37）
 │   │   ├── url-extract.ts            # URL→本文抽出（Sprint 38）
-│   │   └── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
+│   │   ├── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
+│   │   ├── color-aliases.ts          # 色名表記揺れマップ（Sprint 40）
+│   │   └── product-match.ts          # 楽天商品スコアリング・行変換（Sprint 40）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）

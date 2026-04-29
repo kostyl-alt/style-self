@@ -752,3 +752,43 @@ export type AiHistory =
 export interface AiHistoryListResponse {
   histories: AiHistory[];
 }
+
+// ---- External Product Matching (Sprint 40) ----
+
+export interface ExternalProduct {
+  id:                   string;
+  source:               string;
+  externalId:           string;
+  name:                 string;
+  brand:                string | null;
+  price:                number | null;
+  imageUrl:             string | null;
+  productUrl:           string | null;
+  affiliateUrl:         string | null;
+  normalizedCategory:   string | null;
+  normalizedColor:      string | null;
+  normalizedMaterial:   string | null;
+  normalizedSilhouette: string | null;
+  normalizedTaste:      string[];
+  isAvailable:          boolean;
+}
+
+export interface MatchedProduct {
+  id:           string;
+  name:         string;
+  brand:        string;
+  price:        number | null;
+  imageUrl:     string;
+  productUrl:   string;
+  matchReason:  string;
+  matchScore:   number;
+}
+
+export interface ProductMatch {
+  itemIndex: number;
+  products:  MatchedProduct[];
+}
+
+export interface ProductMatchResponse {
+  matches: ProductMatch[];
+}
