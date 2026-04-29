@@ -25,65 +25,63 @@ Next.js 14 + Supabase + Claude API で構築するファッションアプリ。
 ```
 style-self/
 ├── app/
-│   ├── (app)/                        # 認証済みユーザー向けページ
-│   │   ├── layout.tsx                # (app)グループ共通レイアウト（BottomNav）
-│   │   ├── self/page.tsx             # SELF: 世界観診断・身体情報・世界観編集（3タブ統合）
-│   │   ├── discover/page.tsx         # DISCOVER: 抽象語・テーマ入力コーデ生成
-│   │   ├── style/page.tsx            # STYLE: コーデ生成・保存履歴画面
-│   │   ├── closet/page.tsx           # CLOSET: クローゼット管理画面
-│   │   ├── learn/page.tsx            # LEARN: ブランドフィロソフィー・センス育成
-│   │   ├── onboarding/page.tsx       # 世界観診断フロー（全画面・BottomNav非表示）
-│   │   ├── coordinate/page.tsx       # 旧ルート（/style にリダイレクト済み）
-│   │   ├── inspire/page.tsx          # 旧ルート（/discover にリダイレクト済み）
-│   │   ├── profile/page.tsx          # 旧ルート（/self にリダイレクト済み）
-│   │   ├── wardrobe/page.tsx         # 旧ルート（/closet にリダイレクト済み）
-│   │   └── worldview/page.tsx        # 旧ルート（/self にリダイレクト済み）
-│   ├── (auth)/                       # 未認証ユーザー向け
-│   │   ├── callback/route.ts         # 認証コールバック
+│   ├── (app)/                            # 認証済みユーザー向けページ
+│   │   ├── layout.tsx                    # (app)グループ共通レイアウト（BottomNav）
+│   │   ├── self/page.tsx                 # SELF: 4タブ（診断/身体/好み/履歴）（Sprint 39 + 39.5でナレッジは admin 移行）
+│   │   ├── discover/page.tsx             # DISCOVER: 抽象語・テーマ入力コーデ生成
+│   │   ├── style/page.tsx                # STYLE: 4タブ（コーデ提案/理想のコーデ/着こなし相談/保存履歴）
+│   │   ├── closet/page.tsx               # CLOSET: クローゼット管理画面
+│   │   ├── learn/page.tsx                # LEARN: ブランドフィロソフィー・センス育成
+│   │   ├── onboarding/page.tsx           # 世界観診断フロー（全画面・BottomNav非表示）
+│   │   ├── admin/
+│   │   │   └── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
+│   │   ├── coordinate/page.tsx           # 旧ルート（/style にリダイレクト済み）
+│   │   ├── inspire/page.tsx              # 旧ルート（/discover にリダイレクト済み）
+│   │   ├── profile/page.tsx              # 旧ルート（/self にリダイレクト済み）
+│   │   ├── wardrobe/page.tsx             # 旧ルート（/closet にリダイレクト済み）
+│   │   └── worldview/page.tsx            # 旧ルート（/self にリダイレクト済み）
+│   ├── (auth)/                           # 未認証ユーザー向け
+│   │   ├── callback/route.ts             # 認証コールバック
 │   │   ├── layout.tsx
 │   │   ├── login/page.tsx
 │   │   └── signup/page.tsx
-│   ├── (app)/admin/
-│   │   └── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
 │   ├── api/
 │   │   ├── admin/
-│   │   │   ├── sync-rakuten/route.ts # 楽天商品同期API（管理者専用）
-│   │   │   └── sync-trends/route.ts  # 楽天ランキング→トレンド自動同期（Sprint 30）
+│   │   │   ├── sync-rakuten/route.ts                 # 楽天商品同期API（管理者専用）
+│   │   │   └── sync-trends/route.ts                  # 楽天ランキング→トレンド自動同期（Sprint 30）
 │   │   ├── ai/
-│   │   │   ├── abstract-coordinate/route.ts # 抽象語→コーデ提案AI（2段階）
-│   │   │   ├── analyze/route.ts      # スタイル軸診断AI
-│   │   │   ├── analyze-item/route.ts # 画像AI解析（Sprint 21 Phase 3）
-│   │   │   ├── coordinate/route.ts   # コーデ提案AI
-│   │   │   ├── learn-insight/route.ts # 今日の気づき生成AI（Sprint 21 Phase 4）
-│   │   ├── trend-translate/route.ts # トレンド世界観翻訳AI（Sprint 28）
-│   │   ├── style-consult/route.ts   # 着こなし相談AI（Sprint 33）
-│   │   ├── analyze-look/route.ts    # 参考写真の比率・シルエット分析AI（Sprint 34）
-│   │   ├── virtual-coordinate/route.ts           # 理想コーデ提案AI・知識ベースlookup→Stage3（Sprint 36 / 37）
-│   │   ├── virtual-coordinate/concepts/route.ts  # 理想コーデのコンセプト候補3案AI（Sprint 36 v1.1）
-│   │   └── virtual-coordinate/translate/route.ts # コンセプト翻訳AI（Sprint 36 v1.2 単体利用も可能）
-│   ├── knowledge/
-│   │   ├── rules/route.ts          # 知識ベースのルール検索（Sprint 37 MVP）
-│   │   ├── sources/route.ts        # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
-│   │   ├── sources/[id]/route.ts   # 情報源 GET（詳細+ルール）/ DELETE（Sprint 38）
-│   │   └── sources/[id]/analyze/route.ts # 情報源 → AIルール抽出（Sprint 38）
-│   ├── history/
-│   │   ├── route.ts                # AI履歴取得 GET（Sprint 39）
-│   │   └── [id]/route.ts           # AI履歴削除 DELETE（Sprint 39）
-│   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
-│   │   │   └── purchase-check/route.ts # 購入検討AI判定
+│   │   │   ├── abstract-coordinate/route.ts          # 抽象語→コーデ提案AI（2段階）
+│   │   │   ├── analyze/route.ts                      # スタイル軸診断AI（Sprint 39で履歴保存追加）
+│   │   │   ├── analyze-item/route.ts                 # 画像AI解析（Sprint 21 Phase 3）
+│   │   │   ├── analyze-look/route.ts                 # 参考写真の比率・シルエット分析AI（Sprint 34、Sprint 39で履歴保存追加）
+│   │   │   ├── coordinate/route.ts                   # コーデ提案AI
+│   │   │   ├── learn-insight/route.ts                # 今日の気づき生成AI（Sprint 21 Phase 4）
+│   │   │   ├── profile-fit/route.ts                  # 推奨サイズ感AI
+│   │   │   ├── purchase-check/route.ts               # 購入検討AI判定
+│   │   │   ├── style-consult/route.ts                # 着こなし相談AI（Sprint 33、Sprint 39で履歴保存追加）
+│   │   │   ├── trend-translate/route.ts              # トレンド世界観翻訳AI（Sprint 28）
+│   │   │   ├── virtual-coordinate/route.ts           # 理想コーデ提案AI・知識ベースlookup→Stage3（Sprint 36/37、Sprint 39で履歴保存追加）
+│   │   │   ├── virtual-coordinate/concepts/route.ts  # 理想コーデのコンセプト候補3案AI（Sprint 36 v1.1）
+│   │   │   └── virtual-coordinate/translate/route.ts # コンセプト翻訳AI（Sprint 36 v1.2 単体利用も可能）
 │   │   ├── brands/
-│   │   │   ├── recommend/route.ts    # ブランド提案AI（Sprint 19）
-│   │   │   └── list/route.ts         # ブランド一覧取得（/learn用）
-│   │   ├── trends/
-│   │   │   └── route.ts              # トレンド一覧GET（Sprint 28）
-│   │   ├── inspirations/
-│   │   │   └── route.ts              # 偉大な参照一覧GET（Sprint 21 Phase 4）
-│   │   ├── coordinate/route.ts       # コーデ保存
-│   │   ├── profile/route.ts          # プロフィール GET/PATCH
-│   │   ├── worldview/route.ts        # 世界観 GET/PATCH
-│   │   └── wardrobe/route.ts         # ワードローブCRUD + PATCH
+│   │   │   ├── list/route.ts                         # ブランド一覧取得（/learn用）
+│   │   │   └── recommend/route.ts                    # ブランド提案AI（Sprint 19）
+│   │   ├── coordinate/route.ts                       # コーデ保存
+│   │   ├── history/
+│   │   │   ├── route.ts                              # AI履歴取得 GET（Sprint 39）
+│   │   │   └── [id]/route.ts                         # AI履歴削除 DELETE（Sprint 39）
+│   │   ├── inspirations/route.ts                     # 偉大な参照一覧GET（Sprint 21 Phase 4）
+│   │   ├── knowledge/
+│   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
+│   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
+│   │   │   ├── sources/[id]/route.ts                 # 情報源 GET（詳細+ルール）/ DELETE（Sprint 38）
+│   │   │   └── sources/[id]/analyze/route.ts         # 情報源 → AIルール抽出（Sprint 38）
+│   │   ├── profile/route.ts                          # プロフィール GET/PATCH
+│   │   ├── trends/route.ts                           # トレンド一覧GET（Sprint 28）
+│   │   ├── wardrobe/route.ts                         # ワードローブCRUD + PATCH
+│   │   └── worldview/route.ts                        # 世界観 GET/PATCH
 │   ├── layout.tsx
-│   └── page.tsx                      # トップ（認証状態でリダイレクト）
+│   └── page.tsx                          # トップ（認証状態でリダイレクト）
 ├── components/
 │   ├── BottomNav.tsx                 # グローバルボトムナビ（5ページ対応）
 │   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
@@ -147,23 +145,25 @@ style-self/
 │       ├── knowledge-extract.ts       # 情報源→ルール抽出プロンプト（Sprint 38）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
-│   └── migrations/
-│       ├── 001_initial_schema.sql    # 初期スキーマ（users / wardrobe_items / coordinates）
-│       ├── 002_wardrobe_schema_update.sql  # Sprint 6: season→text[], 新カラム追加
-│       ├── 003_sprint7_wardrobe_update.sql # Sprint 7: taste→text[], status, worldview_*
-│       ├── 004_external_products.sql       # 楽天連携: external_productsテーブル
-│       ├── 005_sprint9_body_info.sql       # Sprint 9: users身体情報カラム追加
-│       ├── 006_sprint9_profile_update.sql  # Sprint 9改善: 詳細身体情報・fit_recommendation追加
-│       ├── 007_sprint11_worldview.sql      # Sprint 11: users.worldview jsonb追加
-│       ├── 008_sprint13_style_analysis.sql # Sprint 13: users.style_analysis jsonb追加
-│       ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
-│       ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
-│       ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
-│       ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
-│       ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
-│       ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
-│       ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
-│       └── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
+│   ├── migrations/
+│   │   ├── 001_initial_schema.sql        # 初期スキーマ（users / wardrobe_items / coordinates）
+│   │   ├── 002_wardrobe_schema_update.sql  # Sprint 6: season→text[], 新カラム追加
+│   │   ├── 003_sprint7_wardrobe_update.sql # Sprint 7: taste→text[], status, worldview_*
+│   │   ├── 004_external_products.sql       # 楽天連携: external_productsテーブル
+│   │   ├── 005_sprint9_body_info.sql       # Sprint 9: users身体情報カラム追加
+│   │   ├── 006_sprint9_profile_update.sql  # Sprint 9改善: 詳細身体情報・fit_recommendation追加
+│   │   ├── 007_sprint11_worldview.sql      # Sprint 11: users.worldview jsonb追加
+│   │   ├── 008_sprint13_style_analysis.sql # Sprint 13: users.style_analysis jsonb追加
+│   │   ├── 009_brands.sql                  # Sprint 19: brandsテーブル＋初期20件
+│   │   ├── 010_inspirations.sql            # Sprint 21 Phase 4: inspirationsテーブル＋シード5件
+│   │   ├── 011_preference.sql             # Sprint 26: users.style_preference jsonb追加
+│   │   ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
+│   │   ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
+│   │   ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
+│   │   ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
+│   │   └── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
+│   └── seeds/
+│       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義
