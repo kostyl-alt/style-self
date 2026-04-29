@@ -102,6 +102,21 @@ async function lookupKnowledgeRules(
   // 全文も含めて検索（順序: 全文を先頭にすることで完全一致を優先）
   const queries = Array.from(new Set([concept.trim(), ...tokens]));
 
+  console.log("[knowledge-lookup] concept input:", JSON.stringify(concept));
+  console.log("[knowledge-lookup] queries:", queries);
+
+  // 診断用: テーブルに admin 行が何件あるか確認
+  const { count: adminCount, error: countError } = await supabase
+    .from("knowledge_rules")
+    .select("*", { count: "exact", head: true })
+    .eq("visibility", "admin")
+    .eq("is_active", true);
+  if (countError) {
+    console.error("[knowledge-lookup] count query error:", countError);
+  } else {
+    console.log(`[knowledge-lookup] visible admin rules in DB: ${adminCount ?? 0}`);
+  }
+
   const allRows = new Map<string, Record<string, unknown>>();
 
   await Promise.all(
@@ -122,6 +137,11 @@ async function lookupKnowledgeRules(
       ]);
       const keywordRows = (byKeyword.data ?? []) as unknown as Record<string, unknown>[];
       const aliasRows   = (byAlias.data   ?? []) as unknown as Record<string, unknown>[];
+      console.log(
+        `[knowledge-lookup] q="${q}" byKeyword=${keywordRows.length} byAlias=${aliasRows.length}`,
+        byKeyword.error ? `(byKeyword error: ${byKeyword.error.message})` : "",
+        byAlias.error   ? `(byAlias error: ${byAlias.error.message})`   : "",
+      );
       for (const row of keywordRows) allRows.set(row.id as string, row);
       for (const row of aliasRows)   allRows.set(row.id as string, row);
     }),
@@ -130,7 +150,12 @@ async function lookupKnowledgeRules(
   // 上限まで weight 降順で
   const rules = Array.from(allRows.values()).map(rowToKnowledgeRule);
   rules.sort((a, b) => b.weight - a.weight);
-  return rules.slice(0, KNOWLEDGE_LOOKUP_LIMIT);
+  const topRules = rules.slice(0, KNOWLEDGE_LOOKUP_LIMIT);
+  console.log(
+    `[knowledge-lookup] total unique rows=${allRows.size}, returning ${topRules.length}:`,
+    topRules.map((r) => `${r.conceptKeyword}(w=${r.weight})`),
+  );
+  return topRules;
 }
 
 export async function POST(request: NextRequest) {
@@ -173,7 +198,9 @@ export async function POST(request: NextRequest) {
       conceptInterpretation = mergeRulesToInterpretation(matchedRules);
       conceptSource = "knowledge_base";
       matchedRuleKeywords = matchedRules.map((r) => r.conceptKeyword);
+      console.log(`[virtual-coordinate] using knowledge_base. matched: ${matchedRuleKeywords.join(", ")}`);
     } else {
+      console.log(`[virtual-coordinate] no DB match for "${trimmedConcept}", falling back to Claude Stage 1`);
       const translatePrompt = buildConceptTranslatePrompt(
         trimmedConcept,
         scene,
@@ -191,6 +218,7 @@ export async function POST(request: NextRequest) {
       conceptInterpretation = normalizeInterpretation(rawInterp);
       conceptSource = "ai_generated";
     }
+    console.log(`[virtual-coordinate] conceptSource=${conceptSource}, interpretation colors:`, conceptInterpretation.recommendedColors);
 
     // ---- Stage 3: コーデ設計 ----
     const coordPrompt = buildVirtualCoordinatePrompt(
