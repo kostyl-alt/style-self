@@ -53,17 +53,24 @@ async function matchOne(
 
   // 主カテゴリで検索
   let candidates = await fetchCandidates(supabase, productCategory);
+  console.log(
+    `[match] item="${item.name}" category=${item.category} → productCategory=${productCategory} → primary=${candidates.length}件`,
+  );
 
   // ゼロ時のみフォールバック
   if (candidates.length === 0) {
     const fallbacks = FALLBACK_CATEGORIES[productCategory] ?? [];
     for (const fb of fallbacks) {
       candidates = await fetchCandidates(supabase, fb);
+      console.log(`[match]   fallback=${fb} → ${candidates.length}件`);
       if (candidates.length > 0) break;
     }
   }
 
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) {
+    console.log(`[match]   → 該当なし（item="${item.name}"）`);
+    return [];
+  }
 
   // スコアリング → 上位N件
   const scored = candidates
@@ -73,6 +80,11 @@ async function matchOne(
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, TOP_N);
+
+  console.log(
+    `[match]   → top${scored.length}: ` +
+      scored.map((s) => `${s.product.name.slice(0, 30)} (score=${s.score})`).join(" / "),
+  );
 
   return scored.map(({ product, score, matchReasons }): MatchedProduct => ({
     id:           product.id,
@@ -96,6 +108,8 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "items 配列が必要です" }, { status: 400 });
     }
+
+    console.log(`[match] items received: ${items.length}`);
 
     // 全アイテム並列でマッチング
     const matches: ProductMatch[] = await Promise.all(

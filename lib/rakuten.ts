@@ -16,10 +16,6 @@ export const RAKUTEN_GENRE = {
 } as const;
 
 // ---- 楽天APIレスポンスの型 ----
-interface RakutenImageUrl {
-  imageUrl: string;
-}
-
 interface RakutenItem {
   itemName:        string;
   itemCode:        string;
@@ -29,8 +25,9 @@ interface RakutenItem {
   catchcopy:       string;
   itemCaption:     string;
   shopName:        string;
-  mediumImageUrls: RakutenImageUrl[];
-  smallImageUrls:  RakutenImageUrl[];
+  // 旧API: RakutenImageUrl[] / 新API: string[] / 両形式が来うるので unknown で受ける
+  mediumImageUrls: unknown;
+  smallImageUrls:  unknown;
   availability:    number;
   genreId:         string;
 }
@@ -103,12 +100,23 @@ async function fetchRakuten(params: Record<string, string>): Promise<RakutenSear
   return { ...data, Items: items } as RakutenSearchResponse;
 }
 
+// 画像URLの先頭1件を抽出する。
+// 旧API: [{imageUrl: "..."}] 形式 / 新API: [string] 形式 両対応。
+function firstImageUrl(images: unknown): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const first = images[0];
+  if (typeof first === "string") return first;
+  if (first && typeof first === "object" && "imageUrl" in first) {
+    return (first as { imageUrl: string }).imageUrl;
+  }
+  return null;
+}
+
 // ---- レスポンス → RakutenProduct 変換 ----
 function toRakutenProduct(item: RakutenItem): RakutenProduct {
   const image =
-    item.mediumImageUrls?.[0]?.imageUrl ??
-    item.smallImageUrls?.[0]?.imageUrl ??
-    null;
+    firstImageUrl(item.mediumImageUrls) ??
+    firstImageUrl(item.smallImageUrls);
 
   return {
     source:       "rakuten",
