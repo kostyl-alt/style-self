@@ -38,9 +38,30 @@ export async function middleware(request: NextRequest) {
 
     const appRoutes = ["/onboarding", "/self", "/discover", "/style", "/closet", "/learn"];
     const authRoutes = ["/login", "/signup"];
+    const adminRoutes = ["/admin"];
 
     const isAppRoute = appRoutes.some((r) => pathname.startsWith(r));
     const isAuthRoute = authRoutes.some((r) => pathname === r);
+    const isAdminRoute = adminRoutes.some((r) => pathname.startsWith(r));
+
+    // ---- Admin ガード（最優先） ----
+    // ADMIN_EMAILS（カンマ区切り）に列挙された email のみ /admin/* にアクセス可能。
+    // 大文字小文字は両側 lowerCase 正規化して比較。
+    if (isAdminRoute) {
+      if (!user) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const userEmail = (user.email ?? "").toLowerCase();
+      if (!userEmail || !adminEmails.includes(userEmail)) {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+      // 認可OK: 通常のレスポンスを返す
+      return supabaseResponse;
+    }
 
     if (!user && isAppRoute) {
       return NextResponse.redirect(new URL("/login", request.url));

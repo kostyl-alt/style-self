@@ -772,6 +772,22 @@
 
 ---
 
+## Sprint 39.5: ナレッジ機能を管理者専用へ移行
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `app/(app)/self/page.tsx` — 「ナレッジ」タブを削除（5タブ→4タブ：診断/身体/好み/履歴）。`KnowledgeTab` import と userId state も除去 | ✅ |
+| 2 | `app/(app)/admin/knowledge/page.tsx` — 管理者専用ナレッジ管理ページ新規（既存 `KnowledgeTab` をそのまま流用、Admin バッジと注意書き付き） | ✅ |
+| 3 | `middleware.ts` — `/admin/*` 経路に email allowlist ガード追加（最優先で実行）。未認証は /login、未認可は / にリダイレクト。大文字小文字は両側 lowerCase 正規化 | ✅ |
+| 4 | `.env.local` / `CLAUDE.md` — `ADMIN_EMAILS` 環境変数を追加（カンマ区切り、`NEXT_PUBLIC_` 禁止＝サーバーのみ参照） | ✅ |
+
+**運用メモ**:
+- `ADMIN_EMAILS` はローカルでは空のまま（コミット後に手動で設定）
+- Vercel 本番環境にも同じ env var を設定する必要あり（Dashboard → Settings → Environment Variables）
+- 管理者が登録するルールは visibility='private' で作成される。全ユーザーへ公開する場合は Supabase Studio で `visibility='admin'` に手動昇格
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

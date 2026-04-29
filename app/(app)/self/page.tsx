@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import KnowledgeTab from "@/components/knowledge/KnowledgeTab";
 import HistoryTab from "@/components/history/HistoryTab";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
@@ -13,7 +12,7 @@ import type {
 
 // ---- 型 ----
 
-type SelfTab = "diagnosis" | "body" | "worldview" | "knowledge" | "history";
+type SelfTab = "diagnosis" | "body" | "worldview" | "history";
 
 // ---- 身体情報の選択肢 ----
 
@@ -780,20 +779,11 @@ const TABS: { value: SelfTab; label: string }[] = [
   { value: "diagnosis", label: "診断" },
   { value: "body",      label: "身体" },
   { value: "worldview", label: "好み" },
-  { value: "knowledge", label: "ナレッジ" },
   { value: "history",   label: "履歴" },
 ];
 
 export default function SelfPage() {
   const [activeTab, setActiveTab] = useState<SelfTab>("diagnosis");
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUserId(data.user.id);
-    });
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -823,10 +813,6 @@ export default function SelfPage() {
         {activeTab === "diagnosis" && <DiagnosisTab />}
         {activeTab === "body"      && <BodyTab />}
         {activeTab === "worldview" && <WorldviewTab />}
-        {activeTab === "knowledge" && userId && <KnowledgeTab userId={userId} />}
-        {activeTab === "knowledge" && !userId && (
-          <div className="py-10 text-center text-gray-300 text-sm">読み込み中...</div>
-        )}
         {activeTab === "history"   && <HistoryTab />}
       </div>
     </div>
