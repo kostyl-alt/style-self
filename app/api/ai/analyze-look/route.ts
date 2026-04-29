@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaudeWithImage, type ImageMediaType } from "@/lib/claude";
 import { buildAnalyzeLookPrompt } from "@/lib/prompts/analyze-look";
+import { insertAiHistory } from "@/lib/utils/history-helper";
 import type { BodyProfile, LookAnalysisResponse, StylePreference } from "@/types/index";
 
 const VALID_MEDIA_TYPES = new Set<ImageMediaType>(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -76,7 +77,19 @@ export async function POST(request: NextRequest) {
       3000,
     );
 
-    return NextResponse.json(normalize(raw));
+    const response = normalize(raw);
+
+    // Sprint 39: 履歴保存（fire-and-forget・base64画像はDBに保存しない）
+    await insertAiHistory(
+      supabase,
+      user.id,
+      "look_analysis",
+      { mediaType: safeMediaType },
+      response,
+      { imageProvided: true },
+    );
+
+    return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "画像分析に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });

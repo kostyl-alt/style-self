@@ -6,6 +6,7 @@ import { buildConceptTranslatePrompt } from "@/lib/prompts/concept-translate";
 import { normalizeInterpretation } from "@/lib/prompts/normalize-interpretation";
 import { getSeasonJST } from "@/lib/utils/season";
 import { mergeRulesToInterpretation, rowToKnowledgeRule } from "@/lib/utils/knowledge-merge";
+import { insertAiHistory } from "@/lib/utils/history-helper";
 import type {
   BodyProfile,
   ConceptInterpretation,
@@ -251,6 +252,16 @@ export async function POST(request: NextRequest) {
     if (response.items.length < MIN_ITEMS) {
       console.warn(`virtual-coordinate: only ${response.items.length} items returned (expected ${MIN_ITEMS}-${MAX_ITEMS})`);
     }
+
+    // Sprint 39: 履歴保存（fire-and-forget）
+    await insertAiHistory(
+      supabase,
+      user.id,
+      "virtual_coordinate",
+      { scene, concept: trimmedConcept },
+      response,
+      { season, conceptSource, matchedRuleKeywords },
+    );
 
     return NextResponse.json(response);
   } catch (err) {

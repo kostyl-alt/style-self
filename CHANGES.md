@@ -753,6 +753,25 @@
 
 ---
 
+## Sprint 39: AI履歴管理機能（診断・相談・写真分析・理想コーデの履歴保存と削除）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/016_ai_history.sql` — `ai_history` テーブル新規（user_id × type × jsonb input/output/metadata）。RLS（自分のみ）、複合インデックス2種（type別・全件） | ✅ |
+| 2 | `types/index.ts` — `AiHistoryType` ユニオン + `AiHistoryDiagnosis` / `AiHistoryConsultation` / `AiHistoryLookAnalysis` / `AiHistoryVirtualCoordinate` の Discriminated Union 型追加。`AiHistory` / `AiHistoryListResponse` も追加 | ✅ |
+| 3 | `lib/utils/history-helper.ts` — `insertAiHistory(supabase, userId, type, input, output, metadata?)` 新規（fire-and-forget・失敗時はログ警告のみ）。`rowToAiHistory` も追加 | ✅ |
+| 4 | `app/api/history/route.ts` — GET履歴取得API新規（`type`/`limit`/`offset`、最大100件、`(user_id, created_at desc)` インデックスで高速化） | ✅ |
+| 5 | `app/api/history/[id]/route.ts` — DELETE履歴削除API新規（RLS + `eq("user_id")` で二重防御、ハード削除） | ✅ |
+| 6 | `app/api/ai/analyze/route.ts` — 診断結果を `type='diagnosis'` で履歴保存（`{answers}` を input、`StyleDiagnosisResult` を output） | ✅ |
+| 7 | `app/api/ai/style-consult/route.ts` — 相談結果を `type='consultation'` で履歴保存（`{consultation}` を input、`StyleConsultResponse` を output） | ✅ |
+| 8 | `app/api/ai/analyze-look/route.ts` — 写真分析結果を `type='look_analysis'` で履歴保存。**base64画像はDBに保存せず**、`{mediaType}` のみを input に保存（DB肥大化防止） | ✅ |
+| 9 | `app/api/ai/virtual-coordinate/route.ts` — 理想コーデを `type='virtual_coordinate'` で履歴保存（`{scene,concept}` を input、`VirtualCoordinateResponse` を output、`{season,conceptSource,matchedRuleKeywords}` を metadata） | ✅ |
+| 10 | `components/history/HistoryCard.tsx` — タイプ別カード描画新規。サマリ4種 + 詳細展開（インラインアコーディオン）4種 + 削除ボタン | ✅ |
+| 11 | `components/history/HistoryTab.tsx` — 履歴タブ本体新規。サブフィルタ5種（すべて/診断/相談/写真分析/理想コーデ）、削除確認モーダル、「もっと見る」ページネーション | ✅ |
+| 12 | `app/(app)/self/page.tsx` — 5タブ構成に変更（診断/身体/好み/ナレッジ/履歴）。タブ名を短縮して幅問題を解消（診断結果→診断、身体情報→身体、好みの設定→好み） | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

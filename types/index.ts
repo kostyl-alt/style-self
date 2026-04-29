@@ -686,3 +686,69 @@ export interface OnboardingAnswer {
   question: string;
   answer: string;
 }
+
+// ---- AI History (Sprint 39) ----
+// 4タイプの履歴を Discriminated Union で型安全に扱う
+
+export type AiHistoryType =
+  | "diagnosis"
+  | "consultation"
+  | "look_analysis"
+  | "virtual_coordinate";
+
+export interface AiHistoryDiagnosis {
+  id:        string;
+  userId:    string;
+  type:      "diagnosis";
+  input:     {
+    answers?: OnboardingAnswer[];
+    [key: string]: unknown;
+  };
+  output:    StyleDiagnosisResult;
+  metadata:  null;
+  createdAt: string;
+}
+
+export interface AiHistoryConsultation {
+  id:        string;
+  userId:    string;
+  type:      "consultation";
+  input:     { consultation: string };
+  output:    StyleConsultResponse;
+  metadata:  null;
+  createdAt: string;
+}
+
+export interface AiHistoryLookAnalysis {
+  id:        string;
+  userId:    string;
+  type:      "look_analysis";
+  input:     { mediaType: string };
+  output:    LookAnalysisResponse;
+  metadata:  { imageProvided: boolean };
+  createdAt: string;
+}
+
+export interface AiHistoryVirtualCoordinate {
+  id:        string;
+  userId:    string;
+  type:      "virtual_coordinate";
+  input:     { scene: string; concept: string };
+  output:    VirtualCoordinateResponse;
+  metadata:  {
+    season:              string;
+    conceptSource:       ConceptSource;
+    matchedRuleKeywords: string[];
+  };
+  createdAt: string;
+}
+
+export type AiHistory =
+  | AiHistoryDiagnosis
+  | AiHistoryConsultation
+  | AiHistoryLookAnalysis
+  | AiHistoryVirtualCoordinate;
+
+export interface AiHistoryListResponse {
+  histories: AiHistory[];
+}

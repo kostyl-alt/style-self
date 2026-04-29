@@ -64,6 +64,9 @@ style-self/
 │   │   ├── sources/route.ts        # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
 │   │   ├── sources/[id]/route.ts   # 情報源 GET（詳細+ルール）/ DELETE（Sprint 38）
 │   │   └── sources/[id]/analyze/route.ts # 情報源 → AIルール抽出（Sprint 38）
+│   ├── history/
+│   │   ├── route.ts                # AI履歴取得 GET（Sprint 39）
+│   │   └── [id]/route.ts           # AI履歴削除 DELETE（Sprint 39）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
@@ -88,6 +91,9 @@ style-self/
 │   ├── knowledge/
 │   │   ├── KnowledgeTab.tsx          # ナレッジタブ本体（Sprint 38）
 │   │   └── AddSourceModal.tsx        # 情報源追加モーダル（Sprint 38）
+│   ├── history/
+│   │   ├── HistoryTab.tsx            # 履歴タブ本体（Sprint 39）
+│   │   └── HistoryCard.tsx           # 履歴カード（タイプ別描画）（Sprint 39）
 │   └── wardrobe/
 │       ├── AddItemModal.tsx          # アイテム登録モーダル
 │       ├── PurchaseCheckPanel.tsx    # 購入検討AI判定パネル
@@ -99,7 +105,8 @@ style-self/
 │   │   ├── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
 │   │   ├── season.ts                 # JST季節判定（Sprint 36 v1.1）
 │   │   ├── knowledge-merge.ts        # knowledge_rules→ConceptInterpretation変換・マージ（Sprint 37）
-│   │   └── url-extract.ts            # URL→本文抽出（Sprint 38）
+│   │   ├── url-extract.ts            # URL→本文抽出（Sprint 38）
+│   │   └── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -153,7 +160,8 @@ style-self/
 │       ├── 012_trends.sql                 # Sprint 28: trendsテーブル＋2025SSシード5件
 │       ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
 │       ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
-│       └── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
+│       ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
+│       └── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
 │   └── index.ts                      # アプリ全体の型定義
@@ -202,6 +210,7 @@ NEXT_PUBLIC_ZOZO_AFFILIATE_ID=
 | `inspirations` | 偉大な参照コンテンツ（designer / look / artwork / film / book） |
 | `knowledge_sources` | 知識ベースの一次情報（Sprint 37：URL/メモ/画像/書籍） |
 | `knowledge_rules` | 知識ベースの判断ルール（Sprint 37：concept_keyword→推奨色/素材/シルエット/小物/NG） |
+| `ai_history` | AI履歴の統一テーブル（Sprint 39：診断/相談/写真分析/理想コーデ） |
 
 ---
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import KnowledgeTab from "@/components/knowledge/KnowledgeTab";
+import HistoryTab from "@/components/history/HistoryTab";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
@@ -12,7 +13,7 @@ import type {
 
 // ---- 型 ----
 
-type SelfTab = "diagnosis" | "body" | "worldview" | "knowledge";
+type SelfTab = "diagnosis" | "body" | "worldview" | "knowledge" | "history";
 
 // ---- 身体情報の選択肢 ----
 
@@ -776,10 +777,11 @@ function WorldviewTab() {
 // ---- メインページ ----
 
 const TABS: { value: SelfTab; label: string }[] = [
-  { value: "diagnosis", label: "診断結果" },
-  { value: "body",      label: "身体情報" },
-  { value: "worldview", label: "好みの設定" },
+  { value: "diagnosis", label: "診断" },
+  { value: "body",      label: "身体" },
+  { value: "worldview", label: "好み" },
   { value: "knowledge", label: "ナレッジ" },
+  { value: "history",   label: "履歴" },
 ];
 
 export default function SelfPage() {
@@ -825,6 +827,7 @@ export default function SelfPage() {
         {activeTab === "knowledge" && !userId && (
           <div className="py-10 text-center text-gray-300 text-sm">読み込み中...</div>
         )}
+        {activeTab === "history"   && <HistoryTab />}
       </div>
     </div>
   );

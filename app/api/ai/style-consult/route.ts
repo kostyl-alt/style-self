@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaudeJSON } from "@/lib/claude";
 import { buildStyleConsultPrompt } from "@/lib/prompts/style-consult";
+import { insertAiHistory } from "@/lib/utils/history-helper";
 import type { StyleConsultResponse, BodyProfile } from "@/types/index";
 
 function validateAdjustments(raw: Record<string, unknown>): StyleConsultResponse["adjustments"] {
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
       avoidPoints:    Array.isArray(raw.avoidPoints)  ? (raw.avoidPoints as string[])  : [],
       preferenceNote: typeof raw.preferenceNote === "string" ? raw.preferenceNote : "",
     };
+
+    // Sprint 39: 履歴保存（fire-and-forget）
+    await insertAiHistory(supabase, user.id, "consultation", { consultation }, response);
 
     return NextResponse.json(response);
   } catch (err) {

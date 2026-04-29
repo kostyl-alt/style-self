@@ -3,6 +3,7 @@ import { callClaudeJSON } from "@/lib/claude";
 import { ANALYZE_SYSTEM_PROMPT } from "@/lib/prompts/analyze";
 import { validateAndFixStyleDiagnosis } from "@/lib/validators/analyze";
 import { createServiceClient } from "@/lib/supabase";
+import { insertAiHistory } from "@/lib/utils/history-helper";
 import type { Json } from "@/types/database";
 import type { OnboardingAnswer, StyleDiagnosisResult } from "@/types/index";
 
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
         style_preference:  (result.preference ?? null) as unknown as Json,
         onboarding_completed: true,
       } as never).eq("id", userId);
+
+      // Sprint 39: 履歴保存（fire-and-forget）
+      await insertAiHistory(supabase, userId, "diagnosis", { answers }, result);
     }
 
     return NextResponse.json(result);
