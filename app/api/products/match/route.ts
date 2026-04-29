@@ -5,6 +5,7 @@ import {
   buildMatchReason,
   pickProductUrl,
   rowToExternalProduct,
+  toProductCategory,
   FALLBACK_CATEGORIES,
 } from "@/lib/utils/product-match";
 import type {
@@ -47,12 +48,15 @@ async function matchOne(
   supabase: SupabaseClient,
   item: VirtualCoordinateItem,
 ): Promise<MatchedProduct[]> {
+  // item.category（15種）→ product.normalized_category（7種）にマッピング
+  const productCategory = toProductCategory(item.category);
+
   // 主カテゴリで検索
-  let candidates = await fetchCandidates(supabase, item.category);
+  let candidates = await fetchCandidates(supabase, productCategory);
 
   // ゼロ時のみフォールバック
   if (candidates.length === 0) {
-    const fallbacks = FALLBACK_CATEGORIES[item.category] ?? [];
+    const fallbacks = FALLBACK_CATEGORIES[productCategory] ?? [];
     for (const fb of fallbacks) {
       candidates = await fetchCandidates(supabase, fb);
       if (candidates.length > 0) break;

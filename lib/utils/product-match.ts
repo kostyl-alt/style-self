@@ -73,11 +73,40 @@ export function rowToExternalProduct(row: Record<string, unknown>): ExternalProd
   };
 }
 
-// カテゴリ・フォールバック（候補ゼロ時のみ近隣カテゴリを試す）
+// VirtualCoordinateItem.category（15種 = WardrobeCategory）を
+// external_products.normalized_category（7種 = Sprint 40 統合後）に
+// マッピングする。これを primary lookup の前段で適用する。
+export const ITEM_TO_PRODUCT_CATEGORY: Record<string, string> = {
+  // 7種そのまま
+  tops:        "tops",
+  bottoms:     "bottoms",
+  outerwear:   "outerwear",
+  dress:       "dress",
+  shoes:       "shoes",
+  bags:        "bags",
+  accessories: "accessories",
+  // 15→7 統合
+  jacket:      "outerwear",
+  vest:        "outerwear",
+  inner:       "tops",
+  setup:       "dress",
+  hat:         "accessories",
+  jewelry:     "accessories",
+  roomwear:    "tops",
+  other:       "tops",
+};
+
+export function toProductCategory(itemCategory: string): string {
+  return ITEM_TO_PRODUCT_CATEGORY[itemCategory] ?? "tops";
+}
+
+// 候補ゼロ時のみ近隣カテゴリを試す（マッピング後の7種を起点）
 export const FALLBACK_CATEGORIES: Record<string, string[]> = {
-  setup:   ["tops", "bottoms"],
-  dress:   ["tops"],
-  jacket:  ["outerwear"],
-  vest:    ["tops"],
-  inner:   ["tops"],
+  outerwear:   ["tops"],
+  tops:        ["outerwear"],
+  dress:       ["tops", "bottoms"],
+  bottoms:     ["dress"],
+  shoes:       [],
+  bags:        ["accessories"],
+  accessories: ["bags"],
 };
