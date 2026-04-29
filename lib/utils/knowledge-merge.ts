@@ -31,6 +31,28 @@ export function mergeRulesToInterpretation(rules: KnowledgeRule[]): ConceptInter
   };
 }
 
+// DB行（snake_case）→ KnowledgeSource（camelCase）への変換
+export function rowToKnowledgeSource(row: Record<string, unknown>): import("@/types/index").KnowledgeSource {
+  return {
+    id:           row.id as string,
+    userId:       (row.user_id as string | null) ?? null,
+    title:        row.title as string,
+    sourceType:   row.source_type as import("@/types/index").KnowledgeSourceType,
+    url:          (row.url as string | null) ?? null,
+    contentText:  (row.content_text as string | null) ?? null,
+    imageUrl:     (row.image_url as string | null) ?? null,
+    author:       (row.author as string | null) ?? null,
+    citationNote: (row.citation_note as string | null) ?? null,
+    summary:      (row.summary as string | null) ?? null,
+    visibility:   (row.visibility as import("@/types/index").KnowledgeVisibility) ?? "private",
+    isAnalyzed:   (row.is_analyzed as boolean) ?? false,
+    analyzedAt:   (row.analyzed_at as string | null) ?? null,
+    analyzedBy:   (row.analyzed_by as string | null) ?? null,
+    createdAt:    row.created_at as string,
+    updatedAt:    row.updated_at as string,
+  };
+}
+
 // DB行（snake_case）→ KnowledgeRule（camelCase）への変換
 export function rowToKnowledgeRule(row: Record<string, unknown>): KnowledgeRule {
   return {

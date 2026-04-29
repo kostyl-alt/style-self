@@ -735,6 +735,24 @@
 
 ---
 
+## Sprint 38: ナレッジ管理機能（情報源登録・AI分析・ルール自動生成）
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/utils/url-extract.ts` — URL→本文抽出ユーティリティ新規（fetch + regex strip、最大8000字、タイムアウト15秒、依存追加なし） | ✅ |
+| 2 | `lib/prompts/knowledge-extract.ts` — 情報源→判断ルール抽出プロンプト新規（最大3ルール、抽象→具体翻訳、テキスト/画像両対応） | ✅ |
+| 3 | `lib/storage.ts` — `KNOWLEDGE_BUCKET` 定数 + `uploadKnowledgeImage` ヘルパー追加（5MB制限はクライアント側） | ✅ |
+| 4 | `lib/utils/knowledge-merge.ts` — `rowToKnowledgeSource` ヘルパー追加（DB行→camelCase変換） | ✅ |
+| 5 | `types/index.ts` — `CreateKnowledgeSourceRequest` / `KnowledgeSourcesListResponse` / `KnowledgeSourceWithRulesResponse` / `AnalyzeKnowledgeSourceResponse` 型追加 | ✅ |
+| 6 | `app/api/knowledge/sources/route.ts` — GET（自分のソース一覧、type/analyzed フィルタ可）+ POST（タイプ別バリデーション付き登録、visibility=private 固定） | ✅ |
+| 7 | `app/api/knowledge/sources/[id]/route.ts` — GET（ソース詳細+関連ルール）+ DELETE（CASCADE で関連 rules も削除） | ✅ |
+| 8 | `app/api/knowledge/sources/[id]/analyze/route.ts` — AI分析API（テキスト/画像/URL の3経路、Claude で最大3ルール抽出→knowledge_rules 一括INSERT、source は is_analyzed/analyzed_at/analyzed_by を更新、URL取得失敗時はメモコピペを案内） | ✅ |
+| 9 | `components/knowledge/AddSourceModal.tsx` — 4タイプ（メモ/URL/画像/書籍）対応の追加モーダル新規。画像はクライアント側で Storage アップロード→URL取得 | ✅ |
+| 10 | `components/knowledge/KnowledgeTab.tsx` — ナレッジタブ本体新規（一覧表示・AI分析実行・インラインアコーディオンでルール表示・削除確認モーダル） | ✅ |
+| 11 | `app/(app)/self/page.tsx` — `SelfTab` に `'knowledge'` 追加、4タブ構成に変更（診断結果 / 身体情報 / 好みの設定 / ナレッジ）、userId取得ロジック追加、4タブ収まるよう `min-w-0 truncate` を tailwind に追加 | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

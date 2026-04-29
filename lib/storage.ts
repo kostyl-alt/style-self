@@ -29,3 +29,25 @@ export async function deleteWardrobeImage(publicUrl: string): Promise<void> {
 
   await supabase.storage.from(WARDROBE_BUCKET).remove([pathParts[1]]);
 }
+
+// ---- Sprint 38: ナレッジ画像 ----
+
+export const KNOWLEDGE_BUCKET = "knowledge-images";
+
+export async function uploadKnowledgeImage(userId: string, file: File): Promise<string> {
+  const supabase = createSupabaseBrowserClient();
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `${userId}/${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(KNOWLEDGE_BUCKET)
+    .upload(path, file, { upsert: false });
+
+  if (error) throw new Error("画像のアップロードに失敗しました");
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(KNOWLEDGE_BUCKET)
+    .getPublicUrl(path);
+
+  return publicUrl;
+}

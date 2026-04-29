@@ -653,6 +653,32 @@ export interface KnowledgeRulesResponse {
   matched:  boolean;
 }
 
+// Sprint 38: ナレッジ管理API用のリクエスト/レスポンス型
+export interface CreateKnowledgeSourceRequest {
+  title:          string;
+  sourceType:     KnowledgeSourceType;
+  url?:           string;
+  contentText?:   string;
+  imageUrl?:      string;
+  author?:        string;
+  citationNote?:  string;
+  summary?:       string;
+}
+
+export interface KnowledgeSourcesListResponse {
+  sources: KnowledgeSource[];
+}
+
+export interface KnowledgeSourceWithRulesResponse {
+  source: KnowledgeSource;
+  rules:  KnowledgeRule[];
+}
+
+export interface AnalyzeKnowledgeSourceResponse {
+  source: KnowledgeSource;
+  rules:  KnowledgeRule[];
+}
+
 // ---- Onboarding ----
 
 export interface OnboardingAnswer {

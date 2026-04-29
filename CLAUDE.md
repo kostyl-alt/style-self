@@ -60,7 +60,10 @@ style-self/
 │   │   ├── virtual-coordinate/concepts/route.ts  # 理想コーデのコンセプト候補3案AI（Sprint 36 v1.1）
 │   │   └── virtual-coordinate/translate/route.ts # コンセプト翻訳AI（Sprint 36 v1.2 単体利用も可能）
 │   ├── knowledge/
-│   │   └── rules/route.ts          # 知識ベースのルール検索（Sprint 37 MVP）
+│   │   ├── rules/route.ts          # 知識ベースのルール検索（Sprint 37 MVP）
+│   │   ├── sources/route.ts        # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
+│   │   ├── sources/[id]/route.ts   # 情報源 GET（詳細+ルール）/ DELETE（Sprint 38）
+│   │   └── sources/[id]/analyze/route.ts # 情報源 → AIルール抽出（Sprint 38）
 │   │   │   ├── profile-fit/route.ts  # 推奨サイズ感AI
 │   │   │   └── purchase-check/route.ts # 購入検討AI判定
 │   │   ├── brands/
@@ -82,6 +85,9 @@ style-self/
 │   ├── coordinate/
 │   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
 │   │   └── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント
+│   ├── knowledge/
+│   │   ├── KnowledgeTab.tsx          # ナレッジタブ本体（Sprint 38）
+│   │   └── AddSourceModal.tsx        # 情報源追加モーダル（Sprint 38）
 │   └── wardrobe/
 │       ├── AddItemModal.tsx          # アイテム登録モーダル
 │       ├── PurchaseCheckPanel.tsx    # 購入検討AI判定パネル
@@ -92,7 +98,8 @@ style-self/
 │   │   ├── body-rules.ts             # 体型・骨格・悩みからコーデ制約を導出（Sprint 32）
 │   │   ├── zozo-link.ts              # ZOZOTOWN検索URLビルダー（Sprint 35）
 │   │   ├── season.ts                 # JST季節判定（Sprint 36 v1.1）
-│   │   └── knowledge-merge.ts        # knowledge_rules→ConceptInterpretation変換・マージ（Sprint 37）
+│   │   ├── knowledge-merge.ts        # knowledge_rules→ConceptInterpretation変換・マージ（Sprint 37）
+│   │   └── url-extract.ts            # URL→本文抽出（Sprint 38）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -128,6 +135,7 @@ style-self/
 │       ├── virtual-coordinate.ts      # 理想コーデ提案プロンプト・Stage 3（Sprint 36 / v1.2）
 │       ├── concept-translate.ts       # コンセプト翻訳プロンプト・Stage 1（Sprint 36 v1.2）
 │       ├── normalize-interpretation.ts # コンセプト翻訳レスポンス正規化（Sprint 36 v1.2）
+│       ├── knowledge-extract.ts       # 情報源→ルール抽出プロンプト（Sprint 38）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   └── migrations/

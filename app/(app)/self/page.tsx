@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import KnowledgeTab from "@/components/knowledge/KnowledgeTab";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
@@ -11,7 +12,7 @@ import type {
 
 // ---- 型 ----
 
-type SelfTab = "diagnosis" | "body" | "worldview";
+type SelfTab = "diagnosis" | "body" | "worldview" | "knowledge";
 
 // ---- 身体情報の選択肢 ----
 
@@ -778,10 +779,19 @@ const TABS: { value: SelfTab; label: string }[] = [
   { value: "diagnosis", label: "診断結果" },
   { value: "body",      label: "身体情報" },
   { value: "worldview", label: "好みの設定" },
+  { value: "knowledge", label: "ナレッジ" },
 ];
 
 export default function SelfPage() {
   const [activeTab, setActiveTab] = useState<SelfTab>("diagnosis");
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setUserId(data.user.id);
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -797,7 +807,7 @@ export default function SelfPage() {
             <button
               key={tab.value}
               onClick={() => setActiveTab(tab.value)}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+              className={`flex-1 min-w-0 py-2 rounded-lg text-xs font-medium transition-all truncate ${
                 activeTab === tab.value
                   ? "bg-gray-800 text-white shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -811,6 +821,10 @@ export default function SelfPage() {
         {activeTab === "diagnosis" && <DiagnosisTab />}
         {activeTab === "body"      && <BodyTab />}
         {activeTab === "worldview" && <WorldviewTab />}
+        {activeTab === "knowledge" && userId && <KnowledgeTab userId={userId} />}
+        {activeTab === "knowledge" && !userId && (
+          <div className="py-10 text-center text-gray-300 text-sm">読み込み中...</div>
+        )}
       </div>
     </div>
   );
