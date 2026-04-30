@@ -822,6 +822,23 @@
 
 ---
 
+## Sprint 41.1: 商品の複数属性化＋URL自動入力＋8軸判断情報
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/018_product_multi_attrs.sql` — `normalized_color/material` を配列カラム `normalized_colors/materials text[]` にrename + 既存値を単要素配列に移行 + 旧カラムDROP。`axes jsonb` を新設（8軸判断情報）。GIN インデックス3種 | ✅ |
+| 2 | `lib/prompts/extract-product-info.ts` — URL→商品情報＋8軸抽出プロンプト新規（brand/name/imageUrl/price/category + colors[]/materials[] + axes(7軸) + worldview/bodyCompat/notes/priority） | ✅ |
+| 3 | `lib/prompts/normalize-product.ts` — 楽天同期用も配列対応（normalized_colors/materials を返す。混紡素材・複数色を表現可能に） | ✅ |
+| 4 | `types/index.ts` — `ProductAxes` 型新規。`ExternalProduct` を `normalizedColors: string[]` `normalizedMaterials: string[]` `axes: ProductAxes` に変更。`CreateProductRequest` / `FetchProductInfoResponse` 拡張 | ✅ |
+| 5 | `lib/utils/color-aliases.ts` — `isAnyColorMatch(itemColor, productColors[])` 配列対応版を追加 | ✅ |
+| 6 | `lib/utils/product-match.ts` — `rowToExternalProduct` を新カラム対応に。`scoreProduct` で配列フィールドのいずれかにマッチで判定。NGペナルティも配列対応 | ✅ |
+| 7 | `app/api/admin/sync-rakuten/route.ts` — `normalized_colors/materials` 配列で挿入。`toColorArray/toMaterialArray` ヘルパーで旧形式（単数）と新形式（配列）の両方を吸収 | ✅ |
+| 8 | `app/api/admin/products/route.ts` — POST で配列＋axes受領。INSERT に新カラム反映 | ✅ |
+| 9 | `app/api/admin/fetch-product-info/route.ts` — 新規。URL → fetch HTML → メタデータ抽出（10KB以下に圧縮） → Claude（1500トークン） で構造化抽出 → JSON返却。失敗時はエラーで手入力誘導 | ✅ |
+| 10 | `app/(app)/admin/products/new/page.tsx` — 5セクション構成に拡張（URL自動入力 / 基本 / 属性 / 判断軸8軸 / キュレーション）。色・素材は複数選択チップ。8軸は個別入力（シルエット型・上下比率・丈バランス・肩線・重心・質感・季節）。URL自動入力は空欄のみ埋める動作 | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

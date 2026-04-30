@@ -17,8 +17,9 @@ type ExternalProductInsert = {
   image_url: string | null;
   is_available: boolean;
   normalized_category: string | null;
-  normalized_color: string | null;
-  normalized_material: string | null;
+  // Sprint 41.1: 配列カラム
+  normalized_colors: string[];
+  normalized_materials: string[];
   normalized_silhouette: string | null;
   normalized_taste: string[] | null;
   synced_at: string;
@@ -27,8 +28,11 @@ type ExternalProductInsert = {
 interface NormalizeResult {
   brand: string | null;
   normalized_category: string | null;
-  normalized_color: string | null;
-  normalized_material: string | null;
+  // Sprint 41.1: 配列対応（互換のため単数値のレガシーキーも受ける）
+  normalized_colors?: string[];
+  normalized_color?: string;
+  normalized_materials?: string[];
+  normalized_material?: string;
   normalized_silhouette: string | null;
   normalized_taste: string[];
 }
@@ -61,19 +65,31 @@ async function normalizeProduct(product: RakutenProduct): Promise<NormalizeResul
     return await callClaudeJSON<NormalizeResult>({
       systemPrompt: NORMALIZE_PRODUCT_PROMPT,
       userMessage,
-      maxTokens: 256,
+      maxTokens: 384,
     });
   } catch {
-    // 正規化失敗時はnullフィールドで登録
+    // 正規化失敗時は空フィールドで登録
     return {
       brand: null,
       normalized_category: null,
-      normalized_color: null,
-      normalized_material: null,
+      normalized_colors: [],
+      normalized_materials: [],
       normalized_silhouette: null,
       normalized_taste: [],
     };
   }
+}
+
+// 旧形式（単数）と新形式（配列）の両方を吸収して配列に統一
+function toColorArray(n: NormalizeResult): string[] {
+  if (Array.isArray(n.normalized_colors) && n.normalized_colors.length > 0) return n.normalized_colors;
+  if (typeof n.normalized_color === "string" && n.normalized_color) return [n.normalized_color];
+  return [];
+}
+function toMaterialArray(n: NormalizeResult): string[] {
+  if (Array.isArray(n.normalized_materials) && n.normalized_materials.length > 0) return n.normalized_materials;
+  if (typeof n.normalized_material === "string" && n.normalized_material) return [n.normalized_material];
+  return [];
 }
 
 // 1件ずつ正規化してDBにupsert
@@ -100,8 +116,8 @@ async function syncProducts(
         image_url:            product.imageUrl,
         is_available:         product.isAvailable,
         normalized_category:  normalized.normalized_category,
-        normalized_color:     normalized.normalized_color,
-        normalized_material:  normalized.normalized_material,
+        normalized_colors:    toColorArray(normalized),
+        normalized_materials: toMaterialArray(normalized),
         normalized_silhouette: normalized.normalized_silhouette,
         normalized_taste:     normalized.normalized_taste?.length ? normalized.normalized_taste : null,
         synced_at:            new Date().toISOString(),

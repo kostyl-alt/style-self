@@ -755,6 +755,17 @@ export interface AiHistoryListResponse {
 
 // ---- External Product Matching (Sprint 40) ----
 
+// Sprint 41.1: 商品の8軸判断情報（jsonb で保持）
+export interface ProductAxes {
+  silhouetteType?:  string | null;            // "Iライン"|"Aライン"|"Yライン"|"Oライン"|null
+  topBottomRatio?:  string | null;            // 単一商品では null になり得る
+  lengthBalance?:   string | null;            // "クロップド丈"|"ロング丈"等
+  shoulderLine?:    string | null;            // "ジャストショルダー"|"ドロップ"等
+  weightCenter?:    "upper" | "lower" | "balanced" | null;
+  textureType?:     string | null;            // "ハリ"|"ドレープ"|"落ち感"等
+  seasonality?:     string[];                 // ["春","夏"]等
+}
+
 export interface ExternalProduct {
   id:                   string;
   source:               string;
@@ -766,8 +777,9 @@ export interface ExternalProduct {
   productUrl:           string | null;
   affiliateUrl:         string | null;
   normalizedCategory:   string | null;
-  normalizedColor:      string | null;
-  normalizedMaterial:   string | null;
+  // Sprint 41.1: 単数→配列に変更
+  normalizedColors:     string[];
+  normalizedMaterials:  string[];
   normalizedSilhouette: string | null;
   normalizedTaste:      string[];
   isAvailable:          boolean;
@@ -778,6 +790,8 @@ export interface ExternalProduct {
   curationPriority:     number;
   curatedBy:            string | null;
   matchReasonTemplate:  string | null;
+  // Sprint 41.1: 8軸判断情報
+  axes:                 ProductAxes;
 }
 
 // 商品×コンセプト の多対多リンク（重み付き）
@@ -800,13 +814,34 @@ export interface CreateProductRequest {
   productUrl:           string;
   affiliateUrl?:        string;
   normalizedCategory:   string;
-  normalizedColor?:     string;
-  normalizedMaterial?:  string;
+  // Sprint 41.1: 単数→配列
+  normalizedColors?:    string[];
+  normalizedMaterials?: string[];
   normalizedSilhouette?: string;
   worldviewTags?:       string[];
   bodyCompatTags?:      BodyConcern[];
   curationNotes?:       string;
   curationPriority?:    number;
+  // Sprint 41.1: 8軸
+  axes?:                ProductAxes;
+}
+
+// fetch-product-info API のレスポンス型
+export interface FetchProductInfoResponse {
+  brand:                string | null;
+  name:                 string | null;
+  imageUrl:             string | null;
+  price:                number | null;
+  productUrl:           string | null;
+  normalizedCategory:   string;
+  normalizedColors:     string[];
+  normalizedMaterials:  string[];
+  normalizedSilhouette: string | null;
+  axes:                 ProductAxes;
+  bodyCompatTags:       string[];
+  worldviewTags:        string[];
+  curationNotes:        string;
+  curationPriority:     number;
 }
 
 export interface AdminProductListResponse {

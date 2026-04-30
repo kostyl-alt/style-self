@@ -76,10 +76,12 @@ style-self/
 │   │   ├── products/
 │   │   │   └── match/route.ts                        # 商品マッチング POST（Sprint 40 / 41で拡張スコアリング）
 │   │   ├── admin/products/
-│   │   │   ├── route.ts                              # 管理者用商品 GET（一覧）/ POST（登録）（Sprint 41）
+│   │   │   ├── route.ts                              # 管理者用商品 GET（一覧）/ POST（登録）（Sprint 41 / 41.1で配列・axes対応）
 │   │   │   └── [id]/route.ts                         # 管理者用商品 DELETE（ソフト削除）（Sprint 41）
 │   │   ├── admin/knowledge-keywords/
 │   │   │   └── route.ts                              # オートコンプリート用キーワード GET（Sprint 41）
+│   │   ├── admin/fetch-product-info/
+│   │   │   └── route.ts                              # URL→商品情報＋8軸自動抽出 POST（Sprint 41.1）
 │   │   ├── knowledge/
 │   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
@@ -159,6 +161,7 @@ style-self/
 │       ├── concept-translate.ts       # コンセプト翻訳プロンプト・Stage 1（Sprint 36 v1.2）
 │       ├── normalize-interpretation.ts # コンセプト翻訳レスポンス正規化（Sprint 36 v1.2）
 │       ├── knowledge-extract.ts       # 情報源→ルール抽出プロンプト（Sprint 38）
+│       ├── extract-product-info.ts    # URL→商品情報＋8軸抽出プロンプト（Sprint 41.1）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   ├── migrations/
@@ -178,7 +181,8 @@ style-self/
 │   │   ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
 │   │   ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
 │   │   ├── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
-│   │   └── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
+│   │   ├── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
+│   │   └── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/

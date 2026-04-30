@@ -1,7 +1,7 @@
 // Sprint 40: 楽天商品マッチング - スコアリング・ヘルパー
 // Sprint 41: 手動キュレーション情報を含めた拡張スコアリング
 
-import { isColorMatch } from "./color-aliases";
+import { isAnyColorMatch } from "./color-aliases";
 import type { ExternalProduct, VirtualCoordinateItem } from "@/types/index";
 
 export interface ScoringResult {
@@ -25,16 +25,16 @@ export function scoreProduct(
   let score = 50;
   const reasons: string[] = ["カテゴリ"];
 
-  // ---- Sprint 40 既存スコアリング ----
+  // ---- Sprint 40 既存スコアリング（Sprint 41.1で配列対応） ----
 
-  if (isColorMatch(item.color, product.normalizedColor)) {
+  if (isAnyColorMatch(item.color, product.normalizedColors)) {
     score += 30;
     reasons.push("色");
   }
 
-  if (product.normalizedMaterial) {
+  if (product.normalizedMaterials.length > 0) {
     const haystack = `${item.name} ${item.materialNote} ${item.reason}`;
-    if (haystack.includes(product.normalizedMaterial)) {
+    if (product.normalizedMaterials.some((m) => haystack.includes(m))) {
       score += 20;
       reasons.push("素材");
     }
@@ -83,7 +83,7 @@ export function scoreProduct(
     const ngHit = ctx.ngElements.some((ng) => {
       if (!ng) return false;
       if (product.name.includes(ng)) return true;
-      if (product.normalizedMaterial?.includes(ng)) return true;
+      if (product.normalizedMaterials.some((m) => m.includes(ng))) return true;
       if (product.normalizedSilhouette?.includes(ng)) return true;
       return false;
     });
@@ -118,8 +118,9 @@ export function rowToExternalProduct(row: Record<string, unknown>): ExternalProd
     productUrl:           (row.product_url as string | null) ?? null,
     affiliateUrl:         (row.affiliate_url as string | null) ?? null,
     normalizedCategory:   (row.normalized_category as string | null) ?? null,
-    normalizedColor:      (row.normalized_color as string | null) ?? null,
-    normalizedMaterial:   (row.normalized_material as string | null) ?? null,
+    // Sprint 41.1: 配列カラム
+    normalizedColors:     (row.normalized_colors as string[] | null) ?? [],
+    normalizedMaterials:  (row.normalized_materials as string[] | null) ?? [],
     normalizedSilhouette: (row.normalized_silhouette as string | null) ?? null,
     normalizedTaste:      (row.normalized_taste as string[] | null) ?? [],
     isAvailable:          (row.is_available as boolean) ?? false,
@@ -130,6 +131,8 @@ export function rowToExternalProduct(row: Record<string, unknown>): ExternalProd
     curationPriority:     (row.curation_priority as number | null) ?? 0,
     curatedBy:            (row.curated_by as string | null) ?? null,
     matchReasonTemplate:  (row.match_reason_template as string | null) ?? null,
+    // Sprint 41.1: 8軸 jsonb
+    axes:                 (row.axes as Record<string, unknown> | null) ?? {},
   };
 }
 

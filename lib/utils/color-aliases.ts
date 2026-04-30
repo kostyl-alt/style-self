@@ -39,3 +39,9 @@ export function isColorMatch(itemColor: string, productColor: string | null): bo
   const aliases = expandColorAliases(itemColor);
   return aliases.some((a) => productColor.includes(a) || a.includes(productColor));
 }
+
+// Sprint 41.1: 配列対応版（productの色配列のいずれかにマッチすればtrue）
+export function isAnyColorMatch(itemColor: string, productColors: string[]): boolean {
+  if (!itemColor || productColors.length === 0) return false;
+  return productColors.some((pc) => isColorMatch(itemColor, pc));
+}

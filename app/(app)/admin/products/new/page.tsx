@@ -1,12 +1,19 @@
 "use client";
 
-// Sprint 41: 管理者専用 — 商品登録フォーム
+// Sprint 41 / 41.1: 管理者専用 — 商品登録フォーム
+// 5セクション構成: URL自動入力 / 基本情報 / 属性 / 判断軸（8軸） / キュレーション
 // アクセス制御は middleware（ADMIN_EMAILS）で行う。
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { CreateProductRequest, KnowledgeKeywordsResponse, BodyConcern } from "@/types/index";
+import type {
+  CreateProductRequest,
+  KnowledgeKeywordsResponse,
+  BodyConcern,
+  ProductAxes,
+  FetchProductInfoResponse,
+} from "@/types/index";
 
 const CATEGORIES: { value: string; label: string }[] = [
   { value: "tops",        label: "トップス" },
@@ -34,6 +41,11 @@ const SILHOUETTES = [
   "テーパード","ストレート","フレア","Aライン","タイト","マキシ","ミニ",
 ];
 
+const SILHOUETTE_TYPES = ["Iライン", "Aライン", "Yライン", "Oライン"];
+const SHOULDER_LINES   = ["ジャストショルダー", "ドロップショルダー", "パワーショルダー"];
+const TEXTURE_TYPES    = ["ハリ", "ドレープ", "落ち感", "マット", "光沢", "ニット感"];
+const SEASONS          = ["春", "夏", "秋", "冬"];
+
 const BODY_CONCERN_OPTIONS: { value: BodyConcern; label: string }[] = [
   { value: "looks_young",     label: "子どもっぽく見える" },
   { value: "short_legs",      label: "脚が短く見える" },
@@ -47,23 +59,38 @@ const BODY_CONCERN_OPTIONS: { value: BodyConcern; label: string }[] = [
 export default function AdminProductNewPage() {
   const router = useRouter();
 
-  // フォーム状態
+  // --- 基本情報 ---
   const [brand, setBrand]                       = useState("");
   const [name, setName]                         = useState("");
   const [imageUrl, setImageUrl]                 = useState("");
   const [price, setPrice]                       = useState<string>("");
   const [productUrl, setProductUrl]             = useState("");
+  // --- 属性 ---
   const [normalizedCategory, setCategory]       = useState("tops");
-  const [normalizedColor, setColor]             = useState("");
-  const [normalizedMaterial, setMaterial]       = useState("");
+  const [normalizedColors, setColors]           = useState<string[]>([]);
+  const [normalizedMaterials, setMaterials]     = useState<string[]>([]);
   const [normalizedSilhouette, setSilhouette]   = useState("");
+  // --- 判断軸（8軸） ---
+  const [silhouetteType, setSilhouetteType]     = useState("");
+  const [topBottomRatio, setTopBottomRatio]     = useState("");
+  const [lengthBalance, setLengthBalance]       = useState("");
+  const [shoulderLine, setShoulderLine]         = useState("");
+  const [weightCenter, setWeightCenter]         = useState<"upper" | "lower" | "balanced" | "">("");
+  const [textureType, setTextureType]           = useState("");
+  const [seasonality, setSeasonality]           = useState<string[]>([]);
+  // --- キュレーション ---
   const [worldviewTags, setWorldviewTags]       = useState<string[]>([]);
   const [worldviewInput, setWorldviewInput]     = useState("");
   const [bodyCompatTags, setBodyCompatTags]     = useState<BodyConcern[]>([]);
   const [curationNotes, setNotes]               = useState("");
   const [curationPriority, setPriority]         = useState(50);
 
-  // オートコンプリート用
+  // --- URL自動入力 ---
+  const [fetchUrl, setFetchUrl]                 = useState("");
+  const [isFetching, setFetching]               = useState(false);
+  const [fetchMessage, setFetchMessage]         = useState<string | null>(null);
+
+  // --- オートコンプリート用 ---
   const [knownKeywords, setKnownKeywords]       = useState<string[]>([]);
 
   const [isSaving, setSaving]                   = useState(false);
@@ -76,10 +103,64 @@ export default function AdminProductNewPage() {
       .catch(() => setKnownKeywords([]));
   }, []);
 
+  // ---- URL自動入力 ----
+  async function handleFetchInfo() {
+    if (!fetchUrl.trim()) return;
+    setFetching(true);
+    setFetchMessage(null);
+    try {
+      const res = await fetch("/api/admin/fetch-product-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: fetchUrl.trim() }),
+      });
+      const data = await res.json() as FetchProductInfoResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "取得に失敗しました");
+
+      // 空欄のフィールドのみ自動入力（既入力は尊重）
+      if (!brand && data.brand) setBrand(data.brand);
+      if (!name && data.name) setName(data.name);
+      if (!imageUrl && data.imageUrl) setImageUrl(data.imageUrl);
+      if (!price && data.price !== null) setPrice(String(data.price));
+      if (!productUrl && data.productUrl) setProductUrl(data.productUrl);
+      if (data.normalizedCategory) setCategory(data.normalizedCategory);
+      if (normalizedColors.length === 0 && data.normalizedColors.length > 0) setColors(data.normalizedColors);
+      if (normalizedMaterials.length === 0 && data.normalizedMaterials.length > 0) setMaterials(data.normalizedMaterials);
+      if (!normalizedSilhouette && data.normalizedSilhouette) setSilhouette(data.normalizedSilhouette);
+      // 8軸
+      const a = data.axes ?? {};
+      if (!silhouetteType && a.silhouetteType) setSilhouetteType(a.silhouetteType);
+      if (!topBottomRatio && a.topBottomRatio) setTopBottomRatio(a.topBottomRatio);
+      if (!lengthBalance && a.lengthBalance) setLengthBalance(a.lengthBalance);
+      if (!shoulderLine && a.shoulderLine) setShoulderLine(a.shoulderLine);
+      if (!weightCenter && a.weightCenter) setWeightCenter(a.weightCenter);
+      if (!textureType && a.textureType) setTextureType(a.textureType);
+      if (seasonality.length === 0 && a.seasonality && a.seasonality.length > 0) setSeasonality(a.seasonality);
+      // キュレーション
+      if (worldviewTags.length === 0 && data.worldviewTags.length > 0) setWorldviewTags(data.worldviewTags);
+      if (bodyCompatTags.length === 0 && data.bodyCompatTags.length > 0) {
+        setBodyCompatTags(data.bodyCompatTags as BodyConcern[]);
+      }
+      if (!curationNotes && data.curationNotes) setNotes(data.curationNotes);
+      if (data.curationPriority) setPriority(data.curationPriority);
+
+      setFetchMessage("✓ 取得完了。空欄だったフィールドに自動入力しました。");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "取得に失敗しました";
+      setFetchMessage(`✗ ${msg}`);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  // ---- chip toggle helpers ----
+  function toggleInArray<T>(arr: T[], value: T, setter: (v: T[]) => void) {
+    setter(arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
+  }
+
   function addWorldviewTag(t: string) {
     const trimmed = t.trim();
-    if (!trimmed) return;
-    if (worldviewTags.includes(trimmed)) return;
+    if (!trimmed || worldviewTags.includes(trimmed)) return;
     setWorldviewTags((prev) => [...prev, trimmed]);
     setWorldviewInput("");
   }
@@ -88,24 +169,26 @@ export default function AdminProductNewPage() {
     setWorldviewTags((prev) => prev.filter((x) => x !== t));
   }
 
-  function toggleBodyCompat(t: BodyConcern) {
-    setBodyCompatTags((prev) =>
-      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-    );
-  }
-
+  // ---- submit ----
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    // 簡易バリデーション
     if (!brand.trim() || !name.trim() || !imageUrl.trim() || !productUrl.trim()) {
       setError("ブランド・商品名・画像URL・購入URLは必須です");
       return;
     }
-
     setSaving(true);
     try {
+      const axes: ProductAxes = {
+        silhouetteType:  silhouetteType  || null,
+        topBottomRatio:  topBottomRatio  || null,
+        lengthBalance:   lengthBalance   || null,
+        shoulderLine:    shoulderLine    || null,
+        weightCenter:    weightCenter    || null,
+        textureType:     textureType     || null,
+        seasonality:     seasonality,
+      };
+
       const body: CreateProductRequest = {
         brand:                brand.trim(),
         name:                 name.trim(),
@@ -113,13 +196,14 @@ export default function AdminProductNewPage() {
         price:                price ? Number(price) : null,
         productUrl:           productUrl.trim(),
         normalizedCategory,
-        normalizedColor:      normalizedColor || undefined,
-        normalizedMaterial:   normalizedMaterial || undefined,
+        normalizedColors,
+        normalizedMaterials,
         normalizedSilhouette: normalizedSilhouette || undefined,
         worldviewTags,
         bodyCompatTags,
         curationNotes:        curationNotes.trim() || undefined,
         curationPriority,
+        axes,
       };
 
       const res = await fetch("/api/admin/products", {
@@ -136,7 +220,6 @@ export default function AdminProductNewPage() {
     }
   }
 
-  // オートコンプリート候補（worldviewInput と前方/部分一致 + 既選択を除外）
   const acSuggestions = worldviewInput.trim()
     ? knownKeywords.filter(
         (k) => k.toLowerCase().includes(worldviewInput.toLowerCase()) && !worldviewTags.includes(k),
@@ -153,7 +236,36 @@ export default function AdminProductNewPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* 基本情報 */}
+          {/* Section 1: URL 自動入力 */}
+          <Section title="🔗 URLから自動入力（任意）">
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={fetchUrl}
+                onChange={(e) => setFetchUrl(e.target.value)}
+                placeholder="https://zozo.jp/... もしくは公式サイトのURL"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={handleFetchInfo}
+                disabled={isFetching || !fetchUrl.trim()}
+                className="px-4 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 whitespace-nowrap"
+              >
+                {isFetching ? "取得中..." : "情報を取得"}
+              </button>
+            </div>
+            {fetchMessage && (
+              <p className={`text-xs mt-2 ${fetchMessage.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>
+                {fetchMessage}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-2">
+              OG タグ・JSON-LD から商品情報と8軸判断を自動推測します。空欄のフィールドのみ埋め、既入力は尊重します。ZOZO は弾かれることがあるので、その場合は手動入力してください。
+            </p>
+          </Section>
+
+          {/* Section 2: 基本情報 */}
           <Section title="基本情報">
             <Field label="ブランド名" required>
               <input value={brand} onChange={(e) => setBrand(e.target.value)} className={inputClass} placeholder="例：Auralee" />
@@ -178,36 +290,98 @@ export default function AdminProductNewPage() {
             </div>
           </Section>
 
-          {/* 属性 */}
+          {/* Section 3: 属性 */}
           <Section title="属性">
             <Field label="カテゴリ" required>
               <select value={normalizedCategory} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
                 {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </Field>
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="色">
-                <select value={normalizedColor} onChange={(e) => setColor(e.target.value)} className={selectClass}>
+
+            <Field label="色（複数選択可・先頭がメイン色）">
+              <ChipMulti options={COLORS} selected={normalizedColors} onToggle={(v) => toggleInArray(normalizedColors, v, setColors)} />
+            </Field>
+
+            <Field label="素材（複数選択可）">
+              <ChipMulti options={MATERIALS} selected={normalizedMaterials} onToggle={(v) => toggleInArray(normalizedMaterials, v, setMaterials)} />
+            </Field>
+
+            <Field label="シルエット（単一）">
+              <select value={normalizedSilhouette} onChange={(e) => setSilhouette(e.target.value)} className={selectClass}>
+                <option value="">— 選択 —</option>
+                {SILHOUETTES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </Section>
+
+          {/* Section 4: 判断軸（8軸） */}
+          <Section title="判断軸（8軸）">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="シルエット型">
+                <select value={silhouetteType} onChange={(e) => setSilhouetteType(e.target.value)} className={selectClass}>
                   <option value="">— 選択 —</option>
-                  {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {SILHOUETTE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
-              <Field label="素材">
-                <select value={normalizedMaterial} onChange={(e) => setMaterial(e.target.value)} className={selectClass}>
+              <Field label="重心">
+                <select
+                  value={weightCenter}
+                  onChange={(e) => setWeightCenter(e.target.value as "" | "upper" | "lower" | "balanced")}
+                  className={selectClass}
+                >
                   <option value="">— 選択 —</option>
-                  {MATERIALS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </Field>
-              <Field label="シルエット">
-                <select value={normalizedSilhouette} onChange={(e) => setSilhouette(e.target.value)} className={selectClass}>
-                  <option value="">— 選択 —</option>
-                  {SILHOUETTES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value="upper">上重心</option>
+                  <option value="balanced">中重心</option>
+                  <option value="lower">下重心</option>
                 </select>
               </Field>
             </div>
+
+            <Field label="上下比率（コーデで決まるため任意）">
+              <input value={topBottomRatio} onChange={(e) => setTopBottomRatio(e.target.value)} className={inputClass} placeholder="例：上3:下7" />
+            </Field>
+
+            <Field label="丈バランス">
+              <input value={lengthBalance} onChange={(e) => setLengthBalance(e.target.value)} className={inputClass} placeholder="例：ロング丈 / クロップド丈" />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="肩線（tops/outerwearのみ）">
+                <select value={shoulderLine} onChange={(e) => setShoulderLine(e.target.value)} className={selectClass}>
+                  <option value="">— 選択 —</option>
+                  {SHOULDER_LINES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+              <Field label="質感タイプ">
+                <select value={textureType} onChange={(e) => setTextureType(e.target.value)} className={selectClass}>
+                  <option value="">— 選択 —</option>
+                  {TEXTURE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <Field label="季節（複数可）">
+              <div className="flex gap-2">
+                {SEASONS.map((s) => {
+                  const active = seasonality.includes(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleInArray(seasonality, s, setSeasonality)}
+                      className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                        active ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
           </Section>
 
-          {/* キュレーション */}
+          {/* Section 5: キュレーション */}
           <Section title="キュレーション">
             <Field label="世界観タグ">
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -244,7 +418,6 @@ export default function AdminProductNewPage() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-1">既存ナレッジから候補が出ます。新規入力も可</p>
             </Field>
 
             <Field label="体型適性タグ">
@@ -254,13 +427,12 @@ export default function AdminProductNewPage() {
                     <input
                       type="checkbox"
                       checked={bodyCompatTags.includes(c.value)}
-                      onChange={() => toggleBodyCompat(c.value)}
+                      onChange={() => toggleInArray(bodyCompatTags, c.value, setBodyCompatTags)}
                     />
                     {c.label}
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-1">この商品が解決する悩みにチェック</p>
             </Field>
 
             <Field label="キュレーションメモ">
@@ -294,10 +466,7 @@ export default function AdminProductNewPage() {
           )}
 
           <div className="flex gap-2">
-            <Link
-              href="/admin/products"
-              className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm text-center hover:bg-gray-50"
-            >
+            <Link href="/admin/products" className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm text-center hover:bg-gray-50">
               キャンセル
             </Link>
             <button
@@ -313,6 +482,8 @@ export default function AdminProductNewPage() {
     </div>
   );
 }
+
+// ---- helpers ----
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -331,6 +502,35 @@ function Field({ label, required, children }: { label: string; required?: boolea
       </span>
       {children}
     </label>
+  );
+}
+
+function ChipMulti({ options, selected, onToggle }: { options: string[]; selected: string[]; onToggle: (v: string) => void }) {
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = selected.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onToggle(opt)}
+              className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                active
+                  ? "bg-gray-800 text-white border-gray-800"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <p className="text-xs text-gray-400 mt-1.5">選択中: {selected.join("・")}</p>
+      )}
+    </>
   );
 }
 

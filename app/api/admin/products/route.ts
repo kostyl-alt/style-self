@@ -113,9 +113,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "有効なカテゴリを指定してください" }, { status: 400 });
     }
 
-    const bodyCompatTags = (body.bodyCompatTags ?? []).filter((t) => VALID_BODY_CONCERNS.has(t));
-    const worldviewTags  = (body.worldviewTags ?? []).map((s) => s.trim()).filter(Boolean);
-    const priority       = Math.min(Math.max(0, body.curationPriority ?? 50), 100);
+    const bodyCompatTags     = (body.bodyCompatTags ?? []).filter((t) => VALID_BODY_CONCERNS.has(t));
+    const worldviewTags      = (body.worldviewTags ?? []).map((s) => s.trim()).filter(Boolean);
+    const normalizedColors   = (body.normalizedColors ?? []).map((s) => s.trim()).filter(Boolean);
+    const normalizedMaterials = (body.normalizedMaterials ?? []).map((s) => s.trim()).filter(Boolean);
+    const priority           = Math.min(Math.max(0, body.curationPriority ?? 50), 100);
 
     const service = createServiceClient();
     const externalId = `manual:${crypto.randomUUID()}`;
@@ -130,8 +132,8 @@ export async function POST(request: NextRequest) {
       affiliate_url:         body.affiliateUrl?.trim() || null,
       image_url:             body.imageUrl.trim(),
       normalized_category:   body.normalizedCategory,
-      normalized_color:      body.normalizedColor?.trim() || null,
-      normalized_material:   body.normalizedMaterial?.trim() || null,
+      normalized_colors:     normalizedColors,
+      normalized_materials:  normalizedMaterials,
       normalized_silhouette: body.normalizedSilhouette?.trim() || null,
       normalized_taste:      null,
       is_available:          true,
@@ -140,6 +142,7 @@ export async function POST(request: NextRequest) {
       curation_notes:        body.curationNotes?.trim() || null,
       curation_priority:     priority,
       curated_by:            auth.user.id,
+      axes:                  body.axes ?? {},
       synced_at:             new Date().toISOString(),
     };
 
