@@ -859,6 +859,9 @@ export interface FetchProductInfoResponse {
 // 画像解析専用のエイリアス（互換性のため別名）
 export type AnalyzeProductImageResponse = FetchProductInfoResponse;
 
+// テキスト貼り付け解析専用のエイリアス（Sprint 41.2+）
+export type AnalyzeProductTextResponse  = FetchProductInfoResponse;
+
 export interface AdminProductListResponse {
   products: AdminProduct[];
 }

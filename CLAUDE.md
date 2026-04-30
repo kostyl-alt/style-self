@@ -84,6 +84,8 @@ style-self/
 │   │   │   └── route.ts                              # URL→商品情報＋8軸自動抽出 POST（Sprint 41.1 / 41.2で素材混率対応）
 │   │   ├── admin/analyze-product-image/
 │   │   │   └── route.ts                              # スクショ→商品情報＋8軸＋素材混率を Vision で抽出 POST（Sprint 41.2）
+│   │   ├── admin/analyze-product-text/
+│   │   │   └── route.ts                              # ペーストされた本文→商品情報＋8軸＋素材混率を抽出 POST（Sprint 41.2+）
 │   │   ├── knowledge/
 │   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
@@ -165,6 +167,7 @@ style-self/
 │       ├── knowledge-extract.ts       # 情報源→ルール抽出プロンプト（Sprint 38）
 │       ├── extract-product-info.ts    # URL→商品情報＋8軸抽出プロンプト（Sprint 41.1 / 41.2で素材混率対応）
 │       ├── analyze-product-image.ts   # スクショ→商品情報＋8軸＋素材混率の Vision プロンプト（Sprint 41.2）
+│       ├── analyze-product-text.ts    # ペースト本文→商品情報＋8軸＋素材混率のプロンプト（Sprint 41.2+）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   ├── migrations/

@@ -15,6 +15,7 @@ import type {
   FetchProductInfoResponse,
   MaterialComposition,
   AnalyzeProductImageResponse,
+  AnalyzeProductTextResponse,
 } from "@/types/index";
 
 const CATEGORIES: { value: string; label: string }[] = [
@@ -100,6 +101,11 @@ export default function AdminProductNewPage() {
   const [isAnalyzing, setAnalyzing]             = useState(false);
   const [analyzeMessage, setAnalyzeMessage]     = useState<string | null>(null);
   const imageInputRef                           = useRef<HTMLInputElement>(null);
+
+  // --- テキストから自動入力 ---
+  const [pasteText, setPasteText]               = useState("");
+  const [isAnalyzingText, setAnalyzingText]     = useState(false);
+  const [textMessage, setTextMessage]           = useState<string | null>(null);
 
   // --- オートコンプリート用 ---
   const [knownKeywords, setKnownKeywords]       = useState<string[]>([]);
@@ -272,6 +278,57 @@ export default function AdminProductNewPage() {
     }
   }
 
+  // ---- テキスト貼り付けからの自動入力 ----
+  async function handleAnalyzeText() {
+    if (!pasteText.trim()) return;
+    setAnalyzingText(true);
+    setTextMessage(null);
+    try {
+      const res = await fetch("/api/admin/analyze-product-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: pasteText }),
+      });
+      const data = await res.json() as AnalyzeProductTextResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "テキスト解析に失敗しました");
+
+      // 空欄のフィールドのみ自動入力（既入力は尊重）
+      if (!brand && data.brand) setBrand(data.brand);
+      if (!name && data.name) setName(data.name);
+      if (!imageUrl && data.imageUrl) setImageUrl(data.imageUrl);
+      if (!price && data.price !== null) setPrice(String(data.price));
+      if (!productUrl && data.productUrl) setProductUrl(data.productUrl);
+      if (data.normalizedCategory) setCategory(data.normalizedCategory);
+      if (normalizedColors.length === 0 && data.normalizedColors.length > 0) setColors(data.normalizedColors);
+      if (normalizedMaterials.length === 0 && data.normalizedMaterials.length > 0) setMaterials(data.normalizedMaterials);
+      if (!normalizedSilhouette && data.normalizedSilhouette) setSilhouette(data.normalizedSilhouette);
+      const a = data.axes ?? {};
+      if (!silhouetteType && a.silhouetteType) setSilhouetteType(a.silhouetteType);
+      if (!topBottomRatio && a.topBottomRatio) setTopBottomRatio(a.topBottomRatio);
+      if (!lengthBalance && a.lengthBalance) setLengthBalance(a.lengthBalance);
+      if (!shoulderLine && a.shoulderLine) setShoulderLine(a.shoulderLine);
+      if (!weightCenter && a.weightCenter) setWeightCenter(a.weightCenter);
+      if (!textureType && a.textureType) setTextureType(a.textureType);
+      if (seasonality.length === 0 && a.seasonality && a.seasonality.length > 0) setSeasonality(a.seasonality);
+      if (worldviewTags.length === 0 && data.worldviewTags.length > 0) setWorldviewTags(data.worldviewTags);
+      if (bodyCompatTags.length === 0 && data.bodyCompatTags.length > 0) {
+        setBodyCompatTags(data.bodyCompatTags as BodyConcern[]);
+      }
+      if (!curationNotes && data.curationNotes) setNotes(data.curationNotes);
+      if (data.curationPriority) setPriority(data.curationPriority);
+      if (materialComposition.length === 0 && data.materialComposition.length > 0) {
+        setMaterialComposition(data.materialComposition);
+      }
+
+      setTextMessage("✓ 解析完了。空欄だったフィールドに自動入力しました。");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "テキスト解析に失敗しました";
+      setTextMessage(`✗ ${msg}`);
+    } finally {
+      setAnalyzingText(false);
+    }
+  }
+
   // ---- chip toggle helpers ----
   function toggleInArray<T>(arr: T[], value: T, setter: (v: T[]) => void) {
     setter(arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]);
@@ -425,6 +482,39 @@ export default function AdminProductNewPage() {
               )}
               <p className="text-xs text-gray-400 mt-2">
                 Claude Vision が商品ページのスクショから情報を抽出します。画像URL・購入URLは別途貼り付けてください（画像は保存されません）。
+              </p>
+            </div>
+
+            {/* テキスト貼り付け解析 */}
+            <div className="border-t border-gray-100 mt-4 pt-4">
+              <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">📝 テキストから取得（任意・URLが弾かれた時用）</p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                rows={6}
+                className={`${inputClass} resize-y font-mono text-xs leading-relaxed`}
+                placeholder="商品ページのテキストをコピペしてください（商品名・価格・素材表記を含むブロックを推奨。最大50,000字）"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-gray-400">
+                  {pasteText.length > 0 ? `${pasteText.length.toLocaleString()} 字` : "—"}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAnalyzeText}
+                  disabled={isAnalyzingText || pasteText.trim().length < 30}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40"
+                >
+                  {isAnalyzingText ? "解析中..." : "テキストを解析"}
+                </button>
+              </div>
+              {textMessage && (
+                <p className={`text-xs mt-2 ${textMessage.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>
+                  {textMessage}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                ブラウザで本文を選択コピー → ここに貼り付け。素材混率（「ポリエステル80% 綿20%」等）も抽出します。
               </p>
             </div>
           </Section>
