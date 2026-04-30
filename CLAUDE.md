@@ -34,7 +34,9 @@ style-self/
 │   │   ├── learn/page.tsx                # LEARN: ブランドフィロソフィー・センス育成
 │   │   ├── onboarding/page.tsx           # 世界観診断フロー（全画面・BottomNav非表示）
 │   │   ├── admin/
-│   │   │   └── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
+│   │   │   ├── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
+│   │   │   ├── products/page.tsx         # 管理者専用商品キュレーション一覧（Sprint 41）
+│   │   │   └── products/new/page.tsx     # 商品登録フォーム（Sprint 41）
 │   │   ├── coordinate/page.tsx           # 旧ルート（/style にリダイレクト済み）
 │   │   ├── inspire/page.tsx              # 旧ルート（/discover にリダイレクト済み）
 │   │   ├── profile/page.tsx              # 旧ルート（/self にリダイレクト済み）
@@ -72,7 +74,12 @@ style-self/
 │   │   │   └── [id]/route.ts                         # AI履歴削除 DELETE（Sprint 39）
 │   │   ├── inspirations/route.ts                     # 偉大な参照一覧GET（Sprint 21 Phase 4）
 │   │   ├── products/
-│   │   │   └── match/route.ts                        # 楽天商品マッチング POST（Sprint 40）
+│   │   │   └── match/route.ts                        # 商品マッチング POST（Sprint 40 / 41で拡張スコアリング）
+│   │   ├── admin/products/
+│   │   │   ├── route.ts                              # 管理者用商品 GET（一覧）/ POST（登録）（Sprint 41）
+│   │   │   └── [id]/route.ts                         # 管理者用商品 DELETE（ソフト削除）（Sprint 41）
+│   │   ├── admin/knowledge-keywords/
+│   │   │   └── route.ts                              # オートコンプリート用キーワード GET（Sprint 41）
 │   │   ├── knowledge/
 │   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
@@ -112,7 +119,8 @@ style-self/
 │   │   ├── url-extract.ts            # URL→本文抽出（Sprint 38）
 │   │   ├── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
 │   │   ├── color-aliases.ts          # 色名表記揺れマップ（Sprint 40）
-│   │   └── product-match.ts          # 楽天商品スコアリング・行変換（Sprint 40）
+│   │   ├── product-match.ts          # 商品スコアリング・行変換（Sprint 40 / 41拡張）
+│   │   └── admin-check.ts            # ADMIN_EMAILS allowlist チェック（Sprint 41）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -169,7 +177,8 @@ style-self/
 │   │   ├── 013_trends_evidence.sql        # Sprint 29: trends根拠フィールド追加
 │   │   ├── 014_body_profile.sql           # Sprint 32: users.body_profile jsonb追加
 │   │   ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
-│   │   └── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
+│   │   ├── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
+│   │   └── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/

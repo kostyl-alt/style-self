@@ -395,16 +395,26 @@ function VirtualResult({
   useEffect(() => {
     if (!result.items?.length) return;
     setMatchLoading(true);
+    // Sprint 41: マッチング精度向上のため conceptKeywords / ngElements を併送
+    const conceptKeywords = Array.from(new Set([
+      ...(result.matchedRuleKeywords ?? []),
+      ...(result.conceptInterpretation?.keywords ?? []),
+    ]));
+    const ngElements = result.conceptInterpretation?.ngElements ?? [];
     fetch("/api/products/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: result.items }),
+      body: JSON.stringify({
+        items: result.items,
+        conceptKeywords,
+        ngElements,
+      }),
     })
       .then((r) => r.json())
       .then((data: ProductMatchResponse) => setMatches(data.matches ?? []))
       .catch(() => setMatches([]))
       .finally(() => setMatchLoading(false));
-  }, [result.items]);
+  }, [result.items, result.matchedRuleKeywords, result.conceptInterpretation]);
 
   const interpretationHasContent =
     ci.keywords.length > 0 ||

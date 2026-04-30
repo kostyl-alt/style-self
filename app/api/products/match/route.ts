@@ -8,7 +8,9 @@ import {
   toProductCategory,
   FALLBACK_CATEGORIES,
 } from "@/lib/utils/product-match";
+import type { ScoringContext } from "@/lib/utils/product-match";
 import type {
+  BodyProfile,
   ExternalProduct,
   MatchedProduct,
   ProductMatch,
@@ -47,6 +49,7 @@ async function fetchCandidates(
 async function matchOne(
   supabase: SupabaseClient,
   item: VirtualCoordinateItem,
+  ctx: ScoringContext,
 ): Promise<MatchedProduct[]> {
   // item.category（15種）→ product.normalized_category（7種）にマッピング
   const productCategory = toProductCategory(item.category);
@@ -75,7 +78,7 @@ async function matchOne(
   // スコアリング → 上位N件
   const scored = candidates
     .map((p) => {
-      const { score, matchReasons } = scoreProduct(item, p);
+      const { score, matchReasons } = scoreProduct(item, p, ctx);
       return { product: p, score, matchReasons };
     })
     .sort((a, b) => b.score - a.score)
@@ -104,17 +107,44 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
 
-    const { items } = await request.json() as { items: VirtualCoordinateItem[] };
+    const { items, conceptKeywords, ngElements } = await request.json() as {
+      items: VirtualCoordinateItem[];
+      conceptKeywords?: string[];
+      ngElements?: string[];
+    };
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "items 配列が必要です" }, { status: 400 });
     }
 
-    console.log(`[match] items received: ${items.length}`);
+    // ユーザーの体型悩み（bodyConcerns）を取得
+    const { data: userData } = await supabase
+      .from("users")
+      .select("body_profile, style_preference")
+      .eq("id", user.id)
+      .single() as unknown as {
+        data: {
+          body_profile:     BodyProfile | null;
+          style_preference: { ngElements?: string[] } | null;
+        } | null;
+      };
+
+    const ctx: ScoringContext = {
+      conceptKeywords: conceptKeywords ?? [],
+      ngElements: [
+        ...(ngElements ?? []),
+        ...((userData?.style_preference?.ngElements ?? []) as string[]),
+      ],
+      bodyConcerns: (userData?.body_profile?.concerns as string[] | undefined) ?? [],
+    };
+
+    console.log(
+      `[match] items=${items.length} conceptKeywords=${ctx.conceptKeywords?.length ?? 0} ngElements=${ctx.ngElements?.length ?? 0} bodyConcerns=${ctx.bodyConcerns?.length ?? 0}`,
+    );
 
     // 全アイテム並列でマッチング
     const matches: ProductMatch[] = await Promise.all(
       items.map(async (item, itemIndex): Promise<ProductMatch> => {
-        const products = await matchOne(supabase, item);
+        const products = await matchOne(supabase, item, ctx);
         return { itemIndex, products };
       }),
     );

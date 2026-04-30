@@ -1,4 +1,5 @@
 // Sprint 40: 楽天商品マッチング - スコアリング・ヘルパー
+// Sprint 41: 手動キュレーション情報を含めた拡張スコアリング
 
 import { isColorMatch } from "./color-aliases";
 import type { ExternalProduct, VirtualCoordinateItem } from "@/types/index";
@@ -8,23 +9,29 @@ export interface ScoringResult {
   matchReasons: string[];
 }
 
+export interface ScoringContext {
+  conceptKeywords?: string[];   // interpretation.keywords + matchedRuleKeywords
+  ngElements?:      string[];   // interpretation.ngElements + user.preference.ngElements
+  bodyConcerns?:    string[];   // user.body_profile.concerns
+}
+
 // VirtualCoordinateItem と ExternalProduct のスコアを計算する。
 // カテゴリ一致は前提（呼び出し側でフィルタ済み）なので +50 スタート。
 export function scoreProduct(
   item: VirtualCoordinateItem,
   product: ExternalProduct,
+  ctx: ScoringContext = {},
 ): ScoringResult {
   let score = 50;
   const reasons: string[] = ["カテゴリ"];
 
-  // 色一致（COLOR_ALIASES経由）
+  // ---- Sprint 40 既存スコアリング ----
+
   if (isColorMatch(item.color, product.normalizedColor)) {
     score += 30;
     reasons.push("色");
   }
 
-  // 素材一致：item の name / materialNote / reason に
-  // product.normalizedMaterial が部分一致するか
   if (product.normalizedMaterial) {
     const haystack = `${item.name} ${item.materialNote} ${item.reason}`;
     if (haystack.includes(product.normalizedMaterial)) {
@@ -33,10 +40,56 @@ export function scoreProduct(
     }
   }
 
-  // キーワード一致：item.zozoKeyword が product.name に含まれるか
   if (item.zozoKeyword && product.name.includes(item.zozoKeyword)) {
     score += 10;
     reasons.push("キーワード");
+  }
+
+  // ---- Sprint 41 拡張スコアリング ----
+
+  // worldview_tags がコンセプトキーワードと共通項を持つ → +40
+  if (ctx.conceptKeywords && ctx.conceptKeywords.length > 0 && product.worldviewTags.length > 0) {
+    const overlap = product.worldviewTags.some((t) =>
+      ctx.conceptKeywords!.some((c) => c.includes(t) || t.includes(c)),
+    );
+    if (overlap) {
+      score += 40;
+      reasons.push("世界観");
+    }
+  }
+
+  // body_compat_tags がユーザーの concerns を解決 → +30
+  if (ctx.bodyConcerns && ctx.bodyConcerns.length > 0 && product.bodyCompatTags.length > 0) {
+    const overlap = product.bodyCompatTags.some((t) => ctx.bodyConcerns!.includes(t));
+    if (overlap) {
+      score += 30;
+      reasons.push("体型適性");
+    }
+  }
+
+  // 手動キュレーション優遇 → +25
+  if (product.source === "manual") {
+    score += 25;
+    reasons.push("キュレーション");
+  }
+
+  // curation_priority のスケール反映（0-100 → 0-20）
+  if (product.curationPriority > 0) {
+    score += Math.round((product.curationPriority / 100) * 20);
+  }
+
+  // NG ペナルティ → -50
+  if (ctx.ngElements && ctx.ngElements.length > 0) {
+    const ngHit = ctx.ngElements.some((ng) => {
+      if (!ng) return false;
+      if (product.name.includes(ng)) return true;
+      if (product.normalizedMaterial?.includes(ng)) return true;
+      if (product.normalizedSilhouette?.includes(ng)) return true;
+      return false;
+    });
+    if (ngHit) {
+      score -= 50;
+    }
   }
 
   return { score, matchReasons: reasons };
@@ -70,6 +123,13 @@ export function rowToExternalProduct(row: Record<string, unknown>): ExternalProd
     normalizedSilhouette: (row.normalized_silhouette as string | null) ?? null,
     normalizedTaste:      (row.normalized_taste as string[] | null) ?? [],
     isAvailable:          (row.is_available as boolean) ?? false,
+    // Sprint 41
+    worldviewTags:        (row.worldview_tags as string[] | null) ?? [],
+    bodyCompatTags:       (row.body_compat_tags as string[] | null) ?? [],
+    curationNotes:        (row.curation_notes as string | null) ?? null,
+    curationPriority:     (row.curation_priority as number | null) ?? 0,
+    curatedBy:            (row.curated_by as string | null) ?? null,
+    matchReasonTemplate:  (row.match_reason_template as string | null) ?? null,
   };
 }
 

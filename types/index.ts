@@ -771,6 +771,50 @@ export interface ExternalProduct {
   normalizedSilhouette: string | null;
   normalizedTaste:      string[];
   isAvailable:          boolean;
+  // Sprint 41: キュレーション情報
+  worldviewTags:        string[];
+  bodyCompatTags:       string[];
+  curationNotes:        string | null;
+  curationPriority:     number;
+  curatedBy:            string | null;
+  matchReasonTemplate:  string | null;
+}
+
+// 商品×コンセプト の多対多リンク（重み付き）
+export interface ProductConceptTag {
+  conceptKeyword: string;
+  weight:         number;
+}
+
+// 管理者用：商品詳細（concept_tags 含む）
+export interface AdminProduct extends ExternalProduct {
+  conceptTags: ProductConceptTag[];
+}
+
+// 商品登録リクエスト
+export interface CreateProductRequest {
+  brand:                string;
+  name:                 string;
+  imageUrl:             string;
+  price?:               number | null;
+  productUrl:           string;
+  affiliateUrl?:        string;
+  normalizedCategory:   string;
+  normalizedColor?:     string;
+  normalizedMaterial?:  string;
+  normalizedSilhouette?: string;
+  worldviewTags?:       string[];
+  bodyCompatTags?:      BodyConcern[];
+  curationNotes?:       string;
+  curationPriority?:    number;
+}
+
+export interface AdminProductListResponse {
+  products: AdminProduct[];
+}
+
+export interface KnowledgeKeywordsResponse {
+  keywords: string[];
 }
 
 export interface MatchedProduct {

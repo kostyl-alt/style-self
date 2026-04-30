@@ -804,6 +804,24 @@
 
 ---
 
+## Sprint 41: 手動商品キュレーション基盤
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/017_product_curation.sql` — external_products に worldview_tags / body_compat_tags / curation_notes / curation_priority(0-100) / curated_by / match_reason_template を追加。GIN インデックス3種。新テーブル product_concept_tags（多対多・重み付き、CASCADE） | ✅ |
+| 2 | `types/index.ts` — ExternalProduct を Sprint 41 フィールドで拡張。`AdminProduct` / `CreateProductRequest` / `ProductConceptTag` / `AdminProductListResponse` / `KnowledgeKeywordsResponse` 型追加 | ✅ |
+| 3 | `lib/utils/admin-check.ts` — `isAdminEmail()` ヘルパー新規（API ルート用、middleware は /api/* 対象外のため個別チェック必要） | ✅ |
+| 4 | `lib/utils/product-match.ts` — `ScoringContext` 型追加。`scoreProduct()` 拡張：worldview一致+40 / 体型適性+30 / source=manual+25 / curation_priority×0.2 / NG-50。`rowToExternalProduct` も新フィールド対応 | ✅ |
+| 5 | `app/api/admin/knowledge-keywords/route.ts` — GET（重複排除済みの concept_keyword 一覧）。フォームのオートコンプリート用 | ✅ |
+| 6 | `app/api/admin/products/route.ts` — GET（admin専用一覧、source/priority/created_at で並び替え）+ POST（外部ID自動採番 `manual:${uuid}`、worldview_tags を product_concept_tags にも weight=50 で同期） | ✅ |
+| 7 | `app/api/admin/products/[id]/route.ts` — DELETE（ソフト削除：is_available=false、product_concept_tags は残す） | ✅ |
+| 8 | `app/api/products/match/route.ts` — リクエストに conceptKeywords / ngElements を受領。サーバーで bodyConcerns を user.body_profile.concerns から取得。ScoringContext を構築して scoreProduct に渡す | ✅ |
+| 9 | `app/(app)/admin/products/page.tsx` — 一覧画面（フィルタ：すべて/手動/楽天、サムネ・優先度バッジ・worldview_tags チップ・削除ボタン） | ✅ |
+| 10 | `app/(app)/admin/products/new/page.tsx` — 登録フォーム（基本情報 / 属性 / キュレーション 3セクション、世界観タグオートコンプリート、体型適性チェックボックス、優先度スライダー、画像URLプレビュー） | ✅ |
+| 11 | `app/(app)/style/page.tsx` — VirtualResult から conceptKeywords（matchedRuleKeywords + interpretation.keywords）と ngElements を match API に併送 | ✅ |
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |
