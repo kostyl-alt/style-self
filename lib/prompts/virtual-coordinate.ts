@@ -1,5 +1,6 @@
 import type { BodyProfile, ConceptInterpretation } from "@/types/index";
 import { getSeasonContext } from "@/lib/utils/season";
+import { FASHION_AXES_PROMPT_BLOCK } from "@/lib/knowledge/fashion-axes";
 
 // ---- 共通の文脈ブロック生成 ----
 
@@ -183,6 +184,7 @@ export function buildVirtualCoordinatePrompt(
   worldview?: Record<string, unknown> | null,
 ): string {
   const sections: string[] = [BASE_VIRTUAL_COORDINATE_PROMPT];
+  sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
   sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview));
 
   // 指定コンセプト（原文）
@@ -243,6 +245,7 @@ export function buildVirtualConceptsPrompt(
   worldview?: Record<string, unknown> | null,
 ): string {
   const sections: string[] = [BASE_VIRTUAL_CONCEPTS_PROMPT];
+  sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
   sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview));
   return sections.join("");
 }

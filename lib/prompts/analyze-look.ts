@@ -1,4 +1,5 @@
 import type { BodyProfile, StylePreference } from "@/types/index";
+import { FASHION_AXES_PROMPT_BLOCK } from "@/lib/knowledge/fashion-axes";
 
 const BASE_ANALYZE_LOOK_PROMPT = `
 あなたは比率・シルエット分析の専門家です。
@@ -58,6 +59,7 @@ export function buildAnalyzeLookPrompt(
   stylePreference?: StylePreference | Record<string, unknown> | null,
 ): string {
   const sections: string[] = [BASE_ANALYZE_LOOK_PROMPT];
+  sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
 
   if (bodyProfile) {
     const lines: string[] = ["[ユーザーの体型情報]"];

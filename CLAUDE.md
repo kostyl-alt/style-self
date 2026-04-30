@@ -120,6 +120,8 @@ style-self/
 │   │   ├── ratio.ts                  # 比率辞書（8パターン）
 │   │   ├── index.ts                  # 全辞書 re-export
 │   │   └── inject.ts                 # getMaterialContext / getColorContext / getLineContext
+│   ├── knowledge/
+│   │   └── fashion-axes.ts           # ファッション判断の8軸（FASHION_AXES + プロンプト用ブロック）
 │   ├── claude.ts                     # Claude APIクライアント
 │   ├── rakuten.ts                    # 楽天APIクライアント
 │   ├── storage.ts                    # Supabase Storage操作

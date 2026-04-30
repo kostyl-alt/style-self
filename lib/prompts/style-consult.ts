@@ -1,4 +1,5 @@
 import type { BodyProfile } from "@/types/index";
+import { FASHION_AXES_PROMPT_BLOCK } from "@/lib/knowledge/fashion-axes";
 
 const BASE_STYLE_CONSULT_PROMPT = `
 あなたはファッションの着こなし相談員です。
@@ -65,6 +66,7 @@ export function buildStyleConsultPrompt(
   styleAnalysis?: Record<string, unknown> | null,
 ): string {
   const sections: string[] = [BASE_STYLE_CONSULT_PROMPT];
+  sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
 
   if (bodyProfile) {
     const lines: string[] = ["[ユーザーの体型情報]"];
