@@ -46,12 +46,13 @@ export async function GET(request: NextRequest) {
     const service = createServiceClient();
 
     // 並び替え: manual かつ curation_priority desc を最優先で見せる
+    // external_products には created_at が無く、imported_at（INSERT時刻）が同等の役割
     let query = service
       .from("external_products")
       .select("*")
       .order("source", { ascending: true })          // manual が先頭（アルファベット順）
       .order("curation_priority", { ascending: false })
-      .order("created_at" as never, { ascending: false })
+      .order("imported_at" as never, { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (sourceFilter && sourceFilter !== "all") {
