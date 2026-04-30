@@ -839,6 +839,29 @@
 
 ---
 
+## Sprint 41.2: 商品スクショから情報自動抽出＋素材混率
+
+URL が Akamai 等で弾かれる ZOZO のような場合のフォールバック手段として、商品ページのスクショから Claude Vision で構造化抽出する経路を追加。同時に、素材を「綿」だけでなく「綿80%・ポリエステル20%」レベルで保存できるよう `material_composition jsonb` を追加。
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `supabase/migrations/019_material_composition.sql` — `external_products.material_composition jsonb not null default '[]'` 追加。GIN インデックス | ✅ |
+| 2 | `types/index.ts` — `MaterialComposition` 型新規。`ExternalProduct` / `CreateProductRequest` / `FetchProductInfoResponse` に追加。`AnalyzeProductImageResponse` を `FetchProductInfoResponse` のエイリアスとして公開 | ✅ |
+| 3 | `lib/prompts/analyze-product-image.ts` — Claude Vision 用プロンプト新規。商品ページスクショ → 商品情報・8軸・素材混率を構造化抽出。プライバシー指示（顔・人物属性は分析しない）入り。imageUrl/productUrl は常に null（admin が後で貼り付け） | ✅ |
+| 4 | `lib/prompts/extract-product-info.ts` — `materialComposition` フィールドを追加（記載があれば抽出、無ければ空配列） | ✅ |
+| 5 | `lib/utils/product-match.ts` — `rowToExternalProduct` で `material_composition` を読み出し | ✅ |
+| 6 | `app/api/admin/analyze-product-image/route.ts` — 新規。`{base64, mediaType}` POST → admin チェック → `callClaudeWithImage`（2500トークン）→ 正規化して返却。jpeg/png/webp/gif のみ受け付け、画像は保存しない | ✅ |
+| 7 | `app/api/admin/fetch-product-info/route.ts` — `normalizeMaterialComposition` ヘルパー追加。レスポンスに `materialComposition` を含める | ✅ |
+| 8 | `app/api/admin/products/route.ts` — POST で `materialComposition` を受領。`material_composition` カラムに INSERT。`normalizedMaterials` が未指定なら `materialComposition` の `name` 配列から派生 | ✅ |
+| 9 | `app/(app)/admin/products/new/page.tsx` — Section 1 に「📸 スクショから取得」サブセクションを追加（5MB制限・1500px以下にリサイズ・JPEG 0.85品質・プレビュー＋クリア）。属性セクションに `materialComposition` 読み取り専用チップ表示（v1） | ✅ |
+
+**運用メモ**:
+- Supabase Studio で migration 019 を実行する必要あり（CLI なし環境）。SQL は git push 時にチャットで表示される
+- 解析には Claude Vision を使うため、`ANTHROPIC_API_KEY` のクレジットを多めに消費する（1リクエスト 2500トークン上限）
+- スクショは保存しない（解析専用、容量・プライバシー保護）。adminは結果を見て image_url/product_url を別途貼り付ける運用
+
+---
+
 ## 既知の未解決問題
 
 | 問題 | 詳細 |

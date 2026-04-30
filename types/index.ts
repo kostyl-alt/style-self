@@ -766,6 +766,12 @@ export interface ProductAxes {
   seasonality?:     string[];                 // ["春","夏"]等
 }
 
+// Sprint 41.2: 素材混率（jsonb 配列で保持）
+export interface MaterialComposition {
+  name:        string;          // カノニカル素材名（"ポリエステル"等）
+  percentage:  number | null;   // 整数 / 読めない場合 null
+}
+
 export interface ExternalProduct {
   id:                   string;
   source:               string;
@@ -792,6 +798,8 @@ export interface ExternalProduct {
   matchReasonTemplate:  string | null;
   // Sprint 41.1: 8軸判断情報
   axes:                 ProductAxes;
+  // Sprint 41.2: 素材混率
+  materialComposition:  MaterialComposition[];
 }
 
 // 商品×コンセプト の多対多リンク（重み付き）
@@ -824,9 +832,12 @@ export interface CreateProductRequest {
   curationPriority?:    number;
   // Sprint 41.1: 8軸
   axes?:                ProductAxes;
+  // Sprint 41.2: 素材混率
+  materialComposition?: MaterialComposition[];
 }
 
-// fetch-product-info API のレスポンス型
+// fetch-product-info / analyze-product-image API のレスポンス型
+// Sprint 41.2: materialComposition を追加。両APIで同じ型を返す
 export interface FetchProductInfoResponse {
   brand:                string | null;
   name:                 string | null;
@@ -836,6 +847,7 @@ export interface FetchProductInfoResponse {
   normalizedCategory:   string;
   normalizedColors:     string[];
   normalizedMaterials:  string[];
+  materialComposition:  MaterialComposition[];
   normalizedSilhouette: string | null;
   axes:                 ProductAxes;
   bodyCompatTags:       string[];
@@ -843,6 +855,9 @@ export interface FetchProductInfoResponse {
   curationNotes:        string;
   curationPriority:     number;
 }
+
+// 画像解析専用のエイリアス（互換性のため別名）
+export type AnalyzeProductImageResponse = FetchProductInfoResponse;
 
 export interface AdminProductListResponse {
   products: AdminProduct[];

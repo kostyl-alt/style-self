@@ -133,6 +133,10 @@ export function rowToExternalProduct(row: Record<string, unknown>): ExternalProd
     matchReasonTemplate:  (row.match_reason_template as string | null) ?? null,
     // Sprint 41.1: 8軸 jsonb
     axes:                 (row.axes as Record<string, unknown> | null) ?? {},
+    // Sprint 41.2: 素材混率 jsonb 配列
+    materialComposition:  Array.isArray(row.material_composition)
+      ? (row.material_composition as { name: string; percentage: number | null }[])
+      : [],
   };
 }
 

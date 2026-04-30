@@ -36,7 +36,7 @@ style-self/
 │   │   ├── admin/
 │   │   │   ├── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
 │   │   │   ├── products/page.tsx         # 管理者専用商品キュレーション一覧（Sprint 41）
-│   │   │   └── products/new/page.tsx     # 商品登録フォーム（Sprint 41）
+│   │   │   └── products/new/page.tsx     # 商品登録フォーム（Sprint 41 / 41.2でスクショ解析・素材混率表示追加）
 │   │   ├── coordinate/page.tsx           # 旧ルート（/style にリダイレクト済み）
 │   │   ├── inspire/page.tsx              # 旧ルート（/discover にリダイレクト済み）
 │   │   ├── profile/page.tsx              # 旧ルート（/self にリダイレクト済み）
@@ -81,7 +81,9 @@ style-self/
 │   │   ├── admin/knowledge-keywords/
 │   │   │   └── route.ts                              # オートコンプリート用キーワード GET（Sprint 41）
 │   │   ├── admin/fetch-product-info/
-│   │   │   └── route.ts                              # URL→商品情報＋8軸自動抽出 POST（Sprint 41.1）
+│   │   │   └── route.ts                              # URL→商品情報＋8軸自動抽出 POST（Sprint 41.1 / 41.2で素材混率対応）
+│   │   ├── admin/analyze-product-image/
+│   │   │   └── route.ts                              # スクショ→商品情報＋8軸＋素材混率を Vision で抽出 POST（Sprint 41.2）
 │   │   ├── knowledge/
 │   │   │   ├── rules/route.ts                        # 知識ベースのルール検索（Sprint 37 MVP）
 │   │   │   ├── sources/route.ts                      # 情報源 GET（一覧）/ POST（登録）（Sprint 38）
@@ -161,7 +163,8 @@ style-self/
 │       ├── concept-translate.ts       # コンセプト翻訳プロンプト・Stage 1（Sprint 36 v1.2）
 │       ├── normalize-interpretation.ts # コンセプト翻訳レスポンス正規化（Sprint 36 v1.2）
 │       ├── knowledge-extract.ts       # 情報源→ルール抽出プロンプト（Sprint 38）
-│       ├── extract-product-info.ts    # URL→商品情報＋8軸抽出プロンプト（Sprint 41.1）
+│       ├── extract-product-info.ts    # URL→商品情報＋8軸抽出プロンプト（Sprint 41.1 / 41.2で素材混率対応）
+│       ├── analyze-product-image.ts   # スクショ→商品情報＋8軸＋素材混率の Vision プロンプト（Sprint 41.2）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   ├── migrations/
@@ -182,7 +185,8 @@ style-self/
 │   │   ├── 015_knowledge.sql              # Sprint 37: knowledge_sources / knowledge_rules テーブル追加
 │   │   ├── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
 │   │   ├── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
-│   │   └── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
+│   │   ├── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
+│   │   └── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/

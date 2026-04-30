@@ -4,7 +4,7 @@
 // 5セクション構成: URL自動入力 / 基本情報 / 属性 / 判断軸（8軸） / キュレーション
 // アクセス制御は middleware（ADMIN_EMAILS）で行う。
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -13,6 +13,8 @@ import type {
   BodyConcern,
   ProductAxes,
   FetchProductInfoResponse,
+  MaterialComposition,
+  AnalyzeProductImageResponse,
 } from "@/types/index";
 
 const CATEGORIES: { value: string; label: string }[] = [
@@ -84,11 +86,20 @@ export default function AdminProductNewPage() {
   const [bodyCompatTags, setBodyCompatTags]     = useState<BodyConcern[]>([]);
   const [curationNotes, setNotes]               = useState("");
   const [curationPriority, setPriority]         = useState(50);
+  // --- 素材混率（読み取り専用表示） ---
+  const [materialComposition, setMaterialComposition] = useState<MaterialComposition[]>([]);
 
   // --- URL自動入力 ---
   const [fetchUrl, setFetchUrl]                 = useState("");
   const [isFetching, setFetching]               = useState(false);
   const [fetchMessage, setFetchMessage]         = useState<string | null>(null);
+
+  // --- スクショから自動入力 ---
+  const [imageFile, setImageFile]               = useState<File | null>(null);
+  const [imagePreview, setImagePreview]         = useState<string | null>(null);
+  const [isAnalyzing, setAnalyzing]             = useState(false);
+  const [analyzeMessage, setAnalyzeMessage]     = useState<string | null>(null);
+  const imageInputRef                           = useRef<HTMLInputElement>(null);
 
   // --- オートコンプリート用 ---
   const [knownKeywords, setKnownKeywords]       = useState<string[]>([]);
@@ -143,6 +154,10 @@ export default function AdminProductNewPage() {
       }
       if (!curationNotes && data.curationNotes) setNotes(data.curationNotes);
       if (data.curationPriority) setPriority(data.curationPriority);
+      // 素材混率（読み取り専用、空のときだけ入れる）
+      if (materialComposition.length === 0 && data.materialComposition.length > 0) {
+        setMaterialComposition(data.materialComposition);
+      }
 
       setFetchMessage("✓ 取得完了。空欄だったフィールドに自動入力しました。");
     } catch (err) {
@@ -150,6 +165,110 @@ export default function AdminProductNewPage() {
       setFetchMessage(`✗ ${msg}`);
     } finally {
       setFetching(false);
+    }
+  }
+
+  // ---- 画像（スクショ）からの自動入力 ----
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setAnalyzeMessage(null);
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAnalyzeMessage("✗ 画像サイズは5MB以下にしてください");
+      setImageFile(null);
+      setImagePreview(null);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function clearImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    setAnalyzeMessage(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  async function resizeImage(file: File): Promise<{ base64: string; mediaType: string }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 1500;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像の読み込みに失敗しました")); };
+      img.src = url;
+    });
+  }
+
+  async function handleAnalyzeImage() {
+    if (!imageFile) return;
+    setAnalyzing(true);
+    setAnalyzeMessage(null);
+    try {
+      const { base64, mediaType } = await resizeImage(imageFile);
+      const res = await fetch("/api/admin/analyze-product-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, mediaType }),
+      });
+      const data = await res.json() as AnalyzeProductImageResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "画像解析に失敗しました");
+
+      // 空欄のフィールドのみ自動入力（既入力は尊重）
+      // imageUrl / productUrl はスクショからは取れない（admin が後で貼り付ける）
+      if (!brand && data.brand) setBrand(data.brand);
+      if (!name && data.name) setName(data.name);
+      if (!price && data.price !== null) setPrice(String(data.price));
+      if (data.normalizedCategory) setCategory(data.normalizedCategory);
+      if (normalizedColors.length === 0 && data.normalizedColors.length > 0) setColors(data.normalizedColors);
+      if (normalizedMaterials.length === 0 && data.normalizedMaterials.length > 0) setMaterials(data.normalizedMaterials);
+      if (!normalizedSilhouette && data.normalizedSilhouette) setSilhouette(data.normalizedSilhouette);
+      const a = data.axes ?? {};
+      if (!silhouetteType && a.silhouetteType) setSilhouetteType(a.silhouetteType);
+      if (!topBottomRatio && a.topBottomRatio) setTopBottomRatio(a.topBottomRatio);
+      if (!lengthBalance && a.lengthBalance) setLengthBalance(a.lengthBalance);
+      if (!shoulderLine && a.shoulderLine) setShoulderLine(a.shoulderLine);
+      if (!weightCenter && a.weightCenter) setWeightCenter(a.weightCenter);
+      if (!textureType && a.textureType) setTextureType(a.textureType);
+      if (seasonality.length === 0 && a.seasonality && a.seasonality.length > 0) setSeasonality(a.seasonality);
+      if (worldviewTags.length === 0 && data.worldviewTags.length > 0) setWorldviewTags(data.worldviewTags);
+      if (bodyCompatTags.length === 0 && data.bodyCompatTags.length > 0) {
+        setBodyCompatTags(data.bodyCompatTags as BodyConcern[]);
+      }
+      if (!curationNotes && data.curationNotes) setNotes(data.curationNotes);
+      if (data.curationPriority) setPriority(data.curationPriority);
+      if (materialComposition.length === 0 && data.materialComposition.length > 0) {
+        setMaterialComposition(data.materialComposition);
+      }
+
+      setAnalyzeMessage("✓ 解析完了。空欄だったフィールドに自動入力しました。画像URL・購入URLは別途貼り付けてください。");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "画像解析に失敗しました";
+      setAnalyzeMessage(`✗ ${msg}`);
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -204,6 +323,7 @@ export default function AdminProductNewPage() {
         curationNotes:        curationNotes.trim() || undefined,
         curationPriority,
         axes,
+        materialComposition:  materialComposition.length > 0 ? materialComposition : undefined,
       };
 
       const res = await fetch("/api/admin/products", {
@@ -261,8 +381,52 @@ export default function AdminProductNewPage() {
               </p>
             )}
             <p className="text-xs text-gray-400 mt-2">
-              OG タグ・JSON-LD から商品情報と8軸判断を自動推測します。空欄のフィールドのみ埋め、既入力は尊重します。ZOZO は弾かれることがあるので、その場合は手動入力してください。
+              OG タグ・JSON-LD から商品情報と8軸判断を自動推測します。空欄のフィールドのみ埋め、既入力は尊重します。ZOZO は弾かれることがあるので、その場合は下のスクショ解析を使ってください。
             </p>
+
+            {/* スクショ解析（フォールバック） */}
+            <div className="border-t border-gray-100 mt-4 pt-4">
+              <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">📸 スクショから取得（任意・URLが弾かれた時用）</p>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleImageChange}
+                className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs hover:file:bg-gray-200"
+              />
+              {imagePreview && (
+                <div className="mt-2 relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagePreview} alt="プレビュー" className="max-h-48 rounded-lg object-contain bg-gray-50 border border-gray-100" />
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    className="absolute top-1 right-1 bg-white/90 border border-gray-200 rounded-full w-6 h-6 text-xs text-gray-600 hover:bg-white"
+                    aria-label="画像をクリア"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {imageFile && (
+                <button
+                  type="button"
+                  onClick={handleAnalyzeImage}
+                  disabled={isAnalyzing}
+                  className="mt-2 px-4 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40"
+                >
+                  {isAnalyzing ? "解析中..." : "画像を解析して自動入力"}
+                </button>
+              )}
+              {analyzeMessage && (
+                <p className={`text-xs mt-2 ${analyzeMessage.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>
+                  {analyzeMessage}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                Claude Vision が商品ページのスクショから情報を抽出します。画像URL・購入URLは別途貼り付けてください（画像は保存されません）。
+              </p>
+            </div>
           </Section>
 
           {/* Section 2: 基本情報 */}
@@ -305,6 +469,24 @@ export default function AdminProductNewPage() {
             <Field label="素材（複数選択可）">
               <ChipMulti options={MATERIALS} selected={normalizedMaterials} onToggle={(v) => toggleInArray(normalizedMaterials, v, setMaterials)} />
             </Field>
+
+            {materialComposition.length > 0 && (
+              <div>
+                <span className="text-xs text-gray-500 mb-1 block">素材混率（自動抽出・読み取り専用）</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {materialComposition.map((m) => (
+                    <span
+                      key={m.name}
+                      className="inline-flex items-center text-xs px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-100"
+                    >
+                      {m.name}
+                      {m.percentage !== null && <span className="ml-1 text-amber-600">{m.percentage}%</span>}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">URL/スクショから抽出された素材混率。登録時にDBに保存されます。</p>
+              </div>
+            )}
 
             <Field label="シルエット（単一）">
               <select value={normalizedSilhouette} onChange={(e) => setSilhouette(e.target.value)} className={selectClass}>

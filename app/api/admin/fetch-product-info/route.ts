@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/utils/admin-check";
 import { callClaudeJSON } from "@/lib/claude";
 import { EXTRACT_PRODUCT_INFO_PROMPT } from "@/lib/prompts/extract-product-info";
-import type { FetchProductInfoResponse, ProductAxes } from "@/types/index";
+import type { FetchProductInfoResponse, MaterialComposition, ProductAxes } from "@/types/index";
 
 // Sprint 41.1: 商品ページURLから情報を抽出する管理者API
 //
@@ -82,6 +82,20 @@ async function fetchHtml(url: string): Promise<string> {
   return res.text();
 }
 
+function normalizeMaterialComposition(raw: unknown): MaterialComposition[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): MaterialComposition | null => {
+      if (!item || typeof item !== "object") return null;
+      const o = item as Record<string, unknown>;
+      const name = asString(o.name).trim();
+      if (!name) return null;
+      return { name, percentage: asNumberOrNull(o.percentage) };
+    })
+    .filter((x): x is MaterialComposition => x !== null)
+    .slice(0, 5);
+}
+
 function normalizeAxes(raw: unknown): ProductAxes {
   const o = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -106,6 +120,7 @@ function normalizeFetchedInfo(raw: Record<string, unknown>, fallbackUrl: string)
     normalizedCategory:   VALID_CATEGORIES.has(cat) ? cat : "tops",
     normalizedColors:     asStringArray(raw.normalizedColors, 3),
     normalizedMaterials:  asStringArray(raw.normalizedMaterials, 3),
+    materialComposition:  normalizeMaterialComposition(raw.materialComposition),
     normalizedSilhouette: asStringOrNull(raw.normalizedSilhouette),
     axes:                 normalizeAxes(raw.axes),
     bodyCompatTags:       asStringArray(raw.bodyCompatTags, 5),

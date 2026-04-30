@@ -116,7 +116,16 @@ export async function POST(request: NextRequest) {
     const bodyCompatTags     = (body.bodyCompatTags ?? []).filter((t) => VALID_BODY_CONCERNS.has(t));
     const worldviewTags      = (body.worldviewTags ?? []).map((s) => s.trim()).filter(Boolean);
     const normalizedColors   = (body.normalizedColors ?? []).map((s) => s.trim()).filter(Boolean);
-    const normalizedMaterials = (body.normalizedMaterials ?? []).map((s) => s.trim()).filter(Boolean);
+    // materialComposition から normalized_materials を派生（明示指定が無い場合）
+    const materialComposition = (body.materialComposition ?? [])
+      .filter((m): m is { name: string; percentage: number | null } =>
+        !!m && typeof m.name === "string" && m.name.trim().length > 0,
+      )
+      .map((m) => ({ name: m.name.trim(), percentage: m.percentage }));
+    const explicitMaterials  = (body.normalizedMaterials ?? []).map((s) => s.trim()).filter(Boolean);
+    const normalizedMaterials = explicitMaterials.length > 0
+      ? explicitMaterials
+      : materialComposition.map((m) => m.name);
     const priority           = Math.min(Math.max(0, body.curationPriority ?? 50), 100);
 
     const service = createServiceClient();
@@ -143,6 +152,7 @@ export async function POST(request: NextRequest) {
       curation_priority:     priority,
       curated_by:            auth.user.id,
       axes:                  body.axes ?? {},
+      material_composition:  materialComposition,
       synced_at:             new Date().toISOString(),
     };
 
