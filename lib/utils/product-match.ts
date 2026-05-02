@@ -1,7 +1,9 @@
 // Sprint 40: 楽天商品マッチング - スコアリング・ヘルパー
 // Sprint 41: 手動キュレーション情報を含めた拡張スコアリング
+// Sprint 41.3: シルエット / 季節 / テイスト / 素材双方向 / NG誤爆対策を追加
 
 import { isAnyColorMatch } from "./color-aliases";
+import { getSeasonJST } from "./season";
 import type { ExternalProduct, VirtualCoordinateItem } from "@/types/index";
 
 export interface ScoringResult {
@@ -13,6 +15,7 @@ export interface ScoringContext {
   conceptKeywords?: string[];   // interpretation.keywords + matchedRuleKeywords
   ngElements?:      string[];   // interpretation.ngElements + user.preference.ngElements
   bodyConcerns?:    string[];   // user.body_profile.concerns
+  currentSeason?:   string;     // "春"/"夏"/"秋"/"冬"。未指定時は getSeasonJST() で算出
 }
 
 // VirtualCoordinateItem と ExternalProduct のスコアを計算する。
@@ -25,16 +28,24 @@ export function scoreProduct(
   let score = 50;
   const reasons: string[] = ["カテゴリ"];
 
-  // ---- Sprint 40 既存スコアリング（Sprint 41.1で配列対応） ----
+  // ---- Sprint 40 既存スコアリング ----
 
   if (isAnyColorMatch(item.color, product.normalizedColors)) {
     score += 30;
     reasons.push("色");
   }
 
+  // 素材一致（双方向）→ +20
+  // 1) product.normalizedMaterials のいずれかが item.name/reason/materialNote に含まれる
+  // 2) item.materialNote のトークンが product.normalizedMaterials のいずれかに含まれる
+  // どちらかが当たれば加点（重複加点はしない）
   if (product.normalizedMaterials.length > 0) {
-    const haystack = `${item.name} ${item.materialNote} ${item.reason}`;
-    if (product.normalizedMaterials.some((m) => haystack.includes(m))) {
+    const haystack    = `${item.name} ${item.materialNote} ${item.reason}`;
+    const productHits = product.normalizedMaterials.some((m) => haystack.includes(m));
+    const itemNote    = (item.materialNote ?? "").trim();
+    const itemHits    = itemNote.length > 0
+      && product.normalizedMaterials.some((m) => itemNote.includes(m) || m.includes(itemNote));
+    if (productHits || itemHits) {
       score += 20;
       reasons.push("素材");
     }
@@ -78,21 +89,89 @@ export function scoreProduct(
     score += Math.round((product.curationPriority / 100) * 20);
   }
 
-  // NG ペナルティ → -50
+  // ---- Sprint 41.3 追加スコアリング ----
+
+  // シルエット一致 → +15
+  // product.normalizedSilhouette（"オーバーサイズ" 等の単一文字列）が
+  // item.reason / item.sizeNote に含まれていれば加点
+  const silhouette = (product.normalizedSilhouette ?? "").trim();
+  if (silhouette.length > 0) {
+    const styleNotes = `${item.reason} ${item.sizeNote}`;
+    if (styleNotes.includes(silhouette)) {
+      score += 15;
+      reasons.push("シルエット");
+    }
+  }
+
+  // 季節整合 → +10 / 矛盾 -15
+  // axes.seasonality は ["春","夏"] 等の text[]。空配列はオールシーズン扱いで加減点なし
+  const productSeasons = readProductSeasons(product);
+  if (productSeasons.length > 0) {
+    const currentSeason = ctx.currentSeason ?? getSeasonJST();
+    if (productSeasons.includes(currentSeason)) {
+      score += 10;
+      reasons.push("季節");
+    } else {
+      // 完全矛盾（productが特定季節のみで、現在季節を含まない）→ ペナルティ
+      score -= 15;
+    }
+  }
+
+  // テイスト一致 → +15
+  // product.normalizedTaste（["ミニマル","クリーン"] 等）と
+  // ctx.conceptKeywords の双方向 includes で重なりを検出
+  if (
+    ctx.conceptKeywords && ctx.conceptKeywords.length > 0
+    && product.normalizedTaste.length > 0
+  ) {
+    const overlap = product.normalizedTaste.some((t) =>
+      ctx.conceptKeywords!.some((c) => c.includes(t) || t.includes(c)),
+    );
+    if (overlap) {
+      score += 15;
+      reasons.push("テイスト");
+    }
+  }
+
+  // ---- NG ペナルティ（Sprint 41.3 で誤爆対策） ----
+  // 配列・enum 値はトークンの「完全一致」、自由文 name のみ substring を許可。
+  // これにより NG「ロング」が normalized_silhouette="ロングシルエット" に誤爆するのを防ぐ。
   if (ctx.ngElements && ctx.ngElements.length > 0) {
-    const ngHit = ctx.ngElements.some((ng) => {
-      if (!ng) return false;
-      if (product.name.includes(ng)) return true;
-      if (product.normalizedMaterials.some((m) => m.includes(ng))) return true;
-      if (product.normalizedSilhouette?.includes(ng)) return true;
-      return false;
-    });
+    const ngHit = ctx.ngElements.some((ng) => isNgHit(ng, product));
     if (ngHit) {
       score -= 50;
     }
   }
 
   return { score, matchReasons: reasons };
+}
+
+// ---- ヘルパー（Sprint 41.3） ----
+
+// product.axes.seasonality を安全に読み出す。jsonb 由来なので unknown 扱い。
+function readProductSeasons(product: ExternalProduct): string[] {
+  const axes = product.axes as Record<string, unknown> | null | undefined;
+  const raw  = axes?.seasonality;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === "string" && x.length > 0);
+}
+
+// NG ヒット判定。canonical な配列・enum 値はトークン完全一致、
+// 自由文 name は length>=2 の substring を許可。
+function isNgHit(ng: string, product: ExternalProduct): boolean {
+  const term = ng.trim();
+  if (term.length < 2) return false;
+
+  // canonical な enum/配列：完全一致のみ
+  if (product.normalizedMaterials.includes(term)) return true;
+  if (product.normalizedColors.includes(term))    return true;
+  if (product.normalizedTaste.includes(term))     return true;
+  if (product.normalizedSilhouette === term)      return true;
+
+  // 自由文 name のみ substring を許可
+  if (product.name && product.name.includes(term)) return true;
+
+  return false;
 }
 
 // マッチ理由を1行の日本語に変換

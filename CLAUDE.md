@@ -125,7 +125,7 @@ style-self/
 │   │   ├── url-extract.ts            # URL→本文抽出（Sprint 38）
 │   │   ├── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
 │   │   ├── color-aliases.ts          # 色名表記揺れマップ（Sprint 40）
-│   │   ├── product-match.ts          # 商品スコアリング・行変換（Sprint 40 / 41拡張）
+│   │   ├── product-match.ts          # 商品スコアリング・行変換（Sprint 40 / 41 / 41.3でシルエット・季節・テイスト・NG誤爆対策追加）
 │   │   └── admin-check.ts            # ADMIN_EMAILS allowlist チェック（Sprint 41）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
