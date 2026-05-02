@@ -17,7 +17,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <main className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
         <p className="text-xs tracking-widest text-gray-300 uppercase mb-4">Style Self</p>
         <h1 className="text-4xl font-light text-gray-900 leading-snug mb-4">
           あなただけの<br />ファッション世界観を
@@ -26,6 +26,22 @@ export default async function HomePage() {
           素材・色・余白・信念軸から、<br />
           自分らしいコーデを設計する。
         </p>
+
+        {/* できること */}
+        <div className="w-full max-w-md mb-10">
+          <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">できること</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="flex items-start gap-3 text-left bg-gray-50 rounded-xl px-4 py-3">
+                <span className="text-2xl leading-none mt-0.5">{f.icon}</span>
+                <div>
+                  <p className="text-sm text-gray-900 font-medium leading-tight">{f.title}</p>
+                  <p className="text-xs text-gray-500 leading-snug mt-1">{f.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <Link
@@ -49,3 +65,10 @@ export default async function HomePage() {
     </div>
   );
 }
+
+const FEATURES = [
+  { icon: "📊", title: "スタイル診断",   description: "質問に答えて好み・体型を可視化" },
+  { icon: "💡", title: "コーデ提案",     description: "季節とシーンから今日の一着を設計" },
+  { icon: "🛍",  title: "商品マッチング", description: "提案コーデに合う実物を一発で検索" },
+  { icon: "📚", title: "履歴管理",       description: "診断・相談・コーデを振り返れる" },
+];

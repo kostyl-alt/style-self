@@ -1111,12 +1111,13 @@ function SavedTab() {
 export default function StylePage() {
   const [activeTab, setActiveTab] = useState<StyleTab>("coordinate");
 
-  const TABS: { value: StyleTab; label: string }[] = [
-    { value: "coordinate", label: "コーデ提案" },
-    { value: "virtual",    label: "理想のコーデ" },
-    { value: "consult",    label: "着こなし相談" },
-    { value: "saved",      label: "保存履歴" },
+  const TABS: { value: StyleTab; label: string; description: string }[] = [
+    { value: "coordinate", label: "💡 コーデ提案",   description: "今日の気分・シーンに合わせてAIがコーデを設計します" },
+    { value: "virtual",    label: "🛍 商品から探す", description: "コンセプトを入れると理想のコーデと商品候補を提案" },
+    { value: "consult",    label: "💬 着こなし相談", description: "体型・身長の悩みを具体的なアイテム名で解消" },
+    { value: "saved",      label: "📌 保存履歴",     description: "保存したコーデと過去のAI履歴を振り返れる" },
   ];
+  const activeTabMeta = TABS.find((t) => t.value === activeTab);
 
   return (
     <div className="min-h-screen bg-white">
@@ -1127,7 +1128,7 @@ export default function StylePage() {
           <h1 className="text-2xl font-light text-gray-900">スタイルをつくる</h1>
         </div>
         {/* タブ */}
-        <div className="flex border-b border-gray-100 mb-6">
+        <div className="flex border-b border-gray-100">
           {TABS.map((tab) => (
             <button key={tab.value} onClick={() => setActiveTab(tab.value)}
               className={`flex-1 min-w-0 pb-3 text-xs sm:text-sm transition-colors truncate ${
@@ -1140,6 +1141,10 @@ export default function StylePage() {
             </button>
           ))}
         </div>
+        {/* 選択中タブの説明 */}
+        {activeTabMeta && (
+          <p className="text-xs text-gray-500 mt-3 mb-6 leading-snug">{activeTabMeta.description}</p>
+        )}
         {/* タブコンテンツ */}
         {activeTab === "coordinate" && <CoordinateTab />}
         {activeTab === "virtual"    && <VirtualTab />}
