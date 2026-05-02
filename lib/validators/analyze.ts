@@ -60,5 +60,42 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
     if (!s.gaze)       s.gaze       = "未設定";
   }
 
+  // Sprint 41.5: 新フィールドの正規化（不正な型は削除して旧UIにフォールバック）
+  if (result.worldviewName !== undefined && typeof result.worldviewName !== "string") {
+    delete result.worldviewName;
+  }
+  if (result.unconsciousTendency !== undefined && typeof result.unconsciousTendency !== "string") {
+    delete result.unconsciousTendency;
+  }
+  if (result.idealSelf !== undefined && typeof result.idealSelf !== "string") {
+    delete result.idealSelf;
+  }
+  if (result.avoidedImpression !== undefined && typeof result.avoidedImpression !== "string") {
+    delete result.avoidedImpression;
+  }
+  if (result.attractedCulture !== undefined && typeof result.attractedCulture !== "string") {
+    delete result.attractedCulture;
+  }
+  if (result.culturalAffinities !== undefined) {
+    const c = result.culturalAffinities;
+    if (!c || typeof c !== "object") {
+      delete result.culturalAffinities;
+    } else {
+      c.music     = Array.isArray(c.music)     ? c.music.filter((x): x is string => typeof x === "string")     : [];
+      c.films     = Array.isArray(c.films)     ? c.films.filter((x): x is string => typeof x === "string")     : [];
+      c.fragrance = Array.isArray(c.fragrance) ? c.fragrance.filter((x): x is string => typeof x === "string") : [];
+    }
+  }
+  if (result.firstPiece !== undefined) {
+    const f = result.firstPiece;
+    if (!f || typeof f !== "object" || typeof f.name !== "string" || !f.name.trim()) {
+      delete result.firstPiece;
+    } else {
+      f.name        = f.name.trim();
+      f.why         = typeof f.why === "string" ? f.why.trim() : "";
+      f.zozoKeyword = typeof f.zozoKeyword === "string" ? f.zozoKeyword.trim() : f.name;
+    }
+  }
+
   return result;
 }

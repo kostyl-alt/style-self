@@ -308,6 +308,18 @@ export interface BodyProfile {
   proportionNote?: string;
 }
 
+export interface CulturalAffinities {
+  music:     string[];
+  films:     string[];
+  fragrance: string[];
+}
+
+export interface FirstPiece {
+  name:        string;
+  why:         string;
+  zozoKeyword: string;
+}
+
 export interface StyleDiagnosisResult {
   plainSummary: string;
   coreIdentity: string;
@@ -328,6 +340,14 @@ export interface StyleDiagnosisResult {
   buyingPriority?: string[];
   dailyAdvice?: string[];
   preference?: StylePreference;
+  // v3 fields (Sprint 41.5: 「世界観の言語化」)
+  worldviewName?:        string;
+  unconsciousTendency?:  string;
+  idealSelf?:            string;
+  avoidedImpression?:    string;
+  attractedCulture?:     string;
+  culturalAffinities?:   CulturalAffinities;
+  firstPiece?:           FirstPiece;
 }
 
 export type StyleAnalysisAIResponse = StyleDiagnosisResult;
