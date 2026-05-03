@@ -100,6 +100,7 @@ style-self/
 ├── components/
 │   ├── BottomNav.tsx                 # グローバルボトムナビ（5ページ対応）
 │   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
+│   ├── DiagnosisDisplay.tsx          # 診断結果v3 UI共有コンポーネント（onboarding結果＋/self DiagnosisTabで共用）
 │   ├── coordinate/
 │   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
 │   │   ├── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント
