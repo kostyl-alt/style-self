@@ -127,7 +127,8 @@ style-self/
 │   │   ├── history-helper.ts         # AI履歴INSERTヘルパー（Sprint 39）
 │   │   ├── color-aliases.ts          # 色名表記揺れマップ（Sprint 40）
 │   │   ├── product-match.ts          # 商品スコアリング・行変換（Sprint 40 / 41 / 41.3でシルエット・季節・テイスト・NG誤爆対策追加）
-│   │   └── admin-check.ts            # ADMIN_EMAILS allowlist チェック（Sprint 41）
+│   │   ├── admin-check.ts            # ADMIN_EMAILS allowlist チェック（Sprint 41）
+│   │   └── worldview-matcher.ts      # タグ集計→8パターン判定（Sprint 42、単一2点・複数1点）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
@@ -136,7 +137,9 @@ style-self/
 │   │   ├── index.ts                  # 全辞書 re-export
 │   │   └── inject.ts                 # getMaterialContext / getColorContext / getLineContext
 │   ├── knowledge/
-│   │   └── fashion-axes.ts           # ファッション判断の8軸（FASHION_AXES + プロンプト用ブロック）
+│   │   ├── fashion-axes.ts           # ファッション判断の8軸（FASHION_AXES + プロンプト用ブロック）
+│   │   ├── worldview-patterns.ts     # 世界観8パターン定数（Sprint 42：診断のソース・オブ・トゥルース）
+│   │   └── diagnosis-questions.ts    # 15問の質問定義（Sprint 42：scoring=score/hint で集計分岐）
 │   ├── claude.ts                     # Claude APIクライアント
 │   ├── rakuten.ts                    # 楽天APIクライアント
 │   ├── storage.ts                    # Supabase Storage操作
@@ -190,7 +193,8 @@ style-self/
 │   │   ├── 016_ai_history.sql             # Sprint 39: ai_history テーブル追加
 │   │   ├── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
 │   │   ├── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
-│   │   └── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
+│   │   ├── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
+│   │   └── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
@@ -246,6 +250,9 @@ ADMIN_EMAILS=
 | `knowledge_sources` | 知識ベースの一次情報（Sprint 37：URL/メモ/画像/書籍） |
 | `knowledge_rules` | 知識ベースの判断ルール（Sprint 37：concept_keyword→推奨色/素材/シルエット/小物/NG） |
 | `ai_history` | AI履歴の統一テーブル（Sprint 39：診断/相談/写真分析/理想コーデ） |
+| `diagnosis_sessions` | 診断セッションの詳細記録（Sprint 42：answers / matched_pattern / scores / result） |
+| `worldview_profiles` | ユーザーごとの最新確定プロファイル（Sprint 42：user_id 主キー） |
+| `user_style_events` | 学習用の行動イベントログ（Sprint 42：クリック・保存・拒否など） |
 
 ---
 

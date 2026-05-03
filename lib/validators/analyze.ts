@@ -1,4 +1,4 @@
-import type { StyleDiagnosisResult } from "@/types/index";
+import type { StyleDiagnosisResult, WorldviewPattern } from "@/types/index";
 
 const VALID_COLOR_TONES   = new Set(["warm", "cool", "neutral", "earthy", "vivid"]);
 const VALID_SPACE_FEELINGS = new Set(["minimal", "layered", "balanced", "maximalist"]);
@@ -60,7 +60,6 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
     if (!s.gaze)       s.gaze       = "未設定";
   }
 
-  // Sprint 41.5: 新フィールドの正規化（不正な型は削除して旧UIにフォールバック）
   if (result.worldviewName !== undefined && typeof result.worldviewName !== "string") {
     delete result.worldviewName;
   }
@@ -97,5 +96,30 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
     }
   }
 
+  return result;
+}
+
+// Sprint 42: Claude が文章フィールドを返した後、パターン値で確定フィールドを上書きする。
+// Claude が誤って色や素材を変更してもここで pattern 値に統一されるため、結果の安定性が保たれる。
+export function applyPatternToResult(
+  result: StyleDiagnosisResult,
+  pattern: WorldviewPattern,
+): StyleDiagnosisResult {
+  result.patternId             = pattern.id;
+  result.worldviewName         = pattern.name;
+  result.recommendedColors     = [...pattern.colors];
+  result.recommendedMaterials  = [...pattern.materials];
+  result.recommendedSilhouettes = [...pattern.silhouettes];
+  result.avoidElements         = [...pattern.avoidElements];
+  result.culturalAffinities    = {
+    music:     [...pattern.music],
+    films:     [...pattern.films],
+    fragrance: [...pattern.fragrance],
+  };
+  result.firstPiece = {
+    name:        pattern.firstPiece.name,
+    why:         pattern.firstPiece.why,
+    zozoKeyword: pattern.firstPiece.zozoKeyword,
+  };
   return result;
 }

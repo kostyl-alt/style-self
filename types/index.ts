@@ -348,6 +348,63 @@ export interface StyleDiagnosisResult {
   attractedCulture?:     string;
   culturalAffinities?:   CulturalAffinities;
   firstPiece?:           FirstPiece;
+  // v4 (Sprint 42: パターン駆動診断)
+  patternId?:            string;
+}
+
+// ---- Sprint 42: 世界観パターン駆動診断 ----
+
+export interface WorldviewPattern {
+  id:                 string;
+  name:               string;
+  coreTags:           string[];
+  psychologicalCore:  string;
+  clothingRole:       string;
+  avoidImpressions:   string[];
+  idealSelf:          string;
+  colors:             string[];
+  materials:          string[];
+  silhouettes:        string[];
+  accessories:        string[];
+  brands:             string[];
+  music:              string[];
+  films:              string[];
+  fragrance:          string[];
+  firstPiece:         FirstPiece;
+  avoidElements:      string[];
+}
+
+export type DiagnosisQuestionKind = "single" | "multi" | "single_with_reasons" | "free_text";
+
+export interface DiagnosisOption {
+  id:    string;
+  label: string;
+  tags?: string[];
+  reasons?: { id: string; label: string; tags: string[] }[];
+}
+
+export interface DiagnosisQuestion {
+  id:        string;
+  step:      number;
+  question:  string;
+  hint?:     string;
+  kind:      DiagnosisQuestionKind;
+  options:   DiagnosisOption[];
+  scoring:   "score" | "hint";
+  required:  boolean;
+}
+
+export interface DiagnosisAnswerV2 {
+  questionId:  string;
+  optionIds:   string[];
+  reasonIds?:  string[];
+  freeText?:   string;
+}
+
+export interface WorldviewMatchResult {
+  patternId:  string;
+  scores:     Record<string, number>;
+  topTags:    string[];
 }
 
 export type StyleAnalysisAIResponse = StyleDiagnosisResult;
