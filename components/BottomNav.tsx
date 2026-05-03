@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Home, Compass, ShoppingBag, Shirt, User } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/self",     label: "SELF",     icon: "👤" },
-  { href: "/discover", label: "DISCOVER", icon: "🔍" },
-  { href: "/style",    label: "STYLE",    icon: "✨" },
-  { href: "/closet",   label: "CLOSET",   icon: "👗" },
-  { href: "/learn",    label: "LEARN",    icon: "📖" },
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/home",     label: "ホーム", icon: Home },
+  { href: "/discover", label: "発見",   icon: Compass },
+  { href: "/shop",     label: "買う",   icon: ShoppingBag },
+  { href: "/outfit",   label: "コーデ", icon: Shirt },
+  { href: "/self",     label: "自分",   icon: User },
 ];
 
 export default function BottomNav() {
@@ -19,17 +21,17 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 safe-area-pb">
       <div className="max-w-2xl mx-auto flex">
-        {NAV_ITEMS.map(({ href, label, icon }) => {
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = pathname.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-3 transition-colors ${
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
                 isActive ? "text-gray-900" : "text-gray-400 hover:text-gray-600"
               }`}
             >
-              <span className="text-xl leading-none">{icon}</span>
+              <Icon size={20} strokeWidth={isActive ? 2 : 1.6} />
               <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : ""}`}>
                 {label}
               </span>

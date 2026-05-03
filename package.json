@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.3",
     "encoding-japanese": "^2.2.0",
+    "lucide-react": "^1.14.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18"

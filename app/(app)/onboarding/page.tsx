@@ -163,10 +163,10 @@ export default function OnboardingPage() {
         <div className="max-w-lg mx-auto px-6 py-16">
           <ResultCard result={result} brands={brands} brandsLoading={brandsLoading} />
           <Link
-            href="/closet"
+            href="/home"
             className="mt-8 block w-full py-3.5 bg-gray-800 text-white text-center rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors"
           >
-            クローゼットへ進む →
+            ホームへ進む →
           </Link>
           <button
             onClick={resetAll}

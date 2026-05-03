@@ -36,7 +36,13 @@ export async function middleware(request: NextRequest) {
 
     const { pathname } = request.nextUrl;
 
-    const appRoutes = ["/onboarding", "/self", "/discover", "/style", "/closet", "/learn"];
+    const appRoutes = [
+      "/onboarding",
+      "/home", "/discover", "/shop", "/outfit", "/self",
+      // 旧ルート（redirect shim 経由でも認証ガードを保つ）
+      "/style", "/closet", "/learn",
+      "/coordinate", "/inspire", "/profile", "/wardrobe", "/worldview",
+    ];
     const authRoutes = ["/login", "/signup"];
     const adminRoutes = ["/admin"];
 

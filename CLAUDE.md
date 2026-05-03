@@ -27,21 +27,24 @@ style-self/
 ├── app/
 │   ├── (app)/                            # 認証済みユーザー向けページ
 │   │   ├── layout.tsx                    # (app)グループ共通レイアウト（BottomNav）
-│   │   ├── self/page.tsx                 # SELF: 4タブ（診断/身体/好み/履歴）（Sprint 39 + 39.5でナレッジは admin 移行）
-│   │   ├── discover/page.tsx             # DISCOVER: 抽象語・テーマ入力コーデ生成
-│   │   ├── style/page.tsx                # STYLE: 4タブ（コーデ提案/理想のコーデ/着こなし相談/保存履歴）
-│   │   ├── closet/page.tsx               # CLOSET: クローゼット管理画面
-│   │   ├── learn/page.tsx                # LEARN: ブランドフィロソフィー・センス育成
+│   │   ├── home/page.tsx                 # ホーム: 世界観カード+今日のおすすめコーデ+CTA（Sprint 43）
+│   │   ├── discover/page.tsx             # 発見: 2タブ（インスピレーション/ブランドを学ぶ）（Sprint 43で2タブ統合）
+│   │   ├── shop/page.tsx                 # 買う: VirtualTab を直接ホスト（Sprint 43）
+│   │   ├── outfit/page.tsx               # コーデ: 3タブ（コーデ提案/着こなし相談/クローゼット）（Sprint 43）
+│   │   ├── self/page.tsx                 # 自分: 4タブ（診断/身体/好み/履歴）。履歴に保存コーデを統合（Sprint 43）
 │   │   ├── onboarding/page.tsx           # 世界観診断フロー（全画面・BottomNav非表示）
 │   │   ├── admin/
 │   │   │   ├── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
 │   │   │   ├── products/page.tsx         # 管理者専用商品キュレーション一覧（Sprint 41）
 │   │   │   └── products/new/page.tsx     # 商品登録フォーム（Sprint 41 / 41.2でスクショ解析・素材混率表示追加）
-│   │   ├── coordinate/page.tsx           # 旧ルート（/style にリダイレクト済み）
-│   │   ├── inspire/page.tsx              # 旧ルート（/discover にリダイレクト済み）
-│   │   ├── profile/page.tsx              # 旧ルート（/self にリダイレクト済み）
-│   │   ├── wardrobe/page.tsx             # 旧ルート（/closet にリダイレクト済み）
-│   │   └── worldview/page.tsx            # 旧ルート（/self にリダイレクト済み）
+│   │   ├── style/page.tsx                # 旧ルート（Sprint 43で /outfit に redirect。?tab=virtual→/shop, ?tab=consult→/outfit?tab=consult, ?tab=saved→/self）
+│   │   ├── closet/page.tsx               # 旧ルート（Sprint 43で /outfit?tab=closet にリダイレクト）
+│   │   ├── learn/page.tsx                # 旧ルート（Sprint 43で /discover?tab=learn にリダイレクト）
+│   │   ├── coordinate/page.tsx           # 旧ルート（/outfit にリダイレクト）
+│   │   ├── inspire/page.tsx              # 旧ルート（/discover?tab=inspiration にリダイレクト）
+│   │   ├── profile/page.tsx              # 旧ルート（/self にリダイレクト）
+│   │   ├── wardrobe/page.tsx             # 旧ルート（/outfit?tab=closet にリダイレクト）
+│   │   └── worldview/page.tsx            # 旧ルート（/self?tab=worldview にリダイレクト）
 │   ├── (auth)/                           # 未認証ユーザー向け
 │   │   ├── callback/route.ts             # 認証コールバック
 │   │   ├── layout.tsx
@@ -98,9 +101,13 @@ style-self/
 │   ├── layout.tsx
 │   └── page.tsx                          # トップ（認証状態でリダイレクト）
 ├── components/
-│   ├── BottomNav.tsx                 # グローバルボトムナビ（5ページ対応）
+│   ├── BottomNav.tsx                 # グローバルボトムナビ（Sprint 43で lucide-react SVG + 日本語ラベルに統一）
 │   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
 │   ├── DiagnosisDisplay.tsx          # 診断結果v3 UI共有コンポーネント（onboarding結果＋/self DiagnosisTabで共用）
+│   ├── style/StyleTabs.tsx           # CoordinateTab/VirtualTab/ConsultTab/SavedTab を export（Sprint 43）
+│   ├── closet/ClosetView.tsx         # クローゼット画面（embedded prop で /outfit のサブタブにも対応）（Sprint 43）
+│   ├── discover/InspirationView.tsx  # 抽象語コーデ生成（embedded prop で /discover のサブタブにも対応）（Sprint 43）
+│   ├── learn/LearnView.tsx           # 学び画面（embedded prop で /discover のサブタブにも対応）（Sprint 43）
 │   ├── coordinate/
 │   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
 │   │   ├── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント

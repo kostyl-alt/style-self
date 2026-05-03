@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import HistoryCard from "./HistoryCard";
+import { SavedTab } from "@/components/style/StyleTabs";
 import type { AiHistory, AiHistoryListResponse, AiHistoryType } from "@/types/index";
 
 type FilterValue = "all" | AiHistoryType;
@@ -74,9 +75,17 @@ export default function HistoryTab() {
   }
 
   return (
-    <div className="space-y-4 mt-4">
-      {/* イントロ */}
+    <div className="space-y-6 mt-4">
+      {/* 保存したコーデ */}
+      <div>
+        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Saved Outfits</p>
+        <SavedTab />
+      </div>
+
+      {/* AI履歴 */}
+      <div className="space-y-4">
       <div className="bg-white border border-gray-100 rounded-xl p-4">
+        <p className="text-xs tracking-widest text-gray-400 uppercase mb-2">AI History</p>
         <p className="text-xs text-gray-600 leading-relaxed">
           診断・相談・写真分析・理想コーデの過去履歴を見返せます。不要な履歴は削除できます（復元不可）。
         </p>
@@ -136,6 +145,7 @@ export default function HistoryTab() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }
