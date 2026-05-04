@@ -38,8 +38,9 @@ export async function middleware(request: NextRequest) {
 
     const appRoutes = [
       "/onboarding",
-      "/home", "/discover", "/shop", "/outfit", "/self",
+      "/home", "/discover", "/saved", "/outfit", "/self",
       // 旧ルート（redirect shim 経由でも認証ガードを保つ）
+      "/shop",
       "/style", "/closet", "/learn",
       "/coordinate", "/inspire", "/profile", "/wardrobe", "/worldview",
     ];

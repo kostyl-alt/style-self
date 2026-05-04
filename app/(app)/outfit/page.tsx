@@ -2,19 +2,20 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CoordinateTab, ConsultTab } from "@/components/style/StyleTabs";
+import { CoordinateTab, ConsultTab, VirtualTab } from "@/components/style/StyleTabs";
 import ClosetView from "@/components/closet/ClosetView";
 
-type OutfitTab = "coordinate" | "consult" | "closet";
+type OutfitTab = "coordinate" | "consult" | "closet" | "virtual";
 
 const TABS: { value: OutfitTab; label: string; description: string }[] = [
   { value: "coordinate", label: "コーデ提案",   description: "今日の気分・シーンに合わせてAIがコーデを設計します" },
   { value: "consult",    label: "着こなし相談", description: "体型・身長の悩みを具体的なアイテム名で解消" },
   { value: "closet",     label: "クローゼット", description: "手持ち服・検討中・欲しいを一元管理" },
+  { value: "virtual",    label: "理想を探す",   description: "コンセプトから理想コーデを設計し、合う商品を提案" },
 ];
 
 function isOutfitTab(v: string | null): v is OutfitTab {
-  return v === "coordinate" || v === "consult" || v === "closet";
+  return v === "coordinate" || v === "consult" || v === "closet" || v === "virtual";
 }
 
 function OutfitInner() {
@@ -63,6 +64,7 @@ function OutfitInner() {
         {activeTab === "coordinate" && <CoordinateTab />}
         {activeTab === "consult"    && <ConsultTab />}
         {activeTab === "closet"     && <ClosetView embedded />}
+        {activeTab === "virtual"    && <VirtualTab />}
       </div>
     </div>
   );

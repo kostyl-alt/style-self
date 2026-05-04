@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
-import { ShoppingBag, MessageCircle, RefreshCw } from "lucide-react";
+import { Shirt, MessageCircle, RefreshCw } from "lucide-react";
 import type { StyleDiagnosisResult, CoordinateGenerateResponse } from "@/types/index";
 
 export default function HomePage() {
@@ -106,11 +106,11 @@ export default function HomePage() {
 
         {/* CTA: 続きのアクション */}
         <div className="space-y-3">
-          <Link href="/shop" className="flex items-center gap-3 px-5 py-4 border border-gray-200 rounded-2xl hover:border-gray-400 transition-colors">
-            <ShoppingBag size={20} className="text-gray-500" strokeWidth={1.6} />
+          <Link href="/outfit" className="flex items-center gap-3 px-5 py-4 border border-gray-200 rounded-2xl hover:border-gray-400 transition-colors">
+            <Shirt size={20} className="text-gray-500" strokeWidth={1.6} />
             <div className="flex-1">
-              <p className="text-sm text-gray-900">商品から探す</p>
-              <p className="text-xs text-gray-500">世界観に合う一着を見つける</p>
+              <p className="text-sm text-gray-900">コーデを組む</p>
+              <p className="text-xs text-gray-500">手持ちと理想の両方からコーデを設計</p>
             </div>
             <span className="text-gray-300">→</span>
           </Link>

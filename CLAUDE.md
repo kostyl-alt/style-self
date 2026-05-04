@@ -29,15 +29,16 @@ style-self/
 │   │   ├── layout.tsx                    # (app)グループ共通レイアウト（BottomNav）
 │   │   ├── home/page.tsx                 # ホーム: 世界観カード+今日のおすすめコーデ+CTA（Sprint 43）
 │   │   ├── discover/page.tsx             # 発見: 2タブ（インスピレーション/ブランドを学ぶ）（Sprint 43で2タブ統合）
-│   │   ├── shop/page.tsx                 # 買う: VirtualTab を直接ホスト（Sprint 43）
-│   │   ├── outfit/page.tsx               # コーデ: 3タブ（コーデ提案/着こなし相談/クローゼット）（Sprint 43）
-│   │   ├── self/page.tsx                 # 自分: 4タブ（診断/身体/好み/履歴）。履歴に保存コーデを統合（Sprint 43）
+│   │   ├── saved/page.tsx                # 保存: 4セクション（コーデ/商品/投稿*将来/カルチャー*将来）（Sprint 44）
+│   │   ├── outfit/page.tsx               # コーデ: 4タブ（コーデ提案/着こなし相談/クローゼット/理想を探す）（Sprint 44で理想を探すを追加）
+│   │   ├── self/page.tsx                 # 自分: 4タブ（診断/身体/好み/履歴）。Sprint 44で保存コーデは /saved に移動
 │   │   ├── onboarding/page.tsx           # 世界観診断フロー（全画面・BottomNav非表示）
 │   │   ├── admin/
 │   │   │   ├── knowledge/page.tsx        # 管理者専用ナレッジ管理（Sprint 39.5、middlewareで認可）
 │   │   │   ├── products/page.tsx         # 管理者専用商品キュレーション一覧（Sprint 41）
 │   │   │   └── products/new/page.tsx     # 商品登録フォーム（Sprint 41 / 41.2でスクショ解析・素材混率表示追加）
-│   │   ├── style/page.tsx                # 旧ルート（Sprint 43で /outfit に redirect。?tab=virtual→/shop, ?tab=consult→/outfit?tab=consult, ?tab=saved→/self）
+│   │   ├── shop/page.tsx                 # 旧ルート（Sprint 44で /outfit?tab=virtual にリダイレクト。買うニュアンス削除のため）
+│   │   ├── style/page.tsx                # 旧ルート（Sprint 43で /outfit に redirect。?tab=virtual→/outfit?tab=virtual, ?tab=consult→/outfit?tab=consult, ?tab=saved→/self）
 │   │   ├── closet/page.tsx               # 旧ルート（Sprint 43で /outfit?tab=closet にリダイレクト）
 │   │   ├── learn/page.tsx                # 旧ルート（Sprint 43で /discover?tab=learn にリダイレクト）
 │   │   ├── coordinate/page.tsx           # 旧ルート（/outfit にリダイレクト）
@@ -108,6 +109,7 @@ style-self/
 │   ├── closet/ClosetView.tsx         # クローゼット画面（embedded prop で /outfit のサブタブにも対応）（Sprint 43）
 │   ├── discover/InspirationView.tsx  # 抽象語コーデ生成（embedded prop で /discover のサブタブにも対応）（Sprint 43）
 │   ├── learn/LearnView.tsx           # 学び画面（embedded prop で /discover のサブタブにも対応）（Sprint 43）
+│   ├── saved/SavedProductsList.tsx   # 保存商品リスト（wardrobe_items.status='wishlist' を表示）（Sprint 44）
 │   ├── coordinate/
 │   │   ├── CoordinateCard.tsx        # コーデ結果カード（3層構造・SVG構造図付き）
 │   │   ├── SilhouetteDiagram.tsx     # SVGシルエット構造図コンポーネント

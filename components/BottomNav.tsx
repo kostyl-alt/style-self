@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Compass, ShoppingBag, Shirt, User } from "lucide-react";
+import { Home, Compass, Bookmark, Shirt, User } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/home",     label: "ホーム", icon: Home },
   { href: "/discover", label: "発見",   icon: Compass },
-  { href: "/shop",     label: "買う",   icon: ShoppingBag },
+  { href: "/saved",    label: "保存",   icon: Bookmark },
   { href: "/outfit",   label: "コーデ", icon: Shirt },
   { href: "/self",     label: "自分",   icon: User },
 ];
