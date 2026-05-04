@@ -179,14 +179,7 @@ function DiagnosisTab() {
 
   return (
     <div className="space-y-5 py-4">
-      <DiagnosisDisplay analysis={analysis} />
-
-      <Link
-        href="/onboarding"
-        className="block w-full py-3 border border-gray-200 text-gray-500 text-center rounded-xl text-sm hover:border-gray-400 hover:text-gray-700 transition-colors"
-      >
-        再診断する
-      </Link>
+      <DiagnosisDisplay analysis={analysis} showShare />
     </div>
   );
 }
@@ -735,7 +728,7 @@ function WorldviewTab() {
 // ---- メインページ ----
 
 const TABS: { value: SelfTab; label: string }[] = [
-  { value: "diagnosis", label: "診断" },
+  { value: "diagnosis", label: "世界観" },
   { value: "body",      label: "身体" },
   { value: "worldview", label: "好み" },
   { value: "history",   label: "履歴" },
