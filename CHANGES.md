@@ -2,6 +2,24 @@
 
 ---
 
+## Sprint 46: ホームページを「今日、世界観をどう使うか」に強化
+
+世界観カード+CTAだけだったホームを、診断結果から「今日のコーデ」「今日試すべき1アイテム」「世界観に合うカルチャー」を導出する1画面に再構成。
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `app/(app)/home/page.tsx` — 世界観カードに `styleAxis.beliefKeywords` の `#タグ` 行と「詳しく見る → /self」リンクを追加 | ✅ |
+| 2 | 今日のコーデを `CoordinateCard` から軽量サマリ（concept 1行＋ロール別アイテムリスト＋「コーデを詳しく見る → /outfit」）に差し替え。スケルトンを 3行リスト型に変更 | ✅ |
+| 3 | 「今日試すべき1アイテム」セクションを新設。`firstPiece` の `name`/`why` 表示＋ `buildZozoSearchUrl` で「ZOZOで探す」リンク（新規タブ） | ✅ |
+| 4 | 「世界観に合うカルチャー」セクションを新設。`culturalAffinities` の music/films/fragrance を 3列×各3件で表示（lucide `Music`/`Film`/`Sparkles`） | ✅ |
+| 5 | アクション CTA を「コーデを相談する → /outfit?tab=consult」と「再診断する → /onboarding」の 2 つに整理（「コーデを組む」を削除） | ✅ |
+
+**運用メモ**:
+- 旧結果（v3 フィールド未保有）の場合は `firstPiece` / `culturalAffinities` セクションが自動で非表示になりフォールバックする
+- DB マイグレーション・新ファイル無し（`/home/page.tsx` の差し替えのみ）
+
+---
+
 ## Sprint 1: 認証基盤
 
 | # | 内容 | 状態 |

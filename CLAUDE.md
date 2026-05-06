@@ -27,7 +27,7 @@ style-self/
 ├── app/
 │   ├── (app)/                            # 認証済みユーザー向けページ
 │   │   ├── layout.tsx                    # (app)グループ共通レイアウト（BottomNav）
-│   │   ├── home/page.tsx                 # ホーム: 世界観カード+今日のおすすめコーデ+CTA（Sprint 43）
+│   │   ├── home/page.tsx                 # ホーム: 世界観カード（タグ+詳しく見る）+今日のコーデ（軽量サマリ）+今日試すべき1アイテム+カルチャー3列+CTA（Sprint 46）
 │   │   ├── discover/page.tsx             # 発見: 2タブ（インスピレーション/ブランドを学ぶ）（Sprint 43で2タブ統合）
 │   │   ├── saved/page.tsx                # 保存: 4セクション（コーデ/商品/投稿*将来/カルチャー*将来）（Sprint 44）
 │   │   ├── outfit/page.tsx               # コーデ: 4タブ（コーデ提案/着こなし相談/クローゼット/理想を探す）（Sprint 44で理想を探すを追加）
