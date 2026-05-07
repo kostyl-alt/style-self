@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
 
-    const { scene, concept } = await request.json() as { scene: string; concept?: string };
+    const { scene, concept, mood } = await request.json() as { scene: string; concept?: string; mood?: string };
     if (!scene?.trim()) {
       return NextResponse.json({ error: "シーンを指定してください" }, { status: 400 });
     }
@@ -231,6 +231,7 @@ export async function POST(request: NextRequest) {
       userData?.style_preference,
       userData?.style_analysis,
       userData?.worldview,
+      mood,
     );
 
     const rawCoord = await callClaudeJSON<Record<string, unknown>>({

@@ -34,6 +34,33 @@ const SCENES = [
   { value: "特別な日",   emoji: "✨", desc: "デート・イベント" },
 ];
 
+// Sprint 49: 4-Step コーデ提案フロー
+const PURPOSES = [
+  "普段・休日",
+  "仕事・打ち合わせ",
+  "デート・特別な日",
+  "友達と会う",
+  "ひとりで出かける",
+  "写真を撮る",
+] as const;
+
+const MOODS = [
+  "静かにいたい",
+  "少し印象を残したい",
+  "大人っぽくしたい",
+  "近づきやすくしたい",
+  "強く見せたい",
+  "余白を出したい",
+] as const;
+
+const MODES = [
+  { value: "owned",   label: "手持ち服から組む",         desc: "クローゼットのアイテムだけで設計" },
+  { value: "virtual", label: "商品候補込みで組む",         desc: "理想のコーデを設計し、合う商品を提案" },
+  { value: "auto",    label: "何も考えず提案してもらう",   desc: "診断結果＋気分から自動で1つ提案" },
+] as const;
+
+type CoordinateMode = "owned" | "virtual" | "auto";
+
 const CONSULT_EXAMPLES = [
   "低身長だけどロングコートを着たい",
   "オーバーサイズが服に着られて見える",
@@ -59,15 +86,87 @@ interface SavedCoordinate {
   created_at: string;
 }
 
-// ---- コーデ提案タブ ----
+// Sprint 49: コンセプト候補ピッカー（VirtualTab と CoordinateTab で共有）
+function ConceptCandidatesPicker({
+  concepts, season, scene, isLoading, error, onPick, onBack,
+}: {
+  concepts:  VirtualConceptCandidate[];
+  season:    string;
+  scene:     string;
+  isLoading: boolean;
+  error:     string | null;
+  onPick:    (conceptText: string) => void;
+  onBack:    () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+          {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
+        </span>
+        <span className="text-xs text-gray-400">シーン: {scene}</span>
+      </div>
+      <div>
+        <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Choose a Concept</p>
+        <p className="text-xs text-gray-500 mb-4">気になるコンセプトを選んでください。選んだ方向性で5アイテムを設計します。</p>
+        <div className="space-y-3">
+          {concepts.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => onPick(c.description ? `${c.title}（${c.description}）` : c.title)}
+              disabled={isLoading}
+              className="w-full text-left border border-gray-200 hover:border-gray-800 rounded-2xl p-5 transition-colors disabled:opacity-40"
+            >
+              <p className="text-sm font-medium text-gray-900 mb-1">{c.title}</p>
+              {c.description && (
+                <p className="text-xs text-gray-500 leading-relaxed">{c.description}</p>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+      {isLoading && (
+        <div className="text-center py-6 text-gray-300">
+          <div className="text-3xl mb-2 animate-pulse">✨</div>
+          <p className="text-xs">選んだコンセプトでコーデを設計中</p>
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+      <button
+        onClick={onBack}
+        disabled={isLoading}
+        className="w-full py-3 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
+      >
+        ← 戻る
+      </button>
+    </div>
+  );
+}
+
+// Sprint 49: コーデ提案タブを 4-Step フロー（目的 / 気分 / 組み方 / 生成）に変更
+type CoordinateStage = "input" | "concepts" | "result-owned" | "result-virtual";
+
 export function CoordinateTab() {
-  const [scene, setScene]               = useState("カジュアル");
-  const [ownedCount, setOwnedCount]     = useState<number | null>(null);
-  const [result, setResult]             = useState<CoordinateGenerateResponse | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving]         = useState(false);
-  const [isSaved, setIsSaved]           = useState(false);
-  const [error, setError]               = useState<string | null>(null);
+  const [purpose, setPurpose] = useState<typeof PURPOSES[number] | null>(null);
+  const [mood, setMood]       = useState<typeof MOODS[number]    | null>(null);
+  const [mode, setMode]       = useState<CoordinateMode | null>(null);
+
+  const [stage, setStage]     = useState<CoordinateStage>("input");
+  const [ownedCount, setOwnedCount] = useState<number | null>(null);
+
+  const [ownedResult, setOwnedResult]       = useState<CoordinateGenerateResponse | null>(null);
+  const [virtualResult, setVirtualResult]   = useState<VirtualCoordinateResponse | null>(null);
+  const [season, setSeason]                 = useState("");
+  const [concepts, setConcepts]             = useState<VirtualConceptCandidate[]>([]);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [isSaving, setIsSaving]   = useState(false);
+  const [isSaved, setIsSaved]     = useState(false);
 
   useEffect(() => {
     fetch("/api/wardrobe")
@@ -78,32 +177,96 @@ export function CoordinateTab() {
       .catch(() => setOwnedCount(0));
   }, []);
 
+  function backToInput() {
+    setStage("input");
+    setOwnedResult(null);
+    setVirtualResult(null);
+    setConcepts([]);
+    setError(null);
+    setIsSaved(false);
+  }
+
   async function handleGenerate() {
-    setIsGenerating(true); setError(null); setResult(null); setIsSaved(false);
+    if (!purpose || !mood || !mode) return;
+    setError(null);
+    setIsSaved(false);
+    setOwnedResult(null);
+    setVirtualResult(null);
+    setIsLoading(true);
+
     try {
-      const res = await fetch("/api/ai/coordinate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene }),
-      });
-      const data = await res.json() as CoordinateGenerateResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "コーデ生成に失敗しました");
-      setResult(data);
+      if (mode === "owned") {
+        const res = await fetch("/api/ai/coordinate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene: purpose, mood }),
+        });
+        const data = await res.json() as CoordinateGenerateResponse & { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "コーデ生成に失敗しました");
+        setOwnedResult(data);
+        setStage("result-owned");
+      } else if (mode === "virtual") {
+        const res = await fetch("/api/ai/virtual-coordinate/concepts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene: purpose, mood }),
+        });
+        const data = await res.json() as VirtualConceptsResponse & { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "コンセプト候補の生成に失敗しました");
+        setConcepts(data.concepts);
+        setSeason(data.season);
+        setStage("concepts");
+      } else {
+        // auto: クライアント側で concept を合成して virtual-coordinate を直接呼ぶ
+        const concept = `今日は『${mood}』気分で、『${purpose}』のシーン`;
+        const res = await fetch("/api/ai/virtual-coordinate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scene: purpose, mood, concept }),
+        });
+        const data = await res.json() as VirtualCoordinateResponse & { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "コーデ生成に失敗しました");
+        setVirtualResult(data);
+        setSeason(data.season);
+        setStage("result-virtual");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "コーデ生成に失敗しました");
+      setError(err instanceof Error ? err.message : "生成に失敗しました");
     } finally {
-      setIsGenerating(false);
+      setIsLoading(false);
     }
   }
 
-  async function handleSave() {
-    if (!result) return;
+  async function handleConceptPick(conceptText: string) {
+    if (!purpose || !mood) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/virtual-coordinate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: purpose, mood, concept: conceptText }),
+      });
+      const data = await res.json() as VirtualCoordinateResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "コーデ生成に失敗しました");
+      setVirtualResult(data);
+      setSeason(data.season);
+      setStage("result-virtual");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "コーデ生成に失敗しました");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleSaveOwned() {
+    if (!ownedResult || !purpose) return;
     setIsSaving(true);
     try {
       const res = await fetch("/api/coordinate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coordinate: result.coordinate, occasion: scene }),
+        body: JSON.stringify({ coordinate: ownedResult.coordinate, occasion: purpose }),
       });
       if (res.ok) setIsSaved(true);
     } finally {
@@ -111,65 +274,174 @@ export function CoordinateTab() {
     }
   }
 
+  // ---- レンダリング ----
+  if (stage === "concepts") {
+    return (
+      <ConceptCandidatesPicker
+        concepts={concepts}
+        season={season}
+        scene={purpose ?? ""}
+        isLoading={isLoading}
+        error={error}
+        onPick={handleConceptPick}
+        onBack={backToInput}
+      />
+    );
+  }
+
+  if (stage === "result-owned" && ownedResult) {
+    const priorityIndex = -1; // CoordinateCard 側で扱う
+    void priorityIndex;
+    return (
+      <div className="space-y-6">
+        <CoordinateCard
+          coordinate={ownedResult.coordinate}
+          resolvedItems={ownedResult.resolvedItems}
+          scene={purpose ?? ""}
+          onSave={handleSaveOwned}
+          isSaving={isSaving}
+          isSaved={isSaved}
+        />
+        {isSaved && (
+          <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
+            <p className="text-sm text-gray-600">保存しました ✓</p>
+          </div>
+        )}
+        <button onClick={backToInput}
+          className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+        >
+          条件を変えて再生成
+        </button>
+      </div>
+    );
+  }
+
+  if (stage === "result-virtual" && virtualResult) {
+    const priorityIndex = (() => {
+      const idx = virtualResult.items.findIndex((it) => it.role === "main");
+      return idx >= 0 ? idx : 0;
+    })();
+    return (
+      <VirtualResult
+        result={virtualResult}
+        season={season}
+        scene={purpose ?? ""}
+        priorityIndex={priorityIndex}
+        onReset={backToInput}
+      />
+    );
+  }
+
+  // ---- input stage: 4 ステップフォーム ----
+  const canGenerate = !!(purpose && mood && mode) && !isLoading
+    && !(mode === "owned" && ownedCount === 0);
+
   return (
     <div className="space-y-6">
-      {ownedCount === 0 && ownedCount !== null && (
-        <div className="bg-gray-50 rounded-2xl p-5 text-center">
-          <p className="text-2xl mb-2">👗</p>
-          <p className="text-sm text-gray-700 font-medium mb-1">クローゼットにアイテムがありません</p>
-          <p className="text-xs text-gray-500 mb-4">コーデを生成するには「所有中」のアイテムが必要です</p>
-          <Link href="/outfit?tab=closet" className="inline-block px-5 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors">
-            アイテムを追加する →
-          </Link>
-        </div>
-      )}
+      {/* Step 1: 今日の目的 */}
       <div>
-        <p className="text-xs text-gray-500 mb-3">今日のシーンを選んでください</p>
-        <div className="grid grid-cols-3 gap-3">
-          {SCENES.map((s) => (
-            <button key={s.value}
-              onClick={() => { setScene(s.value); setResult(null); setIsSaved(false); }}
-              className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all ${
-                scene === s.value ? "border-gray-800 bg-gray-800 text-white" : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Step 1</p>
+        <p className="text-sm text-gray-900 font-medium mb-3">今日の目的を選ぶ</p>
+        <div className="grid grid-cols-2 gap-2">
+          {PURPOSES.map((p) => (
+            <button key={p}
+              onClick={() => setPurpose(p)}
+              className={`px-3 py-3 rounded-xl border text-sm transition-all ${
+                purpose === p
+                  ? "border-gray-800 bg-gray-800 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
               }`}
             >
-              <span className="text-2xl">{s.emoji}</span>
-              <span className="text-xs font-medium">{s.value}</span>
-              <span className={`text-xs ${scene === s.value ? "text-gray-300" : "text-gray-400"}`}>{s.desc}</span>
+              {p}
             </button>
           ))}
         </div>
       </div>
-      <button onClick={handleGenerate} disabled={isGenerating || ownedCount === 0}
-        className="w-full py-4 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
+
+      {/* Step 2: 今日の気分 */}
+      <div>
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Step 2</p>
+        <p className="text-sm text-gray-900 font-medium mb-3">今日の気分を選ぶ</p>
+        <div className="grid grid-cols-2 gap-2">
+          {MOODS.map((m) => (
+            <button key={m}
+              onClick={() => setMood(m)}
+              className={`px-3 py-3 rounded-xl border text-sm transition-all ${
+                mood === m
+                  ? "border-gray-800 bg-gray-800 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Step 3: 組み方 */}
+      <div>
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Step 3</p>
+        <p className="text-sm text-gray-900 font-medium mb-3">組み方を選ぶ</p>
+        <div className="space-y-2">
+          {MODES.map((m) => {
+            const disabled = m.value === "owned" && ownedCount === 0;
+            return (
+              <button key={m.value}
+                onClick={() => !disabled && setMode(m.value)}
+                disabled={disabled}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                  mode === m.value
+                    ? "border-gray-800 bg-gray-800 text-white"
+                    : disabled
+                      ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                }`}
+              >
+                <p className="text-sm font-medium">{m.label}</p>
+                <p className={`text-xs mt-0.5 ${
+                  mode === m.value ? "text-gray-300" : disabled ? "text-gray-300" : "text-gray-500"
+                }`}>{m.desc}</p>
+                {disabled && (
+                  <p className="text-[10px] text-gray-400 mt-1">クローゼットにアイテムがないため選べません</p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {ownedCount === 0 && (
+          <div className="mt-3 bg-gray-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-gray-500 mb-2">「手持ち服から組む」を使うにはクローゼットへの登録が必要です</p>
+            <Link href="/outfit?tab=closet" className="inline-block text-xs text-gray-700 underline underline-offset-2">
+              アイテムを追加する →
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Step 4: 生成ボタン */}
+      <button onClick={handleGenerate} disabled={!canGenerate}
+        className="w-full py-4 bg-gray-800 text-white rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
       >
-        {isGenerating ? "コーデを考えています..." : "コーデを提案してもらう"}
+        {isLoading
+          ? (mode === "virtual" ? "コンセプト候補を考えています..." : "コーデを考えています...")
+          : "コーデを生成する"}
       </button>
-      {isGenerating && (
+
+      {isLoading && (
         <div className="text-center py-10 text-gray-300">
-          <div className="text-4xl mb-3 animate-pulse">👗</div>
-          <p className="text-sm">クローゼットから最適な組み合わせを探しています</p>
+          <div className="text-4xl mb-3 animate-pulse">{mode === "owned" ? "👗" : "✨"}</div>
+          <p className="text-sm">
+            {mode === "owned" ? "クローゼットから最適な組み合わせを探しています"
+              : mode === "virtual" ? "理想のコンセプト候補を考えています"
+              : "気分に合う1コーデを設計しています"}
+          </p>
         </div>
       )}
+
       {error && (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4">
           <p className="text-sm text-red-600">{error}</p>
         </div>
-      )}
-      {result && !isGenerating && (
-        <>
-          <CoordinateCard coordinate={result.coordinate} resolvedItems={result.resolvedItems} scene={scene} onSave={handleSave} isSaving={isSaving} isSaved={isSaved} />
-          {isSaved && (
-            <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
-              <p className="text-sm text-gray-600">保存しました ✓</p>
-            </div>
-          )}
-          <button onClick={handleGenerate}
-            className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
-          >
-            別のコーデを提案してもらう
-          </button>
-        </>
       )}
     </div>
   );
@@ -305,51 +577,15 @@ export function VirtualTab() {
 
   if (stage === "concepts") {
     return (
-      <div className="space-y-5">
-        <div className="flex items-center gap-2">
-          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-            {SEASON_EMOJI[season] ?? "🗓️"} {season} ｜ 日本（東京）
-          </span>
-          <span className="text-xs text-gray-400">シーン: {scene}</span>
-        </div>
-        <div>
-          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Choose a Concept</p>
-          <p className="text-xs text-gray-500 mb-4">気になるコンセプトを選んでください。選んだ方向性で5アイテムを設計します。</p>
-          <div className="space-y-3">
-            {concepts.map((c, i) => (
-              <button
-                key={i}
-                onClick={() => generateCoordinate(c.description ? `${c.title}（${c.description}）` : c.title)}
-                disabled={isLoading}
-                className="w-full text-left border border-gray-200 hover:border-gray-800 rounded-2xl p-5 transition-colors disabled:opacity-40"
-              >
-                <p className="text-sm font-medium text-gray-900 mb-1">{c.title}</p>
-                {c.description && (
-                  <p className="text-xs text-gray-500 leading-relaxed">{c.description}</p>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-        {isLoading && (
-          <div className="text-center py-6 text-gray-300">
-            <div className="text-3xl mb-2 animate-pulse">✨</div>
-            <p className="text-xs">選んだコンセプトでコーデを設計中</p>
-          </div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-        <button
-          onClick={resetToInput}
-          disabled={isLoading}
-          className="w-full py-3 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
-        >
-          ← 戻る
-        </button>
-      </div>
+      <ConceptCandidatesPicker
+        concepts={concepts}
+        season={season}
+        scene={scene}
+        isLoading={isLoading}
+        error={error}
+        onPick={generateCoordinate}
+        onBack={resetToInput}
+      />
     );
   }
 

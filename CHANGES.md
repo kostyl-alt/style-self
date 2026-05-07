@@ -2,6 +2,30 @@
 
 ---
 
+## Sprint 49: コーデ提案タブを 4-Step フォームに刷新（目的・気分・組み方）
+
+シーン選択＋生成ボタンだけだった `/outfit` のコーデ提案タブを、世界観・気分・体型を踏まえた段階的な提案フローに変更。`mood` を全コーデ系 API に伝搬し、AI が気分のキーワードを引用するように制約。
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/prompts/coordinate.ts` — `buildCoordinateSystemPrompt` に `mood?: string` 引数追加。気分→方向性の変換表（6種）をシステムプロンプトに注入し、`reason / analysis.what / beliefAlignment` のいずれかに引用必須化 | ✅ |
+| 2 | `lib/prompts/virtual-coordinate.ts` — `buildContextSections` / `buildVirtualCoordinatePrompt` / `buildVirtualConceptsPrompt` に `mood?: string` 追加。同等の方向性指針を Stage 1 と Stage 3 の両方に伝搬 | ✅ |
+| 3 | `app/api/ai/coordinate/route.ts` — body から `mood?` を受け取り、`userMessage` と prompt builder へ伝搬 | ✅ |
+| 4 | `app/api/ai/virtual-coordinate/route.ts` — `mood?` を受け取り、Stage 3 の prompt へ伝搬 | ✅ |
+| 5 | `app/api/ai/virtual-coordinate/concepts/route.ts` — `mood?` を受け取り、コンセプト候補生成プロンプトに伝搬 | ✅ |
+| 6 | `components/style/StyleTabs.tsx` — `ConceptCandidatesPicker` を新規 helper として切り出し、CoordinateTab と VirtualTab で共有 | ✅ |
+| 7 | `components/style/StyleTabs.tsx` — `CoordinateTab` を全面リライト：Step1（目的6種）+ Step2（気分6種）+ Step3（組み方3種：手持ち / 商品候補込み / 何も考えず提案）+ Step4（生成ボタン）。stage state machine（input / concepts / result-owned / result-virtual）で 3 モード分岐 | ✅ |
+| 8 | `components/style/StyleTabs.tsx` — auto モードはクライアント側で `concept = "今日は『${mood}』気分で、『${purpose}』のシーン"` を合成して `/api/ai/virtual-coordinate` に直接 POST。コンセプト候補ステップをスキップ | ✅ |
+| 9 | `components/style/StyleTabs.tsx` — 結果画面の「条件を変えて再生成」ボタンは `purpose / mood / mode` を保持して結果のみクリアし `stage="input"` に戻す | ✅ |
+
+**運用メモ**:
+- DB マイグレーション**不要**
+- 既存 `/outfit?tab=virtual`（理想を探す）タブは変更なし。新タブ1の `virtual` モードと機能重複するが、ガイド付きと直行で住み分け
+- 既存 `/api/ai/coordinate` の互換性は維持（`mood` は省略可能）
+- 「手持ち服から組む」モードは `ownedCount === 0` のとき選択不可（ボタンを無効化＋クローゼット導線を表示）
+
+---
+
 ## Sprint 48: 発見ページを Pinterest/TikTok 的な発見性に強化（コンセプトチップ + カルチャータブ新設）
 
 抽象語入力だけだった `/discover` を、診断結果から自動でコンセプトを提案する「インスピレーション」と、世界観に合うカルチャーを理由付きで紹介する「カルチャー」タブで強化。

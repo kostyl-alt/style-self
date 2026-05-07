@@ -7,6 +7,7 @@ export function buildCoordinateSystemPrompt(
   stylePreference?: StylePreference,
   bodyProfile?: BodyProfile,
   avoidItems?: string[],
+  mood?: string,
 ): string {
   const sections: string[] = [BASE_COORDINATE_PROMPT];
   if (materialContext) {
@@ -44,6 +45,24 @@ export function buildCoordinateSystemPrompt(
     if (bodyProfile.proportionNote)             lines.push(`補足: ${bodyProfile.proportionNote}`);
     sections.push(`\n\n${lines.join("\n")}`);
   }
+  // Sprint 49: 今日の気分（mood）— コーデの方向性を決める強制ヒント
+  if (mood && mood.trim()) {
+    const lines = [
+      "【今日の気分（最優先で反映）】",
+      `ユーザーは今日「${mood}」という気分で服を選んでいる。`,
+      "気分のキーワードに沿った具体的な方向性で組むこと：",
+      "- 静かにいたい：派手な色や強いシルエットを避け、トーン差を小さく抑える",
+      "- 少し印象を残したい：1点だけアクセント（色 or 素材 or 形）を効かせる",
+      "- 大人っぽくしたい：構造重視、ハリのある素材、カチッとした丈感",
+      "- 近づきやすくしたい：肌触りの柔らかい素材、トーン明るめ、抜け感",
+      "- 強く見せたい：黒・濃色を中心、ボリュームのコントラストを作る",
+      "- 余白を出したい：色数を絞り、装飾を引き、白・無彩色を主役にする",
+      "",
+      "選んだアイテムの reason / analysis.what / beliefAlignment のいずれかに、この気分のキーワードを必ず引用すること。",
+    ];
+    sections.push(`\n\n${lines.join("\n")}`);
+  }
+
   // Sprint 47: 着たくない服（Q16）— コーデから外すべき強制的な制約
   if (avoidItems && avoidItems.length > 0) {
     const lines = [

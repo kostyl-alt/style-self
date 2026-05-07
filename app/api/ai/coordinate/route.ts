@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
-    const { scene } = await request.json() as { scene: string };
+    const { scene, mood } = await request.json() as { scene: string; mood?: string };
 
     const { data: userData } = await supabase
       .from("users")
@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
       bodyLines.length ? `身体情報: ${bodyLines.join(", ")}` : "",
       ``,
       `シーン: ${scene}`,
+      mood ? `気分: ${mood}` : "",
       ``,
       `手持ちアイテム（IDを必ず上記のリストから選ぶこと）:`,
       itemList,
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
       stylePreference ?? undefined,
       bodyProfile,
       avoidItems,
+      mood,
     );
 
     const rawCoordinate = await callClaudeJSON<CoordinateAIResponse>({

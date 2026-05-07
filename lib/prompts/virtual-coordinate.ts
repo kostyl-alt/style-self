@@ -11,11 +11,26 @@ function buildContextSections(
   stylePreference?: Record<string, unknown> | null,
   styleAnalysis?: Record<string, unknown> | null,
   worldview?: Record<string, unknown> | null,
+  mood?: string | null,
 ): string[] {
   const sections: string[] = [];
   const ctx = getSeasonContext(season);
 
   sections.push(`\n\n[今回のシーン]\n${scene}`);
+
+  if (mood && mood.trim()) {
+    sections.push(
+      `\n\n[今日の気分（最優先で反映）]\n` +
+      `ユーザーは今日「${mood}」という気分で服を選んでいる。\n` +
+      `この気分が items の reason / whyThisCoordinate に必ず引用されるよう、方向性を統一すること。\n` +
+      `- 静かにいたい：派手色・強シルエットを避け、トーン差を小さく\n` +
+      `- 少し印象を残したい：1点だけアクセントを効かせる\n` +
+      `- 大人っぽくしたい：構造重視、ハリ素材、カチッとした丈\n` +
+      `- 近づきやすくしたい：柔らかい素材、明るめトーン、抜け感\n` +
+      `- 強く見せたい：黒・濃色中心、ボリュームのコントラスト\n` +
+      `- 余白を出したい：色数を絞り、装飾を引き、白・無彩色を主役に`,
+    );
+  }
   sections.push(
     `\n\n[現在の季節・地域]\n` +
     `季節: ${season}\n` +
@@ -182,10 +197,11 @@ export function buildVirtualCoordinatePrompt(
   stylePreference?: Record<string, unknown> | null,
   styleAnalysis?: Record<string, unknown> | null,
   worldview?: Record<string, unknown> | null,
+  mood?: string | null,
 ): string {
   const sections: string[] = [BASE_VIRTUAL_COORDINATE_PROMPT];
   sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
-  sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview));
+  sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview, mood));
 
   // 指定コンセプト（原文）
   sections.push(`\n\n[指定コンセプト]\n${concept}`);
@@ -243,9 +259,10 @@ export function buildVirtualConceptsPrompt(
   stylePreference?: Record<string, unknown> | null,
   styleAnalysis?: Record<string, unknown> | null,
   worldview?: Record<string, unknown> | null,
+  mood?: string | null,
 ): string {
   const sections: string[] = [BASE_VIRTUAL_CONCEPTS_PROMPT];
   sections.push(`\n\n${FASHION_AXES_PROMPT_BLOCK}`);
-  sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview));
+  sections.push(...buildContextSections(scene, season, bodyProfile, stylePreference, styleAnalysis, worldview, mood));
   return sections.join("");
 }

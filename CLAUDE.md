@@ -106,7 +106,7 @@ style-self/
 │   ├── BottomNav.tsx                 # グローバルボトムナビ（Sprint 43で lucide-react SVG + 日本語ラベルに統一）
 │   ├── BrandCard.tsx                 # ブランド提案カード（Sprint 19）
 │   ├── DiagnosisDisplay.tsx          # 診断結果v3 UI共有コンポーネント（onboarding結果＋/self DiagnosisTabで共用）
-│   ├── style/StyleTabs.tsx           # CoordinateTab/VirtualTab/ConsultTab/SavedTab を export（Sprint 43）
+│   ├── style/StyleTabs.tsx           # CoordinateTab/VirtualTab/ConsultTab/SavedTab を export（Sprint 43、Sprint 49でCoordinateTabを4-Step化＋ConceptCandidatesPicker共通化）
 │   ├── closet/ClosetView.tsx         # クローゼット画面（embedded prop で /outfit のサブタブにも対応）（Sprint 43）
 │   ├── discover/InspirationView.tsx  # 抽象語コーデ生成（Sprint 48でパターン別 Inspired Concepts チップを上部に追加）
 │   ├── discover/CultureView.tsx      # カルチャータブ本体（Sprint 48：culturalAffinities + 30日localStorageキャッシュ）
