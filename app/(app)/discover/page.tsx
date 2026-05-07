@@ -2,18 +2,22 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import InspirationView from "@/components/discover/InspirationView";
 import LearnView from "@/components/learn/LearnView";
+import CultureView from "@/components/discover/CultureView";
+import type { StyleDiagnosisResult } from "@/types/index";
 
-type DiscoverTab = "inspiration" | "learn";
+type DiscoverTab = "inspiration" | "learn" | "culture";
 
 const TABS: { value: DiscoverTab; label: string; description: string }[] = [
   { value: "inspiration", label: "インスピレーション", description: "抽象語・テーマからコーデを生成して、新しい表現を見つける" },
   { value: "learn",       label: "ブランドを学ぶ",     description: "ブランド哲学・トレンドの取り入れ方・参照を読む" },
+  { value: "culture",     label: "カルチャー",         description: "あなたの世界観に合う音楽・映画・香水と、その理由" },
 ];
 
 function isDiscoverTab(v: string | null): v is DiscoverTab {
-  return v === "inspiration" || v === "learn";
+  return v === "inspiration" || v === "learn" || v === "culture";
 }
 
 function DiscoverInner() {
@@ -22,11 +26,29 @@ function DiscoverInner() {
   const initialTab = params.get("tab");
   const [activeTab, setActiveTab] = useState<DiscoverTab>(isDiscoverTab(initialTab) ? initialTab : "inspiration");
 
+  const [analysis, setAnalysis] = useState<StyleDiagnosisResult | null>(null);
+
   useEffect(() => {
     const t = params.get("tab");
     if (isDiscoverTab(t) && t !== activeTab) setActiveTab(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  // Sprint 48: 親で1回だけ style_analysis を取得して各タブに props として渡す
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: row } = await supabase
+        .from("users")
+        .select("style_analysis")
+        .eq("id", data.user.id)
+        .single() as unknown as { data: { style_analysis: unknown } | null };
+      if (row?.style_analysis) {
+        setAnalysis(row.style_analysis as StyleDiagnosisResult);
+      }
+    });
+  }, []);
 
   function handleTabChange(t: DiscoverTab) {
     setActiveTab(t);
@@ -59,8 +81,9 @@ function DiscoverInner() {
         {activeTabMeta && (
           <p className="text-xs text-gray-500 mt-3 mb-6 leading-snug">{activeTabMeta.description}</p>
         )}
-        {activeTab === "inspiration" && <InspirationView embedded />}
+        {activeTab === "inspiration" && <InspirationView embedded analysis={analysis} />}
         {activeTab === "learn"       && <LearnView embedded />}
+        {activeTab === "culture"     && <CultureView analysis={analysis} />}
       </div>
     </div>
   );

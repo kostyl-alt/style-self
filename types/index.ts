@@ -314,6 +314,18 @@ export interface CulturalAffinities {
   fragrance: string[];
 }
 
+// Sprint 48: 各カルチャー項目に「なぜあなたの世界観に合うのか」を付ける
+export interface CultureExplanationItem {
+  item:    string;   // "グランジ" / "ジム・ジャームッシュ" / "トバコ" 等
+  reason:  string;   // 60〜100字、「あなたの〜という〇〇」を含む観察文
+}
+
+export interface CultureExplainResponse {
+  music:     CultureExplanationItem[];
+  films:     CultureExplanationItem[];
+  fragrance: CultureExplanationItem[];
+}
+
 export interface FirstPiece {
   name:        string;
   why:         string;

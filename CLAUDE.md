@@ -28,7 +28,7 @@ style-self/
 │   ├── (app)/                            # 認証済みユーザー向けページ
 │   │   ├── layout.tsx                    # (app)グループ共通レイアウト（BottomNav）
 │   │   ├── home/page.tsx                 # ホーム: 世界観カード（タグ+詳しく見る）+今日のコーデ（軽量サマリ）+今日試すべき1アイテム+カルチャー3列+CTA（Sprint 46）
-│   │   ├── discover/page.tsx             # 発見: 2タブ（インスピレーション/ブランドを学ぶ）（Sprint 43で2タブ統合）
+│   │   ├── discover/page.tsx             # 発見: 3タブ（インスピレーション/ブランドを学ぶ/カルチャー）（Sprint 48でカルチャー追加）
 │   │   ├── saved/page.tsx                # 保存: 4セクション（コーデ/商品/投稿*将来/カルチャー*将来）（Sprint 44）
 │   │   ├── outfit/page.tsx               # コーデ: 4タブ（コーデ提案/着こなし相談/クローゼット/理想を探す）（Sprint 44で理想を探すを追加）
 │   │   ├── self/page.tsx                 # 自分: 4タブ（診断/身体/好み/履歴）。Sprint 44で保存コーデは /saved に移動
@@ -61,6 +61,7 @@ style-self/
 │   │   │   ├── analyze-item/route.ts                 # 画像AI解析（Sprint 21 Phase 3）
 │   │   │   ├── analyze-look/route.ts                 # 参考写真の比率・シルエット分析AI（Sprint 34、Sprint 39で履歴保存追加）
 │   │   │   ├── coordinate/route.ts                   # コーデ提案AI
+│   │   │   ├── culture-explain/route.ts              # カルチャー解説AI（Sprint 48: culturalAffinities各項目になぜ合うかを生成）
 │   │   │   ├── learn-insight/route.ts                # 今日の気づき生成AI（Sprint 21 Phase 4）
 │   │   │   ├── profile-fit/route.ts                  # 推奨サイズ感AI
 │   │   │   ├── purchase-check/route.ts               # 購入検討AI判定
@@ -107,7 +108,8 @@ style-self/
 │   ├── DiagnosisDisplay.tsx          # 診断結果v3 UI共有コンポーネント（onboarding結果＋/self DiagnosisTabで共用）
 │   ├── style/StyleTabs.tsx           # CoordinateTab/VirtualTab/ConsultTab/SavedTab を export（Sprint 43）
 │   ├── closet/ClosetView.tsx         # クローゼット画面（embedded prop で /outfit のサブタブにも対応）（Sprint 43）
-│   ├── discover/InspirationView.tsx  # 抽象語コーデ生成（embedded prop で /discover のサブタブにも対応）（Sprint 43）
+│   ├── discover/InspirationView.tsx  # 抽象語コーデ生成（Sprint 48でパターン別 Inspired Concepts チップを上部に追加）
+│   ├── discover/CultureView.tsx      # カルチャータブ本体（Sprint 48：culturalAffinities + 30日localStorageキャッシュ）
 │   ├── learn/LearnView.tsx           # 学び画面（embedded prop で /discover のサブタブにも対応）（Sprint 43）
 │   ├── saved/SavedProductsList.tsx   # 保存商品リスト（wardrobe_items.status='wishlist' を表示）（Sprint 44）
 │   ├── coordinate/
@@ -148,7 +150,8 @@ style-self/
 │   ├── knowledge/
 │   │   ├── fashion-axes.ts           # ファッション判断の8軸（FASHION_AXES + プロンプト用ブロック）
 │   │   ├── worldview-patterns.ts     # 世界観8パターン定数（Sprint 42：診断のソース・オブ・トゥルース）
-│   │   └── diagnosis-questions.ts    # 15問の質問定義（Sprint 42：scoring=score/hint で集計分岐）
+│   │   ├── worldview-concepts.ts     # パターン別 Inspired Concepts チップ（Sprint 48：8パターン×8件のキュレーション語）
+│   │   └── diagnosis-questions.ts    # 16問の質問定義（Sprint 42・47：scoring=score/hint で集計分岐、Q16=avoidItems）
 │   ├── claude.ts                     # Claude APIクライアント
 │   ├── rakuten.ts                    # 楽天APIクライアント
 │   ├── storage.ts                    # Supabase Storage操作
@@ -165,6 +168,7 @@ style-self/
 │       ├── analyze.ts                # スタイル診断・相性判定プロンプト
 │       ├── analyze-item.ts           # 画像AI解析プロンプト（25色・カテゴリ・素材定義付き）
 │       ├── coordinate.ts             # コーデ生成プロンプト（buildCoordinateSystemPrompt）
+│       ├── culture-explain.ts        # カルチャー解説プロンプト（Sprint 48）
 │       ├── learn-insight.ts          # 今日の気づき生成プロンプト（3タイプ×3テーマ）
 │       ├── normalize-product.ts      # 楽天商品属性正規化プロンプト
 │       ├── profile-fit.ts            # 推奨サイズ感AIプロンプト

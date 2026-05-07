@@ -2,6 +2,29 @@
 
 ---
 
+## Sprint 48: 発見ページを Pinterest/TikTok 的な発見性に強化（コンセプトチップ + カルチャータブ新設）
+
+抽象語入力だけだった `/discover` を、診断結果から自動でコンセプトを提案する「インスピレーション」と、世界観に合うカルチャーを理由付きで紹介する「カルチャー」タブで強化。
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/knowledge/worldview-concepts.ts`（新規）— 8 パターン × 8 件の日本語コンセプト phrase をキュレーション。`getConceptsForPattern(patternId)` で取得 | ✅ |
+| 2 | `types/index.ts` — `CultureExplanationItem` / `CultureExplainResponse` 型を追加 | ✅ |
+| 3 | `lib/prompts/culture-explain.ts`（新規）— カルチャー解説プロンプト。「あなたの〜という〇〇」の引用必須・抽象語禁止・JSON 出力 | ✅ |
+| 4 | `app/api/ai/culture-explain/route.ts`（新規）— `culturalAffinities` + `worldviewName` + `avoidImpressions` + `avoidItems` + `idealSelf` を受け取り、各カルチャー項目に reason を付けて返す。入力配列の順序を維持して正規化 | ✅ |
+| 5 | `components/discover/CultureView.tsx`（新規）— 音楽/映画/香水を 3 セクションで縦に並べ、各カードに reason を表示。`localStorage` 30日 TTL でキャッシュ（`patternId` 変更で再 fetch）。未診断時は CTA + サンプル表示 | ✅ |
+| 6 | `components/discover/InspirationView.tsx` — `analysis?: StyleDiagnosisResult` プロップを追加し、上部に「Inspired Concepts」セクション（パターン別 8 件チップ）を追加。タップで既存 `addWord()` に流し込まれる | ✅ |
+| 7 | `app/(app)/discover/page.tsx` — 3 タブ目「カルチャー」を追加。親で `users.style_analysis` を 1 回 fetch して各タブに props として渡す（タブ切替時の二重 fetch 防止） | ✅ |
+
+**運用メモ**:
+- DB マイグレーション**不要**
+- Inspired Concepts は静的キュレーション。新パターン追加時は `worldview-concepts.ts` に対応エントリを書き足す
+- カルチャー解説は `localStorage` キー `culture_explain_cache_v1` に 30 日キャッシュ。`patternId` が変わる（=再診断）と自動破棄
+- `culturalAffinities` 不在の旧結果は CultureView がデフォルト CTA + サンプルにフォールバック
+- API 呼び出しは「カルチャー」タブを開いた瞬間に lazy fire（タブ未訪問ならコスト 0）
+
+---
+
 ## Sprint 47: 診断・出力品質の根本改善（抽象→具体の分解 + Q16 着たくない服）
 
 「逸脱するクリエイター → 黒のロングコート」のように、雰囲気ワードがありがちなジャンル名に直結する問題を解消。診断プロンプトに6軸分解ルールを導入し、firstPiece をパターン定数の上書きから Claude 個別生成に切り替え、Q16「着たくない服」を NG 制約として商品スコア・コーデ生成・診断本文の全てに横断反映。

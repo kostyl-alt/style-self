@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
+import { getConceptsForPattern } from "@/lib/knowledge/worldview-concepts";
 import type {
   AbstractToDesignResponse, CoordinateAIResponse, ResolvedCoordinateItem,
+  StyleDiagnosisResult,
 } from "@/types/index";
 
 const PRESET_WORDS = [
@@ -20,7 +22,13 @@ interface InspireResult {
   resolvedItems: ResolvedCoordinateItem[];
 }
 
-export default function InspirationView({ embedded = false }: { embedded?: boolean }) {
+export default function InspirationView({
+  embedded = false,
+  analysis = null,
+}: {
+  embedded?: boolean;
+  analysis?: StyleDiagnosisResult | null;
+}) {
   const [wordInput, setWordInput]     = useState("");
   const [words, setWords]             = useState<string[]>([]);
   const [theme, setTheme]             = useState("");
@@ -85,6 +93,8 @@ export default function InspirationView({ embedded = false }: { embedded?: boole
         </div>
       );
 
+  const suggestedConcepts = getConceptsForPattern(analysis?.patternId);
+
   return (
     <Wrapper>
       {!embedded && (
@@ -92,6 +102,32 @@ export default function InspirationView({ embedded = false }: { embedded?: boole
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-1">Inspire</p>
           <h1 className="text-2xl font-light text-gray-900">抽象語からコーデを作る</h1>
           <p className="text-sm text-gray-500 mt-2">言語をシルエットに変換します</p>
+        </div>
+      )}
+
+      {/* Sprint 48: 世界観に近いコンセプト（診断結果がある場合のみ） */}
+      {suggestedConcepts.length > 0 && analysis?.worldviewName && (
+        <div className="bg-gray-50 rounded-2xl p-4">
+          <p className="text-[10px] tracking-[0.3em] text-gray-500 uppercase mb-1.5">Inspired Concepts</p>
+          <p className="text-xs text-gray-500 mb-3">
+            あなたの世界観「{analysis.worldviewName}」から
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestedConcepts.map((c) => (
+              <button
+                key={c}
+                onClick={() => addWord(c)}
+                disabled={words.includes(c)}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                  words.includes(c)
+                    ? "border-gray-800 bg-gray-800 text-white"
+                    : "bg-white border-gray-200 text-gray-700 hover:border-gray-400"
+                }`}
+              >
+                #{c}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
