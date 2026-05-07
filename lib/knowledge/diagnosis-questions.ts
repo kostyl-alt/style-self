@@ -201,6 +201,22 @@ export const DIAGNOSIS_QUESTIONS: DiagnosisQuestion[] = [
     hint:     "任意入力。例：「90年代のNYブルックリンの空気」「ローブ・ディシャンブルみたいな佇まい」「制服のように整った人」など。スキップ可能。",
     options: [],
   },
+  {
+    id: "q16", step: 16, kind: "multi", scoring: "hint", required: false,
+    question: "着たくない服はどれですか？",
+    hint:     "複数選択可。スキップ可能。コーデ・商品提案時に避ける材料として使われます。",
+    options: [
+      { id: "q16a", label: "タイトすぎる服" },
+      { id: "q16b", label: "ロング丈のコート・スカート" },
+      { id: "q16c", label: "大きなロゴ・プリント" },
+      { id: "q16d", label: "フリル・レース・装飾が多い服" },
+      { id: "q16e", label: "光沢・ツヤのある素材" },
+      { id: "q16f", label: "カジュアルすぎるスウェット" },
+      { id: "q16g", label: "きれいめすぎるスーツ・フォーマル" },
+      { id: "q16h", label: "短すぎる丈" },
+      { id: "q16i", label: "特にない" },
+    ],
+  },
 ];
 
 export function getQuestionById(id: string): DiagnosisQuestion | undefined {

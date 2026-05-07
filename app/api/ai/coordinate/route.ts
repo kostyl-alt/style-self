@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const { data: userData } = await supabase
       .from("users")
-      .select("style_axis, worldview, height, weight, body_type, body_tendency, weight_center, shoulder_width, style_preference, body_profile")
+      .select("style_axis, worldview, height, weight, body_type, body_tendency, weight_center, shoulder_width, style_preference, body_profile, avoid_items")
       .eq("id", user.id)
       .single() as unknown as {
         data: {
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
           shoulder_width: string | null;
           style_preference: unknown;
           body_profile: BodyProfile | null;
+          avoid_items: string[] | null;
         } | null;
       };
 
@@ -130,11 +131,13 @@ export async function POST(request: NextRequest) {
     const colors = Array.from(new Set(wardrobeItems.flatMap((i) => [i.color, i.subColor]).filter((c): c is string => !!c)));
     const stylePreference = userData?.style_preference as StylePreference | null | undefined;
     const bodyProfile     = userData?.body_profile ?? undefined;
+    const avoidItems      = userData?.avoid_items ?? [];
     const systemPrompt = buildCoordinateSystemPrompt(
       getMaterialContext(materials),
       getColorContext(colors),
       stylePreference ?? undefined,
-      bodyProfile
+      bodyProfile,
+      avoidItems,
     );
 
     const rawCoordinate = await callClaudeJSON<CoordinateAIResponse>({

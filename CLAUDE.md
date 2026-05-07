@@ -203,7 +203,8 @@ style-self/
 │   │   ├── 017_product_curation.sql       # Sprint 41: external_products拡張 + product_concept_tags新規
 │   │   ├── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
 │   │   ├── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
-│   │   └── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
+│   │   ├── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
+│   │   └── 021_avoid_items.sql            # Sprint 47: users.avoid_items text[]（Q16「着たくない服」をNG制約として保存）
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
@@ -250,7 +251,7 @@ ADMIN_EMAILS=
 
 | テーブル | 用途 |
 |---------|------|
-| `users` | ユーザープロフィール・スタイル軸 |
+| `users` | ユーザープロフィール・スタイル軸（Sprint 47で `avoid_items text[]` 追加） |
 | `wardrobe_items` | 手持ちアイテム（status / worldview_score / worldview_tags 含む） |
 | `coordinates` | 保存済みコーデ |
 | `external_products` | 楽天等の外部商品マスタ |

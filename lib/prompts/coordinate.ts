@@ -5,7 +5,8 @@ export function buildCoordinateSystemPrompt(
   materialContext: string,
   colorContext: string,
   stylePreference?: StylePreference,
-  bodyProfile?: BodyProfile
+  bodyProfile?: BodyProfile,
+  avoidItems?: string[],
 ): string {
   const sections: string[] = [BASE_COORDINATE_PROMPT];
   if (materialContext) {
@@ -41,6 +42,26 @@ export function buildCoordinateSystemPrompt(
     if (adj.recommendedSilhouettes.length)      lines.push(`推奨シルエット: ${adj.recommendedSilhouettes.join("・")}`);
     if (adj.avoidElements.length)               lines.push(`避けるべき要素: ${adj.avoidElements.join("・")}`);
     if (bodyProfile.proportionNote)             lines.push(`補足: ${bodyProfile.proportionNote}`);
+    sections.push(`\n\n${lines.join("\n")}`);
+  }
+  // Sprint 47: 着たくない服（Q16）— コーデから外すべき強制的な制約
+  if (avoidItems && avoidItems.length > 0) {
+    const lines = [
+      "【着たくない服（Q16 / 強制制約）】",
+      "以下のいずれかに該当する服はコーデに含めてはいけない。",
+      "選んだアイテムが該当しないか必ず確認してから返答すること。",
+      ...avoidItems.map((x) => `- ${x}`),
+      "",
+      "解釈の指針:",
+      "- 「タイトすぎる服」→ silhouette: タイト・スキニーを選ばない",
+      "- 「ロング丈のコート・スカート」→ 丈はミドル以下を選ぶ",
+      "- 「光沢・ツヤのある素材」→ サテン・シルク・エナメルを選ばない",
+      "- 「短すぎる丈」→ クロップド・ミニを選ばない",
+      "- 「フリル・レース・装飾が多い服」→ 装飾要素のあるアイテムを選ばない",
+      "- 「カジュアルすぎるスウェット」→ スウェット・パーカー・トレーナーを選ばない",
+      "- 「きれいめすぎるスーツ・フォーマル」→ スーツ・セットアップを選ばない",
+      "- 「大きなロゴ・プリント」→ ロゴ・グラフィックの目立つアイテムを選ばない",
+    ];
     sections.push(`\n\n${lines.join("\n")}`);
   }
   return sections.join("");

@@ -131,6 +131,32 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
                 {analysis.firstPiece.why && (
                   <p className="text-sm text-gray-700 leading-relaxed mb-4">{analysis.firstPiece.why}</p>
                 )}
+
+                {/* Sprint 47: 構造分解された理由 */}
+                {(analysis.firstPiece.whyLength
+                  || analysis.firstPiece.whyMaterial
+                  || analysis.firstPiece.whyWeight
+                  || analysis.firstPiece.whereToWear
+                  || analysis.firstPiece.photoLook) && (
+                  <div className="bg-white/60 border border-amber-100 rounded-xl p-4 mb-4 space-y-2.5">
+                    {analysis.firstPiece.whyLength && (
+                      <FirstPieceReason label="丈" text={analysis.firstPiece.whyLength} />
+                    )}
+                    {analysis.firstPiece.whyMaterial && (
+                      <FirstPieceReason label="素材" text={analysis.firstPiece.whyMaterial} />
+                    )}
+                    {analysis.firstPiece.whyWeight && (
+                      <FirstPieceReason label="重さ" text={analysis.firstPiece.whyWeight} />
+                    )}
+                    {analysis.firstPiece.whereToWear && (
+                      <FirstPieceReason label="着る場所" text={analysis.firstPiece.whereToWear} />
+                    )}
+                    {analysis.firstPiece.photoLook && (
+                      <FirstPieceReason label="写真の写り" text={analysis.firstPiece.photoLook} />
+                    )}
+                  </div>
+                )}
+
                 {analysis.firstPiece.zozoKeyword && (
                   <a
                     href={buildZozoSearchUrl({ keyword: analysis.firstPiece.zozoKeyword })}
@@ -321,6 +347,15 @@ function ChipRow({ title, items }: { title: string; items: string[] }) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function FirstPieceReason({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="text-[10px] text-amber-700 tracking-widest uppercase pt-0.5 w-16 flex-shrink-0">{label}</span>
+      <p className="text-xs text-gray-700 leading-relaxed">{text}</p>
     </div>
   );
 }

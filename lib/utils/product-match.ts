@@ -16,7 +16,26 @@ export interface ScoringContext {
   ngElements?:      string[];   // interpretation.ngElements + user.preference.ngElements
   bodyConcerns?:    string[];   // user.body_profile.concerns
   currentSeason?:   string;     // "春"/"夏"/"秋"/"冬"。未指定時は getSeasonJST() で算出
+  avoidItems?:      string[];   // Sprint 47: users.avoid_items（Q16の選択ラベル）
 }
+
+// Sprint 47: avoid item ラベル → 商品検出キーワードのマッピング
+// 各 avoid ラベルが商品のどのフィールドに当たれば「合わない」と判定するかを定義する。
+const AVOID_ITEM_KEYWORDS: Record<string, {
+  silhouettes?:  string[];   // normalized_silhouette と完全一致
+  materials?:    string[];   // normalized_materials の要素と完全一致
+  tastes?:       string[];   // normalized_taste の要素と完全一致
+  nameKeywords?: string[];   // name に substring 一致（length>=2 のみ）
+}> = {
+  "タイトすぎる服":               { silhouettes: ["タイト", "スキニー"], nameKeywords: ["タイト", "スキニー"] },
+  "ロング丈のコート・スカート":   { silhouettes: ["ロング"], nameKeywords: ["ロングコート", "ロングスカート", "ロング丈"] },
+  "大きなロゴ・プリント":         { nameKeywords: ["ロゴ", "プリント", "グラフィック"] },
+  "フリル・レース・装飾が多い服": { nameKeywords: ["フリル", "レース", "リボン", "装飾"] },
+  "光沢・ツヤのある素材":         { materials: ["サテン", "シルク", "エナメル"], nameKeywords: ["光沢", "ツヤ", "サテン", "エナメル"] },
+  "カジュアルすぎるスウェット":   { tastes: ["カジュアル"], nameKeywords: ["スウェット", "パーカー", "トレーナー"] },
+  "きれいめすぎるスーツ・フォーマル": { tastes: ["フォーマル"], nameKeywords: ["スーツ", "セットアップ", "フォーマル"] },
+  "短すぎる丈":                   { silhouettes: ["クロップド", "ショート丈"], nameKeywords: ["クロップド", "ミニ", "ショート丈"] },
+};
 
 // VirtualCoordinateItem と ExternalProduct のスコアを計算する。
 // カテゴリ一致は前提（呼び出し側でフィルタ済み）なので +50 スタート。
@@ -143,7 +162,38 @@ export function scoreProduct(
     }
   }
 
+  // ---- Sprint 47: avoidItems ペナルティ（着たくない服 Q16） ----
+  // ユーザーが診断で「着たくない」と答えた形・素材に該当する商品は -30 点。
+  // ngElements とは独立に評価する（重複しても問題ない設計）。
+  if (ctx.avoidItems && ctx.avoidItems.length > 0) {
+    const avoidHit = ctx.avoidItems.some((label) => isAvoidHit(label, product));
+    if (avoidHit) {
+      score -= 30;
+    }
+  }
+
   return { score, matchReasons: reasons };
+}
+
+// Sprint 47: avoidItems の判定。AVOID_ITEM_KEYWORDS に基づき、
+// silhouette / materials / tastes は完全一致、name は length>=2 の substring を許可。
+function isAvoidHit(avoidLabel: string, product: ExternalProduct): boolean {
+  const map = AVOID_ITEM_KEYWORDS[avoidLabel];
+  if (!map) return false;
+
+  if (map.silhouettes && product.normalizedSilhouette) {
+    if (map.silhouettes.includes(product.normalizedSilhouette)) return true;
+  }
+  if (map.materials) {
+    if (map.materials.some((m) => product.normalizedMaterials.includes(m))) return true;
+  }
+  if (map.tastes) {
+    if (map.tastes.some((t) => product.normalizedTaste.includes(t))) return true;
+  }
+  if (map.nameKeywords && product.name) {
+    if (map.nameKeywords.some((kw) => kw.length >= 2 && product.name.includes(kw))) return true;
+  }
+  return false;
 }
 
 // ---- ヘルパー（Sprint 41.3） ----

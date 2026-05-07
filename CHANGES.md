@@ -2,6 +2,36 @@
 
 ---
 
+## Sprint 47: 診断・出力品質の根本改善（抽象→具体の分解 + Q16 着たくない服）
+
+「逸脱するクリエイター → 黒のロングコート」のように、雰囲気ワードがありがちなジャンル名に直結する問題を解消。診断プロンプトに6軸分解ルールを導入し、firstPiece をパターン定数の上書きから Claude 個別生成に切り替え、Q16「着たくない服」を NG 制約として商品スコア・コーデ生成・診断本文の全てに横断反映。
+
+| # | 内容 | 状態 |
+|---|------|------|
+| 1 | `lib/prompts/analyze.ts` — 「抽象→具体の分解ルール（6軸：種類/明度/光沢/露出/重さ/写り方）」セクション追加。ありきたりなジャンル名の直結を禁止し、avoidItems を逆方向制約として効かせる指針を追加 | ✅ |
+| 2 | `lib/prompts/analyze.ts` — `firstPiece` 出力スキーマを 5 fields 拡張（whyLength/whyMaterial/whyWeight/whereToWear/photoLook）。`unconsciousTendency` は 120字に拡大し「回答引用 / 惹かれる理由 / 嫌悪の根拠」3点必須化 | ✅ |
+| 3 | `types/index.ts` — `FirstPiece` 拡張、`StyleDiagnosisResult.avoidItems?: string[]` 追加 | ✅ |
+| 4 | `types/database.ts` — `users.avoid_items text[]` を Row/Insert/Update に追加 | ✅ |
+| 5 | `lib/validators/analyze.ts` — 新 firstPiece フィールド検証、`avoidItems` 配列検証。**`applyPatternToResult` で firstPiece をパターン上書きから「Claude 空欄時のみフォールバック」に変更** | ✅ |
+| 6 | `lib/knowledge/diagnosis-questions.ts` — Q16 を追加（kind: multi / scoring: hint / required: false / 9選択肢「特にない」含む） | ✅ |
+| 7 | `lib/utils/worldview-matcher.ts` — `extractAvoidItems` ヘルパー追加（「特にない」選択時は空配列） | ✅ |
+| 8 | `app/api/ai/analyze/route.ts` — Q16 抽出 → プロンプトに `[Q16 着たくない服 / avoidItems]` 行追加 → `result.avoidItems` 設定 → `users.avoid_items` 保存 | ✅ |
+| 9 | `supabase/migrations/021_avoid_items.sql` — `users.avoid_items text[] default '{}'` を新規追加 | ✅ |
+| 10 | `lib/utils/product-match.ts` — `ScoringContext.avoidItems` 追加。`AVOID_ITEM_KEYWORDS` マッピング表（8ラベル→silhouette/material/taste/name の検出キーワード）追加。`scoreProduct` に **-30 点** ペナルティブロック追加。`isAvoidHit` ヘルパーで完全一致＋name 部分一致を判定 | ✅ |
+| 11 | `app/api/products/match/route.ts` — `users.avoid_items` を読み出し、`ctx.avoidItems` に渡す。ログにも件数を出力 | ✅ |
+| 12 | `lib/prompts/coordinate.ts` — `buildCoordinateSystemPrompt` に `avoidItems?` 引数追加。「着たくない服（Q16 / 強制制約）」セクションをシステムプロンプトに注入し、解釈の指針8件を明示 | ✅ |
+| 13 | `app/api/ai/coordinate/route.ts` — `users.avoid_items` を読み出して prompt builder に渡す | ✅ |
+| 14 | `components/DiagnosisDisplay.tsx` — firstPiece カードに新 5 fields の表示ブロック追加（丈/素材/重さ/着る場所/写真の写り）。`FirstPieceReason` ヘルパーコンポーネント新規 | ✅ |
+
+**運用メモ**:
+- マイグレーション**必要**：`021_avoid_items.sql` を Supabase に適用すること
+- 既存ユーザーの `avoid_items` は空配列（`'{}'`）で初期化される。再診断するまで NG ペナルティは効かない（下位互換）
+- Q16 は `scoring: "hint"` なのでパターン判定スコアには影響しない（既存ロジック保護）
+- Q16 の「特にない（q16i）」を選んだ場合は `extractAvoidItems` が空配列を返すため、無効な NG が立たない
+- firstPiece のパターン上書き廃止により、診断結果ごとに固有の名前・5つの理由が出る。Claude が空欄を返した場合のみパターン定数値（例：「白の細番手シャツ」）にフォールバック
+
+---
+
 ## Sprint 46: ホームページを「今日、世界観をどう使うか」に強化
 
 世界観カード+CTAだけだったホームを、診断結果から「今日のコーデ」「今日試すべき1アイテム」「世界観に合うカルチャー」を導出する1画面に再構成。

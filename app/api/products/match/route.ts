@@ -116,15 +116,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "items 配列が必要です" }, { status: 400 });
     }
 
-    // ユーザーの体型悩み（bodyConcerns）を取得
+    // ユーザーの体型悩み（bodyConcerns）と着たくない服（avoidItems）を取得
     const { data: userData } = await supabase
       .from("users")
-      .select("body_profile, style_preference")
+      .select("body_profile, style_preference, avoid_items")
       .eq("id", user.id)
       .single() as unknown as {
         data: {
           body_profile:     BodyProfile | null;
           style_preference: { ngElements?: string[] } | null;
+          avoid_items:      string[] | null;
         } | null;
       };
 
@@ -135,10 +136,11 @@ export async function POST(request: NextRequest) {
         ...((userData?.style_preference?.ngElements ?? []) as string[]),
       ],
       bodyConcerns: (userData?.body_profile?.concerns as string[] | undefined) ?? [],
+      avoidItems:   userData?.avoid_items ?? [],
     };
 
     console.log(
-      `[match] items=${items.length} conceptKeywords=${ctx.conceptKeywords?.length ?? 0} ngElements=${ctx.ngElements?.length ?? 0} bodyConcerns=${ctx.bodyConcerns?.length ?? 0}`,
+      `[match] items=${items.length} conceptKeywords=${ctx.conceptKeywords?.length ?? 0} ngElements=${ctx.ngElements?.length ?? 0} bodyConcerns=${ctx.bodyConcerns?.length ?? 0} avoidItems=${ctx.avoidItems?.length ?? 0}`,
     );
 
     // 全アイテム並列でマッチング

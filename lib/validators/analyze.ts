@@ -93,7 +93,25 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
       f.name        = f.name.trim();
       f.why         = typeof f.why === "string" ? f.why.trim() : "";
       f.zozoKeyword = typeof f.zozoKeyword === "string" ? f.zozoKeyword.trim() : f.name;
+      // Sprint 47: 構造分解された理由フィールド（任意）
+      const trimOrDelete = (key: keyof typeof f) => {
+        const v = f[key];
+        if (typeof v === "string" && v.trim()) {
+          (f[key] as string) = v.trim();
+        } else if (v !== undefined) {
+          delete f[key];
+        }
+      };
+      trimOrDelete("whyLength");
+      trimOrDelete("whyMaterial");
+      trimOrDelete("whyWeight");
+      trimOrDelete("whereToWear");
+      trimOrDelete("photoLook");
     }
+  }
+
+  if (result.avoidItems !== undefined && !Array.isArray(result.avoidItems)) {
+    result.avoidItems = [];
   }
 
   return result;
@@ -101,6 +119,10 @@ export function validateAndFixStyleDiagnosis(result: StyleDiagnosisResult): Styl
 
 // Sprint 42: Claude が文章フィールドを返した後、パターン値で確定フィールドを上書きする。
 // Claude が誤って色や素材を変更してもここで pattern 値に統一されるため、結果の安定性が保たれる。
+//
+// Sprint 47: firstPiece はパターン上書きを廃止し、Claude 生成を優先する。
+// Claude が空欄を返した場合のみパターン値をフォールバックに使う。
+// （理由：「逸脱するクリエイター」→「黒のロングコート」のようなパターン名直結を避けるため）
 export function applyPatternToResult(
   result: StyleDiagnosisResult,
   pattern: WorldviewPattern,
@@ -116,10 +138,13 @@ export function applyPatternToResult(
     films:     [...pattern.films],
     fragrance: [...pattern.fragrance],
   };
-  result.firstPiece = {
-    name:        pattern.firstPiece.name,
-    why:         pattern.firstPiece.why,
-    zozoKeyword: pattern.firstPiece.zozoKeyword,
-  };
+  // Sprint 47: Claude が firstPiece を返さなかった/欠損した場合だけパターン値を使う
+  if (!result.firstPiece || !result.firstPiece.name) {
+    result.firstPiece = {
+      name:        pattern.firstPiece.name,
+      why:         pattern.firstPiece.why,
+      zozoKeyword: pattern.firstPiece.zozoKeyword,
+    };
+  }
   return result;
 }

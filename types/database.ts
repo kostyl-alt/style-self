@@ -32,6 +32,7 @@ export interface Database {
           fit_recommendation: string | null;
           worldview: Json | null;
           style_analysis: Json | null;
+          avoid_items: string[] | null;
           created_at: string;
           updated_at: string;
         };
@@ -57,6 +58,7 @@ export interface Database {
           fit_recommendation?: string | null;
           worldview?: Json | null;
           style_analysis?: Json | null;
+          avoid_items?: string[] | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -80,6 +82,7 @@ export interface Database {
           fit_recommendation?: string | null;
           worldview?: Json | null;
           style_analysis?: Json | null;
+          avoid_items?: string[] | null;
           updated_at?: string;
         };
       };

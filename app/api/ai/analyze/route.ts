@@ -4,7 +4,7 @@ import { ANALYZE_SYSTEM_PROMPT } from "@/lib/prompts/analyze";
 import { validateAndFixStyleDiagnosis, applyPatternToResult } from "@/lib/validators/analyze";
 import { createServiceClient } from "@/lib/supabase";
 import { insertAiHistory } from "@/lib/utils/history-helper";
-import { matchWorldview, extractHintAnswers, buildInputMapping } from "@/lib/utils/worldview-matcher";
+import { matchWorldview, extractHintAnswers, extractAvoidItems, buildInputMapping } from "@/lib/utils/worldview-matcher";
 import { getPatternById } from "@/lib/knowledge/worldview-patterns";
 import { DIAGNOSIS_QUESTIONS, getQuestionById } from "@/lib/knowledge/diagnosis-questions";
 import type { Json } from "@/types/database";
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Claude へ渡す入力を構築
     const { troubleLabel, freeText } = extractHintAnswers(answers);
+    const avoidItems = extractAvoidItems(answers);
     const labeledAnswers = answers.map((a) => {
       const q = getQuestionById(a.questionId);
       if (!q) return null;
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
       "",
       `[Q14 困りごと（dailyAdvice/buyingPriorityのヒント）]: ${troubleLabel ?? "未回答"}`,
       `[Q15 自由記述（任意）]: ${freeText ?? "なし"}`,
+      `[Q16 着たくない服 / avoidItems]: ${avoidItems.length > 0 ? avoidItems.join("、") : "なし"}`,
     ].join("\n");
 
     // Step 3: Claude で文章フィールドのみ生成
@@ -80,6 +82,9 @@ export async function POST(request: NextRequest) {
     // Step 5: inputMapping はアプリ側で組み立てる（Claude に頼らない）
     result.inputMapping = buildInputMapping(answers);
 
+    // Sprint 47: Q16 で選んだ avoidItems を結果オブジェクトにも保持（プロンプト出力ではなく入力由来）
+    result.avoidItems = avoidItems;
+
     // Step 6: 永続化
     if (userId) {
       const supabase = createServiceClient();
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
         style_axis:        result.styleAxis as unknown as Json,
         style_analysis:    result as unknown as Json,
         style_preference:  (result.preference ?? null) as unknown as Json,
+        avoid_items:       avoidItems,
         onboarding_completed: true,
       } as never).eq("id", userId);
 

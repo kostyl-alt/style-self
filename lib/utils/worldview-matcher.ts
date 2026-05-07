@@ -112,6 +112,19 @@ export function extractHintAnswers(answers: DiagnosisAnswerV2[]): {
   return { troubleLabel, freeText };
 }
 
+// Sprint 47: Q16（着たくない服）を取り出すヘルパー。
+// "特にない"（q16i）が選ばれていた場合は他の選択を含めず空配列を返す。
+export function extractAvoidItems(answers: DiagnosisAnswerV2[]): string[] {
+  const ans = answers.find((a) => a.questionId === "q16");
+  if (!ans) return [];
+  const q = getQuestionById("q16");
+  if (!q) return [];
+  if (ans.optionIds.includes("q16i")) return [];
+  return ans.optionIds
+    .map((id) => q.options.find((o) => o.id === id)?.label)
+    .filter((x): x is string => !!x);
+}
+
 // inputMapping をアプリ側で組み立てる（Claude に頼らない）
 export function buildInputMapping(
   answers: DiagnosisAnswerV2[],

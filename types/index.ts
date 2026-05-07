@@ -318,6 +318,12 @@ export interface FirstPiece {
   name:        string;
   why:         string;
   zozoKeyword: string;
+  // Sprint 47: 構造分解された理由フィールド（任意・Claude生成）
+  whyLength?:    string;   // なぜその丈なのか
+  whyMaterial?:  string;   // なぜその素材なのか
+  whyWeight?:    string;   // なぜその重さ・ボリュームなのか
+  whereToWear?:  string;   // どんな場所で着るか
+  photoLook?:    string;   // 写真に撮った時どう見えるか
 }
 
 export interface StyleDiagnosisResult {
@@ -350,6 +356,8 @@ export interface StyleDiagnosisResult {
   firstPiece?:           FirstPiece;
   // v4 (Sprint 42: パターン駆動診断)
   patternId?:            string;
+  // v5 (Sprint 47: 着たくない服の Q16 回答)
+  avoidItems?:           string[];
 }
 
 // ---- Sprint 42: 世界観パターン駆動診断 ----
