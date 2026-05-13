@@ -371,3 +371,53 @@ supabase.from("foo").update({ field: value } as never)
 ### 楽天API 認証
 `RAKUTEN_ACCESS_KEY` を優先し、未設定の場合は `RAKUTEN_APP_ID` にフォールバック。
 現状 UUID形式のIDはAPIに拒否される問題あり（未解決）。
+
+---
+
+## Knowledge OS 連携
+
+このプロジェクトは Knowledge OS（管理者専用ナレッジOS）に MCP 経由で接続されています。
+過去の判断ルール・本のメモ・画像分析・影響源分析・改善履歴が全て参照可能です。
+
+### コードを書く前に必ず実行すること
+
+1. **query_knowledge** で関連ナレッジを取得
+   例: query_knowledge({ question: "コーデ提案を改善したい" })
+
+2. **get_decision_rules** で適用すべき判断ルールを確認
+   例: get_decision_rules({ category: "コーデ提案", importance_min: 4 })
+
+3. **get_failure_patterns** で過去の失敗を回避
+   例: get_failure_patterns({ context: "AI出力の浅さ" })
+
+4. **get_fashion_rules** でファッション判断ルールを取得（ファッション関連の機能の場合）
+   例: get_fashion_rules({ worldview_tags: ["minimal", "street"] })
+
+5. **get_influences** で文化的・芸術的影響源を参照（世界観関連の場合）
+   例: get_influences({ subject_name: "ジードラゴン" })
+
+### ナレッジ参照の優先順位
+
+1. 必ず最初に query_knowledge を呼んで全体像を把握
+2. 続いて get_decision_rules で具体的なルールを確認
+3. 重要な機能を変更する前に get_failure_patterns で過去の失敗を確認
+4. ファッション・コーデ関連なら get_fashion_rules + get_influences も併用
+
+### ナレッジが矛盾している場合
+
+- importance が高い方を優先
+- confidence が高い方を優先
+- より新しい created_at を優先
+- それでも判断できなければユーザーに確認
+
+### ナレッジを使った後の報告ルール
+
+コード実装後、以下を必ず報告してください：
+- 使用したナレッジ（query_knowledge の関連IDs）
+- 適用した判断ルール
+- 回避した失敗パターン
+
+### 重要
+
+新しい機能を実装する前に、必ず該当する判断ルール・失敗パターンを確認すること。
+過去の知見を活用することで、同じ失敗を繰り返さず、一貫した世界観を保てる。

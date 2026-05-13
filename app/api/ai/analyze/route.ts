@@ -7,8 +7,9 @@ import { insertAiHistory } from "@/lib/utils/history-helper";
 import { matchWorldview, extractHintAnswers, extractAvoidItems, buildInputMapping } from "@/lib/utils/worldview-matcher";
 import { getPatternById } from "@/lib/knowledge/worldview-patterns";
 import { DIAGNOSIS_QUESTIONS, getQuestionById } from "@/lib/knowledge/diagnosis-questions";
+import { getInfluences, getDecisionRules } from "@/lib/knowledge-os/client";
 import type { Json } from "@/types/database";
-import type { DiagnosisAnswerV2, OnboardingAnswer, StyleDiagnosisResult } from "@/types/index";
+import type { DiagnosisAnswerV2, OnboardingAnswer, StyleDiagnosisResult, WorldviewPattern } from "@/types/index";
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,10 +69,14 @@ export async function POST(request: NextRequest) {
       `[Q16 着たくない服 / avoidItems]: ${avoidItems.length > 0 ? avoidItems.join("、") : "なし"}`,
     ].join("\n");
 
+    // Step 2.5: Knowledge OS から影響源・判断ルールを取得して userMessage に注入
+    const knowledgeContext = await fetchKnowledgeOSContext(pattern, match.topTags);
+    const enhancedUserMessage = knowledgeContext ? `${userMessage}\n\n${knowledgeContext}` : userMessage;
+
     // Step 3: Claude で文章フィールドのみ生成
     const rawResult = await callClaudeJSON<StyleDiagnosisResult>({
       systemPrompt: ANALYZE_SYSTEM_PROMPT,
-      userMessage,
+      userMessage: enhancedUserMessage,
       maxTokens: 3500,
     });
 
@@ -145,4 +150,43 @@ export async function POST(request: NextRequest) {
     console.warn("[analyze] failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "分析に失敗しました" }, { status: 500 });
   }
+}
+
+async function fetchKnowledgeOSContext(
+  _pattern: WorldviewPattern,
+  _topTags: string[],
+): Promise<string> {
+  const [influences, rules] = await Promise.all([
+    getInfluences({ importance_min: 4, limit: 5 }),
+    getDecisionRules({ importance_min: 4, limit: 5 }),
+  ]);
+
+  if (influences.length === 0 && rules.length === 0) {
+    return "";
+  }
+
+  const influenceText = influences
+    .map((i) => [
+      `### ${i.subject_name}`,
+      `- 世界観: ${(i.influences?.worldview ?? []).join("、")}`,
+      `- 哲学: ${(i.influences?.philosophy ?? []).join("、")}`,
+      `- 文化: ${(i.influences?.culture ?? []).join("、")}`,
+      `- 美意識(fusion_essence): ${i.fusion_essence ?? ""}`,
+    ].join("\n"))
+    .join("\n\n");
+
+  const ruleText = rules.map((r) => `- ${r.rule}`).join("\n");
+
+  return [
+    "[Knowledge OS 参考情報]",
+    "",
+    "以下は過去の偉人・デザイナー・思想家の影響源データ。",
+    "診断結果の文章を豊かにするための参考情報として使ってください。",
+    "",
+    "## 関連する影響源:",
+    influenceText,
+    "",
+    "## 関連する判断ルール:",
+    ruleText,
+  ].join("\n");
 }
