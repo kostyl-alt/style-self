@@ -312,6 +312,16 @@ export interface CulturalAffinities {
   music:     string[];
   films:     string[];
   fragrance: string[];
+  // v6 (analyze-v2): 13項目11番の「アート」を独立カテゴリとして追加。
+  // 既存パターン駆動診断では未生成のため optional。
+  art?:      string[];
+}
+
+// v6 (analyze-v2): 13項目13番「近い世界観の人・投稿・コミュニティ」の準備として、
+// AI が選んだ影響源 + 理由をユーザーの結果に保持する。
+export interface RelatedInfluencer {
+  subject_name: string;
+  reason:       string;
 }
 
 // Sprint 48: 各カルチャー項目に「なぜあなたの世界観に合うのか」を付ける
@@ -370,6 +380,14 @@ export interface StyleDiagnosisResult {
   patternId?:            string;
   // v5 (Sprint 47: 着たくない服の Q16 回答)
   avoidItems?:           string[];
+  // v6 (analyze-v2 / アプローチ2): AI が世界観を毎回構築する形。
+  // 8パターンに依存せず固有の世界観名・関連影響源・小物・worldview_tags を返す。
+  // 既存パターン診断との後方互換のため全て optional。
+  recommendedAccessories?: string[];   // 13項目の9番
+  recommendedBrands?:      string[];   // 13項目の10番(従来は pattern.brands から流していた)
+  relatedInfluencers?:     RelatedInfluencer[]; // 13項目の13番
+  worldview_tags?:         string[];   // 商品マッチング用の英語スラッグ配列
+  worldview_keywords?:     string[];   // 世界観を表す 3〜5 語
 }
 
 // ---- Sprint 42: 世界観パターン駆動診断 ----

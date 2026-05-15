@@ -34,6 +34,23 @@ export interface InfluenceData {
   influence_decision_rules?: unknown[];
   visual_signatures?: unknown;
   importance?: number;
+  // Sprint 17 Phase 1 で MCP が返すカテゴリ階層メタ（未紐付けは null）
+  category_id?: string | null;
+  category_slug?: string | null;
+  category_name?: string | null;
+}
+
+export interface CategoryData {
+  id: string;
+  slug: string;
+  name: string;
+  parent_id: string | null;
+  parent_slug: string | null;
+  description: string | null;
+  sort_order: number;
+  is_system: boolean;
+  influence_count?: number;
+  entry_count?: number;
 }
 
 export interface DecisionRule {
@@ -51,15 +68,25 @@ export interface DecisionRule {
 interface GetInfluencesArgs {
   subject_name?: string;
   category?: string;
+  // Sprint 17 Phase 1: 新カテゴリ階層 slug でフィルタ
+  category_slug?: string;
+  include_children?: boolean;
   importance_min?: number;
   limit?: number;
 }
 
 interface GetDecisionRulesArgs {
   project?: string;
+  category_slug?: string;
+  include_children?: boolean;
   importance_min?: number;
   min_confidence?: number;
   limit?: number;
+}
+
+interface GetCategoriesArgs {
+  parent_slug?: string;
+  include_counts?: boolean;
 }
 
 async function callTool<T>(name: string, args: Record<string, unknown>): Promise<T[]> {
@@ -127,4 +154,8 @@ export async function getInfluences(args: GetInfluencesArgs = {}): Promise<Influ
 
 export async function getDecisionRules(args: GetDecisionRulesArgs = {}): Promise<DecisionRule[]> {
   return callTool<DecisionRule>("get_decision_rules", args as Record<string, unknown>);
+}
+
+export async function getCategories(args: GetCategoriesArgs = {}): Promise<CategoryData[]> {
+  return callTool<CategoryData>("get_categories", args as Record<string, unknown>);
 }
