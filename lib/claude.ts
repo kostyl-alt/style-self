@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { writeFile } from "fs/promises";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -6,22 +7,40 @@ const anthropic = new Anthropic({
 
 export const MODEL = "claude-sonnet-4-6";
 
+// JSON parse 失敗時に Claude の生レスポンスを /tmp に退避する。
+// 書き込み自体が失敗しても元のパースエラーは握りつぶさずに上に投げ直すため、
+// この関数は throw しない(内側で try/catch して飲み込む)。
+async function saveRawResponseToTmp(text: string): Promise<void> {
+  const path = `/tmp/claude-error-${Date.now()}.txt`;
+  try {
+    await writeFile(path, text);
+    console.error(`[claude] parse failed, raw response saved to ${path}`);
+  } catch {
+    // 書き込みエラーは無視（元のパースエラー情報を優先）
+  }
+}
+
 export interface ClaudeRequestOptions {
   systemPrompt: string;
   userMessage: string;
   maxTokens?: number;
+  // analyze-v2 (アプローチ2) で再現性をある程度確保するため optional で追加。
+  // 既存呼び出しは未指定 = SDK デフォルトで挙動不変。
+  temperature?: number;
 }
 
 export async function callClaude({
   systemPrompt,
   userMessage,
   maxTokens = 2048,
+  temperature,
 }: ClaudeRequestOptions): Promise<string> {
   const message = await anthropic.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
+    ...(typeof temperature === "number" ? { temperature } : {}),
   });
 
   const content = message.content[0];
@@ -49,6 +68,7 @@ export async function callClaudeJSON<T>(
   try {
     return JSON.parse(jsonStr) as T;
   } catch (e) {
+    await saveRawResponseToTmp(text);
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`JSON parse failed (response length: ${text.length}, json length: ${jsonStr.length}): ${msg}`);
   }
@@ -99,7 +119,8 @@ export async function callClaudeWithImage<T>(
   try {
     return JSON.parse(jsonStr) as T;
   } catch (e) {
+    await saveRawResponseToTmp(text);
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`JSON parse failed: ${msg}`);
+    throw new Error(`JSON parse failed (response length: ${text.length}, json length: ${jsonStr.length}): ${msg}`);
   }
 }
