@@ -19,7 +19,12 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
   // パターンから clothingRole 等を取得（patternId 駆動診断結果のみ）
   const pattern = analysis.patternId ? getPatternById(analysis.patternId) : undefined;
   const clothingRole = pattern?.clothingRole;
-  const coreTags = pattern?.coreTags ?? analysis.styleAxis?.beliefKeywords ?? [];
+  // analyze-v2 (アプローチ2) では patternId が無いので、worldview_keywords を優先フォールバックに使う。
+  const coreTags =
+    pattern?.coreTags
+    ?? analysis.worldview_keywords
+    ?? analysis.styleAxis?.beliefKeywords
+    ?? [];
 
   async function handleShare() {
     const lines = [
@@ -106,10 +111,15 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
       )}
 
       {/* ===== Section 3: ファッション変換 ===== */}
-      {(analysis.recommendedColors?.length || analysis.recommendedMaterials?.length || analysis.recommendedSilhouettes?.length || analysis.firstPiece) && (
+      {(analysis.recommendedColors?.length
+        || analysis.recommendedMaterials?.length
+        || analysis.recommendedSilhouettes?.length
+        || analysis.recommendedAccessories?.length
+        || analysis.recommendedBrands?.length
+        || analysis.firstPiece) && (
         <Section title="Fashion Translation" subtitle="ファッション変換">
           <div className="space-y-3">
-            <DiagnosisCard label="合う色・素材・シルエット">
+            <DiagnosisCard label="合う色・素材・シルエット・小物">
               <div className="space-y-3">
                 {analysis.recommendedColors && analysis.recommendedColors.length > 0 && (
                   <ChipRow title="色" items={analysis.recommendedColors} />
@@ -120,8 +130,26 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
                 {analysis.recommendedSilhouettes && analysis.recommendedSilhouettes.length > 0 && (
                   <ChipRow title="シルエット" items={analysis.recommendedSilhouettes} />
                 )}
+                {analysis.recommendedAccessories && analysis.recommendedAccessories.length > 0 && (
+                  <ChipRow title="小物" items={analysis.recommendedAccessories} />
+                )}
               </div>
             </DiagnosisCard>
+
+            {analysis.recommendedBrands && analysis.recommendedBrands.length > 0 && (
+              <DiagnosisCard label="似合うブランド">
+                <div className="flex flex-wrap gap-1.5">
+                  {analysis.recommendedBrands.map((b) => (
+                    <span
+                      key={b}
+                      className="text-xs px-2.5 py-1 bg-gray-900 text-gray-50 rounded-full"
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              </DiagnosisCard>
+            )}
 
             {analysis.firstPiece && (
               <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
@@ -194,16 +222,45 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
                 <p className="text-sm text-gray-800 leading-relaxed">{analysis.attractedCulture}</p>
               </DiagnosisCard>
             )}
-            {analysis.culturalAffinities && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <AffinityBlock title="音楽" items={analysis.culturalAffinities.music} />
-                <AffinityBlock title="映画" items={analysis.culturalAffinities.films} />
-                <AffinityBlock title="香水" items={analysis.culturalAffinities.fragrance} />
-              </div>
-            )}
+            {analysis.culturalAffinities && (() => {
+              // analyze-v2 では art も含む 4 カテゴリ、過去診断は 3 カテゴリのみ。
+              // 列数を 4 と 3 で切り替えて余白の出方を保つ。
+              const hasArt = !!(analysis.culturalAffinities.art && analysis.culturalAffinities.art.length > 0);
+              const gridCls = hasArt
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+                : "grid grid-cols-1 sm:grid-cols-3 gap-3";
+              return (
+                <div className={gridCls}>
+                  <AffinityBlock title="音楽" items={analysis.culturalAffinities.music} />
+                  <AffinityBlock title="映画" items={analysis.culturalAffinities.films} />
+                  <AffinityBlock title="香水" items={analysis.culturalAffinities.fragrance} />
+                  {hasArt && (
+                    <AffinityBlock title="アート" items={analysis.culturalAffinities.art ?? []} />
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </Section>
       ) : null}
+
+      {/* ===== Section 5: 近い世界観の人(analyze-v2 専用・13項目の13番) ===== */}
+      {analysis.relatedInfluencers && analysis.relatedInfluencers.length > 0 && (
+        <Section title="Kindred Spirits" subtitle="近い世界観の人">
+          <div className="space-y-3">
+            {analysis.relatedInfluencers.map((person) => (
+              <div
+                key={person.subject_name}
+                className="bg-gray-50 border border-gray-100 rounded-2xl p-5"
+              >
+                <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Influencer</p>
+                <h3 className="text-base font-medium text-gray-900 mb-2">{person.subject_name}</h3>
+                <p className="text-sm text-gray-700 leading-relaxed">{person.reason}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ===== 詳細（折りたたみ） ===== */}
       {(analysis.styleStructure || analysis.whyThisResult || analysis.dailyAdvice?.length || analysis.actionPlan?.length || analysis.buyingPriority?.length) && (

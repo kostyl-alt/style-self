@@ -271,15 +271,20 @@ export async function POST(request: NextRequest) {
     if (userId) {
       const supabase = createServiceClient();
 
-      await supabase.from("users").update({
+      // Supabase v2 は Postgres エラー時に throw せず { data, error } を返すため、
+      // 必ず .error を明示的にログする(フェーズB Step 1 の握りつぶし修正)。
+      const usersRes = await supabase.from("users").update({
         style_axis:        validated.styleAxis as unknown as Json,
         style_analysis:    validated as unknown as Json,
         avoid_items:       avoidItems,
         onboarding_completed: true,
       } as never).eq("id", userId);
+      if (usersRes.error) {
+        console.warn("[analyze-v2 users.update] error:", usersRes.error.message);
+      }
 
       try {
-        await supabase.from("diagnosis_sessions").insert({
+        const sessionRes = await supabase.from("diagnosis_sessions").insert({
           user_id:         userId,
           answers:         answers as unknown as Json,
           matched_pattern: null,
@@ -287,20 +292,27 @@ export async function POST(request: NextRequest) {
           result:          validated as unknown as Json,
           completed:       true,
         } as never);
+        if (sessionRes.error) {
+          console.warn("[analyze-v2 diagnosis_sessions.insert] error:", sessionRes.error.message);
+        }
       } catch (e) {
-        console.warn("[analyze-v2 diagnosis_sessions] insert skipped:", e instanceof Error ? e.message : e);
+        console.warn("[analyze-v2 diagnosis_sessions] exception:", e instanceof Error ? e.message : e);
       }
 
       try {
-        await supabase.from("worldview_profiles").upsert({
+        const profileRes = await supabase.from("worldview_profiles").upsert({
           user_id:      userId,
           pattern_id:   null,
           pattern_name: validated.worldviewName ?? step1.worldview_name,
           result:       validated as unknown as Json,
           updated_at:   new Date().toISOString(),
         } as never, { onConflict: "user_id" });
+        if (profileRes.error) {
+          // migration 022 適用前は NOT NULL 違反 ('null value in column "pattern_id"') が出る。
+          console.warn("[analyze-v2 worldview_profiles.upsert] error:", profileRes.error.message);
+        }
       } catch (e) {
-        console.warn("[analyze-v2 worldview_profiles] upsert skipped:", e instanceof Error ? e.message : e);
+        console.warn("[analyze-v2 worldview_profiles] exception:", e instanceof Error ? e.message : e);
       }
 
       const compactInput: { answers: OnboardingAnswer[] } = {
