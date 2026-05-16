@@ -5,7 +5,13 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// デフォルトモデル(Sonnet)。CLAUDE.md「モデルは必ず claude-sonnet-4-6 を使用する」の原則。
 export const MODEL = "claude-sonnet-4-6";
+
+// 単純タスク向け Haiku モデル。analyze-v2 の step2(20人から5人選び短い理由を書くだけ)など、
+// 品質より速度が効く軽量サブタスクに限って使う。
+// CLAUDE.md の Sonnet 必須ルールに対する明示的な例外で、選択は呼び出し側の責任。
+export const HAIKU_MODEL = "claude-haiku-4-5";
 
 // JSON parse 失敗時に Claude の生レスポンスを /tmp に退避する。
 // 書き込み自体が失敗しても元のパースエラーは握りつぶさずに上に投げ直すため、
@@ -27,6 +33,9 @@ export interface ClaudeRequestOptions {
   // analyze-v2 (アプローチ2) で再現性をある程度確保するため optional で追加。
   // 既存呼び出しは未指定 = SDK デフォルトで挙動不変。
   temperature?: number;
+  // 呼び出し側でモデルを上書きできる。未指定なら MODEL(Sonnet)。
+  // 既存の呼び出しはすべて未指定なので後方互換。analyze-v2 の step2 のみ HAIKU_MODEL を渡す。
+  model?: string;
 }
 
 export async function callClaude({
@@ -34,9 +43,10 @@ export async function callClaude({
   userMessage,
   maxTokens = 2048,
   temperature,
+  model,
 }: ClaudeRequestOptions): Promise<string> {
   const message = await anthropic.messages.create({
-    model: MODEL,
+    model: model ?? MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],

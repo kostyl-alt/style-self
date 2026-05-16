@@ -10,7 +10,7 @@
 //   Step 5: バリデーション + worldview_profiles へ保存 (pattern_id は null で OK)
 
 import { NextRequest, NextResponse } from "next/server";
-import { callClaudeJSON } from "@/lib/claude";
+import { callClaudeJSON, HAIKU_MODEL } from "@/lib/claude";
 import { validateAndFixStyleDiagnosis } from "@/lib/validators/analyze";
 import { createServiceClient } from "@/lib/supabase";
 import { insertAiHistory } from "@/lib/utils/history-helper";
@@ -81,6 +81,20 @@ function buildLabeledAnswers(answers: DiagnosisAnswerV2[]): LabeledAnswer[] {
 }
 
 export async function POST(request: NextRequest) {
+  // 各ステップの所要時間を実測ログ出力する。フェーズA レイテンシ調査用。
+  // 本番運用でも残しても害のないレベルのログ(1リクエストで6行程度)。
+  const t0 = performance.now();
+  let tPrev = t0;
+  const timings: { label: string; ms: number; cum_ms: number }[] = [];
+  const mark = (label: string) => {
+    const now = performance.now();
+    const ms = Math.round(now - tPrev);
+    const cum = Math.round(now - t0);
+    timings.push({ label, ms, cum_ms: cum });
+    console.log(`[analyze-v2 timing] ${label}: ${ms}ms (cum ${cum}ms)`);
+    tPrev = now;
+  };
+
   try {
     const body = (await request.json()) as {
       answers?: DiagnosisAnswerV2[];
@@ -95,6 +109,7 @@ export async function POST(request: NextRequest) {
     const { troubleLabel, freeText } = extractHintAnswers(answers);
     const avoidItems = extractAvoidItems(answers);
     const labeledAnswers = buildLabeledAnswers(answers);
+    mark("step0_preprocess");
 
     // ----- Step 1: Knowledge OS から並列取得 -----
     const [influences, decisionRules, categories] = await Promise.all([
@@ -102,6 +117,8 @@ export async function POST(request: NextRequest) {
       getDecisionRules({ importance_min: 4, limit: 20 }),
       getCategories({ include_counts: true }),
     ]);
+
+    mark(`step1_knowledgeos_parallel_fetch (influences=${influences.length} rules=${decisionRules.length} categories=${categories.length})`);
 
     const knownInfluenceNames = new Set(influences.map((i) => i.subject_name));
 
@@ -131,12 +148,16 @@ export async function POST(request: NextRequest) {
       "上記を踏まえて、指定の JSON スキーマで返答してください。",
     ].join("\n");
 
+    // P2: step2 は「20人から5人選び短い理由を書く」だけの軽量タスクなので Haiku を使う。
+    // step4(13項目詳細生成・実測94秒)は品質維持のため Sonnet のまま。
     const step1 = await callClaudeJSON<WorldviewStep1Output>({
       systemPrompt: ANALYZE_V2_WORLDVIEW_SYSTEM_PROMPT,
       userMessage:  step1UserMessage,
       maxTokens:    1500,
       temperature:  0.4,
+      model:        HAIKU_MODEL,
     });
+    mark(`step2_ai_call1_worldview_haiku (input_chars=${step1UserMessage.length})`);
 
     // Claude が捏造した名前を弾き、Knowledge OS に存在するものだけ採用。
     const validInfluences = (step1.selected_influences ?? []).filter((s) =>
@@ -151,6 +172,7 @@ export async function POST(request: NextRequest) {
     const influenceDetails: InfluenceData[] = influences.filter((i) =>
       namesToFind.has(i.subject_name),
     );
+    mark(`step3_local_filter (selected=${validInfluences.length} matched=${influenceDetails.length})`);
 
     // ----- Step 4: 2回目 AI コール (13項目の詳細生成) -----
     const step2UserMessage = [
@@ -195,6 +217,7 @@ export async function POST(request: NextRequest) {
       maxTokens:    8000,
       temperature:  0.4,
     });
+    mark(`step4_ai_call2_details (input_chars=${step2UserMessage.length} output_keys=${Object.keys(step2 ?? {}).length})`);
 
     // ----- Step 5: バリデーション + 永続化 -----
     const result: StyleDiagnosisResult = {
@@ -298,7 +321,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(validated);
+    mark(`step5_validate_persist (userId=${userId ? "set" : "null"})`);
+
+    // 計測調査中のみ: レスポンスに _timings を含める(クライアント未使用なら無視される)
+    return NextResponse.json({ ...validated, _timings: timings });
   } catch (err) {
     console.warn("[analyze-v2] failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "分析に失敗しました" }, { status: 500 });

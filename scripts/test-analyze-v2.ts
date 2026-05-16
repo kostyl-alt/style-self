@@ -98,6 +98,13 @@ async function main() {
   console.log("\n--- relatedInfluencers ---");
   console.log(r.relatedInfluencers);
 
+  if (Array.isArray(r._timings)) {
+    console.log("\n--- _timings (server-side perf.now) ---");
+    for (const t of r._timings as { label: string; ms: number; cum_ms: number }[]) {
+      console.log(`  ${String(t.ms).padStart(7)}ms  (cum ${String(t.cum_ms).padStart(7)}ms)  ${t.label}`);
+    }
+  }
+
   console.log("\n[test-analyze-v2] DONE");
 }
 
