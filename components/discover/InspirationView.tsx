@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
-import { getConceptsForPattern } from "@/lib/knowledge/worldview-concepts";
+import { getInspiredConceptsForAnalysis } from "@/lib/knowledge/worldview-concepts";
 import type {
   AbstractToDesignResponse, CoordinateAIResponse, ResolvedCoordinateItem,
   StyleDiagnosisResult,
@@ -93,7 +93,8 @@ export default function InspirationView({
         </div>
       );
 
-  const suggestedConcepts = getConceptsForPattern(analysis?.patternId);
+  // フェーズB Step 3: analyze-v2 では patternId が無いため、worldview_keywords へフォールバック
+  const suggestedConcepts = getInspiredConceptsForAnalysis(analysis);
 
   return (
     <Wrapper>

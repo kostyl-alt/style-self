@@ -93,3 +93,24 @@ export function getConceptsForPattern(patternId: string | undefined): string[] {
   if (!patternId) return [];
   return WORLDVIEW_CONCEPTS[patternId] ?? [];
 }
+
+import type { StyleDiagnosisResult } from "@/types/index";
+
+// フェーズB Step 3: analyze-v2 は patternId を持たないため、
+// patternId 経由のキュレーション辞書が空になる。AI 生成の worldview_keywords を
+// 代替のチップソースとして使う。styleAxis.beliefKeywords は最終フォールバック。
+//
+// 過去診断(patternId あり)は引き続き WORLDVIEW_CONCEPTS の手キュレーション語が出る。
+export function getInspiredConceptsForAnalysis(
+  analysis: StyleDiagnosisResult | null | undefined,
+): string[] {
+  if (!analysis) return [];
+  const fromPattern = getConceptsForPattern(analysis.patternId);
+  if (fromPattern.length > 0) return fromPattern;
+  if (analysis.worldview_keywords && analysis.worldview_keywords.length > 0) {
+    return analysis.worldview_keywords;
+  }
+  const belief = analysis.styleAxis?.beliefKeywords;
+  if (belief && belief.length > 0) return belief;
+  return [];
+}

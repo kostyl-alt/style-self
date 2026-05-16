@@ -11,7 +11,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { DiagnosisAnswerV2, StyleDiagnosisResult } from "@/types/index";
+import type { Json } from "@/types/database";
 
 // --- 3 つの新形式サンプル回答 (test-analyze-v2-multi.ts と同一) ---
 
@@ -206,6 +208,44 @@ export default function PreviewClient() {
     setError(null);
   }
 
+  // フェーズB Step 3 確認用: 現在のユーザーの style_analysis に書き込んで
+  // /discover に飛ぶ。InspirationView / CultureView の動作確認のため。
+  // ⚠️ 過去診断データを上書きするため、確認ダイアログ必須。
+  const [savingToProfile, setSavingToProfile] = useState(false);
+  async function saveAndOpenDiscover() {
+    if (!result) return;
+    const ok = window.confirm(
+      "⚠️ 現在ログインしているユーザーの style_analysis を、この試験結果で上書きします。\n\n"
+      + "過去の診断データは消えます(Supabase Studio で users.style_analysis から復元可能ですが、自動バックアップは取りません)。\n\n"
+      + "/discover で InspirationView / CultureView を確認するためだけの用途です。続行しますか?",
+    );
+    if (!ok) return;
+    setSavingToProfile(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authData.user) {
+        alert("ログインしてから実行してください: " + (authErr?.message ?? "未ログイン"));
+        return;
+      }
+      const { error: updErr } = await supabase
+        .from("users")
+        .update({
+          style_analysis:       result as unknown as Json,
+          style_axis:           result.styleAxis as unknown as Json,
+          onboarding_completed: true,
+        } as never)
+        .eq("id", authData.user.id);
+      if (updErr) {
+        alert("保存失敗: " + updErr.message);
+        return;
+      }
+      window.location.href = "/discover";
+    } finally {
+      setSavingToProfile(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white pb-24">
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-6">
@@ -290,6 +330,24 @@ export default function PreviewClient() {
         {/* 13項目チェックリスト (analyze-v2 結果が出ているときだけ表示) */}
         {result && active !== "legacy" && (
           <ChecklistCard analysis={result} />
+        )}
+
+        {/* /discover 確認導線 (フェーズB Step 3 用) */}
+        {result && !loading && (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-xs text-sky-900 space-y-2">
+            <p className="font-medium">/discover の InspirationView / CultureView を確認するには:</p>
+            <p className="leading-relaxed text-sky-800">
+              この結果をログイン中ユーザーの <code>style_analysis</code> に保存して <code>/discover</code> を開けます。<strong>過去診断は上書きされます</strong>(復元は Supabase Studio から手動)。
+            </p>
+            <button
+              type="button"
+              disabled={savingToProfile}
+              onClick={saveAndOpenDiscover}
+              className="mt-1 inline-block px-4 py-2 bg-sky-700 text-white rounded-lg text-xs font-medium hover:bg-sky-800 disabled:opacity-50"
+            >
+              {savingToProfile ? "保存中…" : "💾 この結果を保存して /discover を開く"}
+            </button>
+          </div>
         )}
 
         {/* 結果表示 */}

@@ -9,22 +9,25 @@ import type {
   CultureExplanationItem,
 } from "@/types/index";
 
-const CACHE_KEY = "culture_explain_cache_v1";
+// フェーズB Step 3: analyze-v2 は patternId を持たないので、cacheKey は
+//   patternId → worldviewName → worldview_keywords.join("-") の順でフォールバック。
+// v1→v2 へバージョンを上げて古い patternId 専用エントリと衝突しないようにする。
+const CACHE_KEY = "culture_explain_cache_v2";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;  // 30日
 
 interface CacheEntry {
-  patternId:   string;
+  cacheKey:    string;
   generatedAt: number;
   response:    CultureExplainResponse;
 }
 
-function readCache(patternId: string): CultureExplainResponse | null {
+function readCache(cacheKey: string): CultureExplainResponse | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const entry = JSON.parse(raw) as CacheEntry;
-    if (entry.patternId !== patternId) return null;
+    if (entry.cacheKey !== cacheKey) return null;
     if (Date.now() - entry.generatedAt > CACHE_TTL_MS) return null;
     return entry.response;
   } catch {
@@ -32,19 +35,32 @@ function readCache(patternId: string): CultureExplainResponse | null {
   }
 }
 
-function writeCache(patternId: string, response: CultureExplainResponse) {
+function writeCache(cacheKey: string, response: CultureExplainResponse) {
   if (typeof window === "undefined") return;
   try {
-    const entry: CacheEntry = { patternId, generatedAt: Date.now(), response };
+    const entry: CacheEntry = { cacheKey, generatedAt: Date.now(), response };
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
   } catch {
     // localStorage 容量制限など。失敗してもUIは動かす
   }
 }
 
+function deriveCacheKey(analysis: StyleDiagnosisResult | null | undefined): string | null {
+  if (!analysis) return null;
+  // 過去診断は patternId が安定キー。新形式は worldviewName を採用し、
+  // worldviewName も無い場合のみ keywords のソート結合へフォールバック。
+  if (analysis.patternId) return `pid:${analysis.patternId}`;
+  if (analysis.worldviewName) return `wn:${analysis.worldviewName}`;
+  const kw = analysis.worldview_keywords ?? [];
+  if (kw.length > 0) return `kw:${[...kw].sort().join("-")}`;
+  return null;
+}
+
 export default function CultureView({ analysis }: { analysis: StyleDiagnosisResult | null }) {
   const cultural = analysis?.culturalAffinities;
-  const patternId = analysis?.patternId;
+  // フェーズB Step 3: analyze-v2 では patternId が無いため、worldviewName / keywords から
+  // キャッシュキーを派生させる。過去診断(patternId あり)は引き続き patternId ベース。
+  const cacheKey = deriveCacheKey(analysis);
 
   const [explained, setExplained] = useState<CultureExplainResponse | null>(null);
   const [loading, setLoading]     = useState(false);
@@ -58,9 +74,9 @@ export default function CultureView({ analysis }: { analysis: StyleDiagnosisResu
   );
 
   useEffect(() => {
-    if (!hasCultural || !cultural || !patternId) return;
+    if (!hasCultural || !cultural || !cacheKey) return;
 
-    const cached = readCache(patternId);
+    const cached = readCache(cacheKey);
     if (cached) {
       setExplained(cached);
       return;
@@ -74,7 +90,7 @@ export default function CultureView({ analysis }: { analysis: StyleDiagnosisResu
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         worldviewName:       analysis?.worldviewName,
-        patternId,
+        patternId:           analysis?.patternId,
         culturalAffinities:  cultural,
         avoidImpressions:    analysis?.preference?.avoidImpressions ?? [],
         avoidItems:          analysis?.avoidItems ?? [],
@@ -92,7 +108,7 @@ export default function CultureView({ analysis }: { analysis: StyleDiagnosisResu
       .then((d) => {
         if (cancelled) return;
         setExplained(d);
-        writeCache(patternId, d);
+        writeCache(cacheKey, d);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -104,7 +120,7 @@ export default function CultureView({ analysis }: { analysis: StyleDiagnosisResu
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patternId, hasCultural]);
+  }, [cacheKey, hasCultural]);
 
   // 未診断 or culturalAffinities なし
   if (!hasCultural) {

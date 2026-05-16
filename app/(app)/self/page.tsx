@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
+import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
@@ -180,6 +181,8 @@ function DiagnosisTab() {
   return (
     <div className="space-y-5 py-4">
       <DiagnosisDisplay analysis={analysis} showShare />
+      {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
+      <WorldviewProductsSection analysis={analysis} variant="self" />
     </div>
   );
 }

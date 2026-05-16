@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
 import { MessageCircle, RefreshCw, Music, Film, Sparkles, ExternalLink } from "lucide-react";
+import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
 import type { StyleDiagnosisResult, CoordinateGenerateResponse } from "@/types/index";
 
 const ROLE_LABELS: Record<string, { label: string; style: string }> = {
@@ -190,6 +191,11 @@ export default function HomePage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* 3.5. 世界観に合う商品(フェーズB Step 4: 横スクロール軽量表示) */}
+        {analysis?.worldviewName && (
+          <WorldviewProductsSection analysis={analysis} variant="home" />
         )}
 
         {/* 4. 世界観に合うカルチャー */}
