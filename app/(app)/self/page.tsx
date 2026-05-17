@@ -7,6 +7,7 @@ import HistoryTab from "@/components/history/HistoryTab";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
 import WorldviewPublicityPanel from "@/components/worldview/WorldviewPublicityPanel";
+import MyPostsTab from "@/components/posts/MyPostsTab";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
@@ -15,7 +16,7 @@ import type {
 
 // ---- 型 ----
 
-type SelfTab = "diagnosis" | "body" | "worldview" | "history";
+type SelfTab = "diagnosis" | "body" | "worldview" | "history" | "posts";
 
 // ---- 身体情報の選択肢 ----
 
@@ -767,6 +768,7 @@ function WorldviewTab() {
 
 const TABS: { value: SelfTab; label: string }[] = [
   { value: "diagnosis", label: "世界観" },
+  { value: "posts",     label: "投稿" },
   { value: "body",      label: "身体" },
   { value: "worldview", label: "好み" },
   { value: "history",   label: "履歴" },
@@ -801,6 +803,7 @@ export default function SelfPage() {
         </div>
 
         {activeTab === "diagnosis" && <DiagnosisTab />}
+        {activeTab === "posts"     && <MyPostsTab />}
         {activeTab === "body"      && <BodyTab />}
         {activeTab === "worldview" && <WorldviewTab />}
         {activeTab === "history"   && <HistoryTab />}
