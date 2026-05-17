@@ -202,6 +202,19 @@ function DiagnosisTab() {
           worldviewName={analysis.worldviewName ?? null}
         />
       )}
+      {/* M3-3: 投稿作成ページへの導線。診断有無に依存せずログインユーザーには常時表示
+          (worldview_profiles が無くても投稿可・案 a)。 */}
+      <Link
+        href="/self/new-post"
+        className="flex items-center justify-between px-5 py-4 border border-gray-200 rounded-2xl bg-white hover:bg-gray-50 transition-colors"
+      >
+        <div>
+          <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-0.5">New Post</p>
+          <p className="text-sm text-gray-800">投稿を作る</p>
+          <p className="text-xs text-gray-500 mt-0.5">画像 + キャプションで世界観を投稿</p>
+        </div>
+        <span className="text-gray-300">→</span>
+      </Link>
       <DiagnosisDisplay analysis={analysis} showShare />
       {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
       <WorldviewProductsSection analysis={analysis} variant="self" />
