@@ -340,3 +340,72 @@ docs/STYLE-SELF_ビジョン統合マップ.md(最上位)
 Knowledge OS再設計・フェーズB・M2 と同じ
 「調査→設計→ステップ実装」の型。M3 も5ステップで進める。
 ```
+
+---
+
+## 11. 認証アカウントに関する確定事実(2026-05-18 確定)
+
+> **次回以降の混乱防止のため、ここに「重要な確定事実」として明記する。**
+> M3-5 検証中に admin user_id の誤認で長時間混乱したため、その根本記録。
+
+### オーナーアカウント(唯一の admin)
+
+```
+email   : kleeeec00@gmail.com
+user_id : 7ed5d391-5e47-40ae-adc5-68464b380a50
+provider: email
+方式    : email + password(signInWithPassword)
+日常運用: ブラウザ保存パスワード + 指紋認証で自動入力
+```
+
+→ `kleeeec00@gmail.com = 7ed5d391` が **このプロジェクトの admin そのもの**。
+
+### 「6bd309dd」は幽霊 id(無効・参照しないこと)
+
+```
+過去の記録/メモに「admin user_id = 6bd309dd-a52f-4d98-a7f2-0cb327836314」
+と書かれていたが、この id は auth.users に存在しない
+(2026-05-18 に SQL で確認・0 件)。
+
+→ 6bd309dd は出所不明の幽霊 id。
+   今後 admin として 6bd309dd を参照しない。
+   docs / メモ / コメントで 6bd309dd を見かけたら誤情報として扱う。
+```
+
+### admin 判定は email ベース(コード由来)
+
+```
+.env.local           : ADMIN_EMAILS=kleeeec00@gmail.com
+middleware.ts        : ADMIN_EMAILS に含まれる email のみ /admin/* 通過
+→ admin 相当 = kleeeec00@gmail.com でログインしたセッション = user_id 7ed5d391
+  (user_id ベースのハードコードは存在しない)
+```
+
+### M3-5「他人の投稿を削除できた」事象は誤認だった
+
+```
+2026-05-17〜18 の検証で「admin が他人の投稿を削除できた」と見えた事象は、
+6bd309dd を admin と誤認していたことに起因する誤解。
+
+実体:
+  - 検証中にログインしていたのは admin = 7ed5d391(kleeeec00@gmail.com)
+  - 削除対象の posts.author_user_id も 7ed5d391
+  - すなわち本人が自分の投稿を削除した正常動作
+
+M3-5 の本人保証は正常に機能している(2026-05-18 に確認済み):
+  1. DELETE /api/posts/[id]: body から author_user_id を受けない
+  2. アプリ層: .eq("id", postId).eq("author_user_id", user.id)
+  3. RLS "users own posts" FOR ALL: auth.uid() = author_user_id
+  → 三層の本人保証が直列に効く構造で、コード調査 + RLS 直接確認の両面で健全。
+```
+
+### 取り違え再発防止策(2026-05-18 実装)
+
+```
+components/dev/DevAuthBadge.tsx(新規)
+  - dev 環境(NODE_ENV !== "production")の (app) 配下全画面に
+    画面右下バッジで「ログイン中の email + user_id 先頭8文字」を常時表示。
+  - 本番 bundle には描画自体が乗らない(NODE_ENV ガードで return null)。
+  - これで「今ログイン中のユーザーが誰か」を視覚的に常時確認できる。
+  - /dev/diagnosis-preview の notFound() と同型の本番ガード哲学。
+```
