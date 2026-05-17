@@ -19,8 +19,14 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadPostImage } from "@/lib/storage";
+import { isHeic, convertHeicToJpeg } from "@/lib/utils/image-pipeline";
 
-type Status = "idle" | "selected" | "processing" | "done" | "error";
+// M3-3 改善: HEIC プレビュー対応
+// - HEIC 選択時は heic-to で JPEG に変換 → state に保持 → プレビュー
+// - 投稿時は変換済み JPEG をそのまま渡す → processImageForUpload の isHeic が
+//   自然に false → heic-to 二度起動なし(設計の核心)
+// - EXIF/GPS 除去は変わらず最終 Canvas 再エンコードで担保(69ea622 / e89a397)
+type Status = "idle" | "converting" | "selected" | "processing" | "done" | "error";
 
 interface DoneInfo {
   // M3-4 で /p/[id] 個別ページが完成したら [投稿を見る] リンクを足すため id を保持。
@@ -36,12 +42,20 @@ export default function NewPostPage() {
   const [status, setStatus]   = useState<Status>("idle");
   const [file, setFile]       = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState(false);
   const [caption, setCaption] = useState("");
   const [error, setError]     = useState<string | null>(null);
   const [done, setDone]       = useState<DoneInfo | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // (旧) mountedRef による「アンマウント後 setState 警告防御」を撤去した。
+  //   React 18 では unmounted コンポーネントへの setState 警告は撤廃済みで、
+  //   そもそも防御の目的が存在しない。さらに dev の Strict Mode で
+  //   mount→cleanup→remount サイクルが走ると、素朴な mountedRef パターンは
+  //   useEffect body で true に戻さない限り永遠に false に固定され、
+  //   正常系の setState を握りつぶす(今回踏んだ罠・238秒ハングの正体)。
+  //   不要な防御は撤去するのが正解(M2-4 の楽観的更新なし作法と同じ思想:
+  //   本当に必要なものだけ持つ)。
 
   // 選択中 previewUrl の URL.createObjectURL を解放する
   useEffect(() => {
@@ -50,15 +64,39 @@ export default function NewPostPage() {
     };
   }, [previewUrl]);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     if (!f) return;
+    setError(null);
     // 旧プレビューを解放
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    if (isHeic(f)) {
+      // HEIC は選択時に heic-to で JPEG 変換 → state に JPEG を保持。
+      // 投稿時の processImageForUpload は isHeic(jpeg)=false で heic-to をスキップ
+      //  → heic-to 二度起動なし(設計の核心)。
+      // EXIF/GPS 除去は最終 Canvas 再エンコードで担保(69ea622 / e89a397)。
+      setFile(null);
+      setPreviewUrl(null);
+      setStatus("converting");
+      try {
+        const jpeg = await convertHeicToJpeg(f);
+        setFile(jpeg);
+        setPreviewUrl(URL.createObjectURL(jpeg));
+        setStatus("selected");
+      } catch (err) {
+        // M3-2 で可視化済みの元エラー(ERR_LIBHEIF 等)をそのまま表示
+        setError(err instanceof Error ? err.message : "HEIC 変換に失敗しました");
+        setFile(null);
+        setPreviewUrl(null);
+        setStatus("idle");
+      }
+      return;
+    }
+
+    // 非 HEIC(jpg/png/webp): 従来通り即プレビュー
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
-    setPreviewError(false);
-    setError(null);
     setStatus("selected");
   }
 
@@ -130,7 +168,6 @@ export default function NewPostPage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(null);
     setPreviewUrl(null);
-    setPreviewError(false);
     setCaption("");
     setError(null);
     setDone(null);
@@ -184,7 +221,10 @@ export default function NewPostPage() {
 
   // ===== フォーム / 処理中 =====
   const processing = status === "processing";
-  const canSubmit = !!file && !processing;
+  const converting = status === "converting";
+  // converting / processing 中は二重操作を構造的に阻止
+  const inputDisabled  = processing || converting;
+  const canSubmit      = !!file && !processing && !converting;
 
   return (
     <div className="min-h-screen bg-white">
@@ -213,24 +253,25 @@ export default function NewPostPage() {
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
               onChange={handleFile}
-              disabled={processing}
+              disabled={inputDisabled}
               className="block w-full text-sm text-gray-700 file:mr-3 file:px-4 file:py-2 file:border file:border-gray-200 file:rounded-lg file:bg-white file:text-gray-700 file:hover:bg-gray-50 file:cursor-pointer disabled:opacity-50"
             />
           </label>
 
-          {previewUrl && !previewError && (
+          {/* M3-3 改善: HEIC 変換中のインライン表示(オーバーレイではない)。
+              フォームの自然な流れの中で「準備中」を出す。 */}
+          {converting && <ConvertingInline />}
+
+          {/* プレビュー(HEIC は変換後 JPEG なので表示できる)。
+              onError は壊れた JPEG 等のレア防御として残し、失敗時は静かに非表示にする。 */}
+          {previewUrl && !converting && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt="preview"
-              onError={() => setPreviewError(true)}
+              onError={() => setPreviewUrl(null)}
               className="w-full rounded-xl border border-gray-100"
             />
-          )}
-          {previewUrl && previewError && (
-            <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-6 text-center text-xs text-gray-500">
-              プレビュー非対応(HEIC は処理後にアップロードされます)
-            </div>
           )}
         </div>
 
@@ -241,7 +282,7 @@ export default function NewPostPage() {
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value.slice(0, CAPTION_MAX))}
-              disabled={processing}
+              disabled={inputDisabled}
               rows={4}
               maxLength={CAPTION_MAX}
               placeholder="この投稿について、何か言葉を添えたければ。"
@@ -271,6 +312,31 @@ export default function NewPostPage() {
         {/* 処理中オーバーレイ(経過秒) */}
         {processing && <ProcessingOverlay />}
       </div>
+    </div>
+  );
+}
+
+// M3-3 改善: HEIC 変換中のインライン表示(フォーム内・コンパクト)。
+// ProcessingOverlay はフル画面オーバーレイなので、選択中の文脈に出すと違和感がある。
+// 同じ「経過秒で動きを見せる」作法だが、フォーム内に溶け込むサイズ感。
+function ConvertingInline() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-5 text-center">
+      <p className="text-xs text-gray-700 mb-1">プレビューを準備中…</p>
+      <p className="text-2xl font-light text-gray-700 tabular-nums">
+        {elapsed}<span className="text-sm text-gray-400 ml-1">秒</span>
+      </p>
+      <p className="text-[10px] text-gray-400 mt-2">
+        HEIC は初回 WASM 読み込みで 10〜15 秒かかります
+      </p>
     </div>
   );
 }

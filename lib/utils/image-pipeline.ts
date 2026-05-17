@@ -51,7 +51,8 @@ function pipelineError(code: ImagePipelineError["code"], message: string): Image
 
 // HEIC/HEIF 判定: file.type は iOS Safari で空文字や application/octet-stream に
 // なることがあるため、ファイル名拡張子もフォールバックとして見る。
-function isHeic(file: File): boolean {
+// M3-3 改善: 投稿フォームの選択時プレビューでも使うため export。
+export function isHeic(file: File): boolean {
   const t = (file.type || "").toLowerCase();
   if (t === "image/heic" || t === "image/heif") return true;
   const name = file.name.toLowerCase();
@@ -77,7 +78,13 @@ function describeError(e: unknown): { name: string; message: string } {
 // HEIC → JPEG 変換。WASM ロードがあるので動的 import で初回のみコストを払う。
 // catch は必ず元エラーをログ + ユーザー文言に name/message を含める
 // (M2-3 で学んだ反省: 真因を握りつぶしてはならない)。
-async function convertHeicToJpeg(file: File): Promise<File> {
+//
+// M3-3 改善: 選択時プレビューで heic-to を 1 回だけ呼び、その結果を
+// 投稿時に再利用するため、本関数を export して new-post/page.tsx からも使えるようにする。
+// 投稿時の processImageForUpload は内部で isHeic(workFile)=false になり
+// 自動的に heic-to をスキップ → 二度起動を構造的に回避。
+// EXIF/GPS 除去の保証は変わらず最終 Canvas 再エンコードで担保される。
+export async function convertHeicToJpeg(file: File): Promise<File> {
   // heic-to: 名前付き export の heicTo を使う(default は無い)
   let heicTo: typeof import("heic-to").heicTo;
   try {
