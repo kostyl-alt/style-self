@@ -96,11 +96,12 @@ export default function ExifTestClient() {
         <div className="border border-gray-200 rounded-2xl p-5">
           <label className="block">
             <span className="text-sm text-gray-700 mb-2 block">
-              画像を選択(jpeg / png / webp)
+              画像を選択(jpeg / png / webp / heic / heif)
             </span>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              // image/heic は一部ブラウザで MIME 推論されないため拡張子も列挙
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
               onChange={handleFile}
               disabled={uploading}
               className="block w-full text-sm text-gray-700 file:mr-3 file:px-4 file:py-2 file:border file:border-gray-200 file:rounded-lg file:bg-white file:text-gray-700 file:hover:bg-gray-50 file:cursor-pointer disabled:opacity-50"
