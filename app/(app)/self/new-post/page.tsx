@@ -197,9 +197,14 @@ export default function NewPostPage() {
             )}
           </div>
 
-          {/* M3-4 で /p/[id] 公開ページが完成したら [投稿を見る → /p/{done.id}] を追加。
-              現状は id を done state に保持するのみ。 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* M3-4: 投稿個別ページが完成したので、保持していた id で [投稿を見る] を追加(伏線回収)。 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Link
+              href={`/p/${done.id}`}
+              className="px-4 py-3 border border-gray-200 text-gray-700 rounded-xl text-sm text-center hover:bg-gray-50 transition-colors"
+            >
+              投稿を見る →
+            </Link>
             <button
               type="button"
               onClick={resetAndPostAgain}

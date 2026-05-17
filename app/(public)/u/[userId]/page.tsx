@@ -79,6 +79,24 @@ export default async function PublicWorldviewPage({ params }: PageProps) {
     .eq("id", userId)
     .maybeSingle() as unknown as { data: { display_name: string | null } | null };
 
+  // M3-4: 投稿一覧(プロフィール公開済みユーザーの公開投稿のみ表示)
+  //   - SELECT 句で公開対象の列のみ取得(worldview_tags/pattern_id/is_public/updated_at は
+  //     取得しない = HTML inline 漏洩を構造的に防ぐ)
+  //   - .eq("is_public", true) はアプリ層フィルタ(RLS と二重防御)
+  //   - 「プロフィール非公開だが投稿は公開」のユーザーは、本ページでは到達しない
+  //     (上の profileRow null で fallback 済み)。その投稿は /p/[postId] 直リンクで見える。
+  //     = 「プロフィールが見られる人の投稿だけ /u/ に出る」MVP の方針通り。
+  const { data: postsRaw } = await supabase
+    .from("posts")
+    .select("id, image_url, caption, worldview_name, created_at")
+    .eq("author_user_id", userId)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(50) as unknown as {
+      data: { id: string; image_url: string; caption: string; worldview_name: string | null; created_at: string }[] | null;
+    };
+  const posts = postsRaw ?? [];
+
   return (
     <div className="max-w-lg mx-auto px-4 py-10 space-y-6">
       {pu?.display_name && (
@@ -87,6 +105,35 @@ export default async function PublicWorldviewPage({ params }: PageProps) {
         </p>
       )}
       <DiagnosisDisplay analysis={masked} viewer="public" />
+
+      {/* M3-4: Posts セクション(DiagnosisDisplay の下に追加・既存表示は無変更) */}
+      <section className="space-y-3">
+        <div>
+          <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase">Posts</p>
+          <p className="text-xs text-gray-500 mt-0.5">投稿</p>
+        </div>
+        {posts.length === 0 ? (
+          <p className="text-xs text-gray-400 py-6 text-center">まだ投稿がありません</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {posts.map((p) => (
+              <Link
+                key={p.id}
+                href={`/p/${p.id}`}
+                className="block aspect-square overflow-hidden rounded-md bg-gray-100 hover:opacity-90 transition-opacity"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.image_url}
+                  alt={p.caption.trim().slice(0, 40) || "投稿"}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
