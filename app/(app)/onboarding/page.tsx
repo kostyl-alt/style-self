@@ -28,6 +28,41 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   );
 }
 
+// フェーズB Step 5: analyze-v2 は AI コール 2 回で 90〜110 秒かかる。
+// 「分析中…」ボタン文字だけだとフリーズに見えるため、専用ローディング画面を出す。
+// Step 6 でストリーミング化したら、この画面は段階的に文字が現れる UI に進化させる想定。
+function AnalyzingScreen() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="max-w-xs mx-auto px-6 text-center space-y-4">
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase">Analyzing</p>
+        <h1 className="text-xl font-light text-gray-900 leading-snug">
+          あなたの世界観を<br />言語化しています
+        </h1>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          16問の回答と影響源データを照合し、<br />
+          AIがあなただけの世界観を構築しています。
+        </p>
+        <p className="text-3xl font-light text-gray-700 tabular-nums pt-2">
+          {elapsed}
+          <span className="text-base text-gray-400 ml-1">秒</span>
+        </p>
+        <p className="text-[10px] text-gray-400">
+          合計 90〜110 秒かかります
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ResultCard({
   result, brands, brandsLoading,
 }: {
@@ -120,7 +155,11 @@ export default function OnboardingPage() {
           !!x && (x.optionIds.length > 0 || !!x.freeText?.trim())
         );
 
-      const res = await fetch("/api/ai/analyze", {
+      // フェーズB Step 5 切替: 旧 /api/ai/analyze(8 パターン版)→ /api/ai/analyze-v2
+      // (アプローチ2・AI が世界観を毎回構築する形)。
+      // ロールバック: この URL を "/api/ai/analyze" に戻すだけで旧フローに復帰可能。
+      // 旧エンドポイントは Step 7(フェーズC)まで保険として残置。
+      const res = await fetch("/api/ai/analyze-v2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: payload, userId }),
@@ -155,6 +194,12 @@ export default function OnboardingPage() {
     setAnswers({});
     setError(null);
     setBrands([]);
+  }
+
+  // フェーズB Step 5: analyze-v2 の 90〜110 秒待機中は専用画面を出す。
+  // 既存の「分析中…」ボタン文字だけだとフリーズに見えるため。
+  if (isLoading && !result) {
+    return <AnalyzingScreen />;
   }
 
   if (result) {
