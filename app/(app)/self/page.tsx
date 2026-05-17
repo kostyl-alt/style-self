@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
+import WorldviewPublicityPanel from "@/components/worldview/WorldviewPublicityPanel";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
@@ -142,19 +143,31 @@ function PillButton({ selected, onClick, children, className = "" }: { selected:
 
 function DiagnosisTab() {
   const [analysis, setAnalysis] = useState<StyleDiagnosisResult | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  // M2-4: 公開設定パネル用の状態。worldview_profiles 行の有無 + is_public を本人クエリで取得。
+  const [hasDiagnosisRow, setHasDiagnosisRow] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { setLoading(false); return; }
-      const { data: row } = await supabase
-        .from("users")
-        .select("style_analysis")
-        .eq("id", data.user.id)
-        .single() as unknown as { data: { style_analysis: unknown } | null };
-      if (row?.style_analysis) {
-        setAnalysis(row.style_analysis as StyleDiagnosisResult);
+      setUserId(data.user.id);
+
+      // M2-4: users.style_analysis と worldview_profiles を並列取得
+      // (両方とも本人限定 RLS で読める・service_role 不使用)
+      const [userRes, profileRes] = await Promise.all([
+        supabase.from("users").select("style_analysis").eq("id", data.user.id).single() as unknown as Promise<{ data: { style_analysis: unknown } | null }>,
+        supabase.from("worldview_profiles").select("is_public").eq("user_id", data.user.id).maybeSingle() as unknown as Promise<{ data: { is_public: boolean } | null }>,
+      ]);
+
+      if (userRes.data?.style_analysis) {
+        setAnalysis(userRes.data.style_analysis as StyleDiagnosisResult);
+      }
+      if (profileRes.data) {
+        setHasDiagnosisRow(true);
+        setIsPublic(Boolean(profileRes.data.is_public));
       }
       setLoading(false);
     });
@@ -180,6 +193,15 @@ function DiagnosisTab() {
 
   return (
     <div className="space-y-5 py-4">
+      {/* M2-4: 公開設定パネル(DiagnosisDisplay 直上) */}
+      {userId && (
+        <WorldviewPublicityPanel
+          userId={userId}
+          hasDiagnosis={hasDiagnosisRow}
+          initialIsPublic={isPublic}
+          worldviewName={analysis.worldviewName ?? null}
+        />
+      )}
       <DiagnosisDisplay analysis={analysis} showShare />
       {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
       <WorldviewProductsSection analysis={analysis} variant="self" />
