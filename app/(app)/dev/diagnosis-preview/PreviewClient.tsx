@@ -172,6 +172,8 @@ export default function PreviewClient() {
   const [result,  setResult]  = useState<StyleDiagnosisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
+  // M2-2: 本人ビュー / 公開ビュー の切替トグル(同じ result を 2 モードで見比べる)
+  const [viewer, setViewer] = useState<"self" | "public">("self");
   const elapsed = useElapsedSeconds(loading);
 
   async function runV2(preset: PresetPattern) {
@@ -350,10 +352,44 @@ export default function PreviewClient() {
           </div>
         )}
 
+        {/* M2-2: 本人ビュー / 公開ビュー の切替(結果がある時のみ) */}
+        {result && (
+          <div className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-2">
+            <span className="text-[10px] tracking-widest text-gray-400 uppercase mr-2">Viewer</span>
+            <button
+              type="button"
+              onClick={() => setViewer("self")}
+              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                viewer === "self"
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              本人ビュー (self)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewer("public")}
+              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                viewer === "public"
+                  ? "bg-sky-700 text-white"
+                  : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              公開ビュー (public)
+            </button>
+            <span className="text-[10px] text-gray-400 ml-auto">
+              {viewer === "self"
+                ? "本人が /self で見る画面"
+                : "他者が /u/[userId] で見る画面 (M2-3)"}
+            </span>
+          </div>
+        )}
+
         {/* 結果表示 */}
         {result && (
           <div className="border-t border-gray-100 pt-6">
-            <DiagnosisDisplay analysis={result} />
+            <DiagnosisDisplay analysis={result} viewer={viewer} />
           </div>
         )}
       </div>

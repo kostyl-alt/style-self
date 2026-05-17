@@ -4,10 +4,21 @@ import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
 import { getPatternById } from "@/lib/knowledge/worldview-patterns";
 import type { StyleDiagnosisResult } from "@/types/index";
 
-export function DiagnosisDisplay({ analysis, showShare = false }: {
+export function DiagnosisDisplay({
+  analysis,
+  showShare = false,
+  viewer = "self",
+}: {
   analysis: StyleDiagnosisResult;
   showShare?: boolean;
+  // フェーズB M2-2: 本人向け("self") と 他者向け("public") の出し分け。
+  // 既存呼出はすべて未指定 = "self" デフォルトで後方互換。
+  // public では内省項目(avoidedImpression / unconsciousTendency / actionPlan 等)を隠し、
+  // 世界観のポジティブな核(worldviewName / coreIdentity / tags /
+  // idealSelf / Fashion / Culture / Kindred Spirits)+ First Piece は name+ZOZO のみを露出。
+  viewer?: "self" | "public";
 }) {
+  const isPublic = viewer === "public";
   const hasV3 = !!(
     analysis.worldviewName ||
     analysis.unconsciousTendency ||
@@ -54,7 +65,7 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
       {/* ===== Section 1: 世界観カード ===== */}
       {hasV3 && analysis.worldviewName ? (
         <div className="bg-gray-900 text-white rounded-2xl px-6 py-10 text-center">
-          <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-3">Your Worldview</p>
+          <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-3">{isPublic ? "Worldview" : "Your Worldview"}</p>
           <h2 className="text-3xl font-light leading-snug mb-4">{analysis.worldviewName}</h2>
           {analysis.coreIdentity && (
             <p className="text-xs text-gray-300 leading-relaxed max-w-xs mx-auto mb-4">{analysis.coreIdentity}</p>
@@ -80,34 +91,46 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
         </div>
       ) : null}
 
-      {/* ===== Section 2: 内面の言語化 ===== */}
-      {(analysis.unconsciousTendency || analysis.idealSelf || analysis.avoidedImpression || clothingRole) && (
-        <Section title="Inner Voice" subtitle="内面の言語化">
-          <div className="space-y-3">
-            {analysis.unconsciousTendency && (
-              <DiagnosisCard label="無意識の傾向">
-                <p className="text-sm text-gray-800 leading-relaxed">{analysis.unconsciousTendency}</p>
-              </DiagnosisCard>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {analysis.idealSelf && (
-                <DiagnosisCard label="本当はなりたい自分" tone="emerald">
-                  <p className="text-sm text-gray-800 leading-relaxed">{analysis.idealSelf}</p>
+      {/* ===== Section 2: 内面の言語化(self) / Aspirations(public) ===== */}
+      {isPublic ? (
+        // public: idealSelf だけ単独カード化。見出しを Aspirations / 目指す姿 に。
+        // 内省項目(無意識・避けている印象)と clothingRole は隠す。
+        analysis.idealSelf && (
+          <Section title="Aspirations" subtitle="目指す姿">
+            <DiagnosisCard label="本当はなりたい自分" tone="emerald">
+              <p className="text-sm text-gray-800 leading-relaxed">{analysis.idealSelf}</p>
+            </DiagnosisCard>
+          </Section>
+        )
+      ) : (
+        (analysis.unconsciousTendency || analysis.idealSelf || analysis.avoidedImpression || clothingRole) && (
+          <Section title="Inner Voice" subtitle="内面の言語化">
+            <div className="space-y-3">
+              {analysis.unconsciousTendency && (
+                <DiagnosisCard label="無意識の傾向">
+                  <p className="text-sm text-gray-800 leading-relaxed">{analysis.unconsciousTendency}</p>
                 </DiagnosisCard>
               )}
-              {analysis.avoidedImpression && (
-                <DiagnosisCard label="避けている印象" tone="rose">
-                  <p className="text-sm text-gray-800 leading-relaxed">{analysis.avoidedImpression}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {analysis.idealSelf && (
+                  <DiagnosisCard label="本当はなりたい自分" tone="emerald">
+                    <p className="text-sm text-gray-800 leading-relaxed">{analysis.idealSelf}</p>
+                  </DiagnosisCard>
+                )}
+                {analysis.avoidedImpression && (
+                  <DiagnosisCard label="避けている印象" tone="rose">
+                    <p className="text-sm text-gray-800 leading-relaxed">{analysis.avoidedImpression}</p>
+                  </DiagnosisCard>
+                )}
+              </div>
+              {clothingRole && (
+                <DiagnosisCard label="服に求める役割" tone="amber">
+                  <p className="text-sm text-gray-800 leading-relaxed">{clothingRole}</p>
                 </DiagnosisCard>
               )}
             </div>
-            {clothingRole && (
-              <DiagnosisCard label="服に求める役割" tone="amber">
-                <p className="text-sm text-gray-800 leading-relaxed">{clothingRole}</p>
-              </DiagnosisCard>
-            )}
-          </div>
-        </Section>
+          </Section>
+        )
       )}
 
       {/* ===== Section 3: ファッション変換 ===== */}
@@ -119,7 +142,7 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
         || analysis.firstPiece) && (
         <Section title="Fashion Translation" subtitle="ファッション変換">
           <div className="space-y-3">
-            <DiagnosisCard label="合う色・素材・シルエット・小物">
+            <DiagnosisCard label={isPublic ? "色・素材・シルエット・小物" : "合う色・素材・シルエット・小物"}>
               <div className="space-y-3">
                 {analysis.recommendedColors && analysis.recommendedColors.length > 0 && (
                   <ChipRow title="色" items={analysis.recommendedColors} />
@@ -137,7 +160,7 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
             </DiagnosisCard>
 
             {analysis.recommendedBrands && analysis.recommendedBrands.length > 0 && (
-              <DiagnosisCard label="似合うブランド">
+              <DiagnosisCard label={isPublic ? "ブランド" : "似合うブランド"}>
                 <div className="flex flex-wrap gap-1.5">
                   {analysis.recommendedBrands.map((b) => (
                     <span
@@ -154,14 +177,17 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
             {analysis.firstPiece && (
               <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
                 <p className="text-[10px] tracking-[0.3em] text-amber-700 uppercase mb-3">First Piece</p>
-                <p className="text-xs text-amber-900/70 mb-2">まず試すべき1着</p>
+                {/* public では「まず試すべき1着」(本人向けアドバイス文体) を隠し、name + ZOZO リンクのみ。 */}
+                {!isPublic && (
+                  <p className="text-xs text-amber-900/70 mb-2">まず試すべき1着</p>
+                )}
                 <h3 className="text-xl font-medium text-gray-900 mb-3">{analysis.firstPiece.name}</h3>
-                {analysis.firstPiece.why && (
+                {!isPublic && analysis.firstPiece.why && (
                   <p className="text-sm text-gray-700 leading-relaxed mb-4">{analysis.firstPiece.why}</p>
                 )}
 
-                {/* Sprint 47: 構造分解された理由 */}
-                {(analysis.firstPiece.whyLength
+                {/* Sprint 47: 構造分解された理由(本人向け文体・public では非表示) */}
+                {!isPublic && (analysis.firstPiece.whyLength
                   || analysis.firstPiece.whyMaterial
                   || analysis.firstPiece.whyWeight
                   || analysis.firstPiece.whereToWear
@@ -197,7 +223,8 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
               </div>
             )}
 
-            {analysis.avoidElements && analysis.avoidElements.length > 0 && (
+            {/* avoidElements は本人向け advisory なので public では隠す。 */}
+            {!isPublic && analysis.avoidElements && analysis.avoidElements.length > 0 && (
               <DiagnosisCard label="避けた方がいい要素" tone="rose">
                 <ul className="space-y-1.5">
                   {analysis.avoidElements.map((item, i) => (
@@ -218,7 +245,7 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
         <Section title="Culture Translation" subtitle="カルチャー変換">
           <div className="space-y-3">
             {analysis.attractedCulture && (
-              <DiagnosisCard label="惹かれている文化・空気感">
+              <DiagnosisCard label={isPublic ? "文化・空気感" : "惹かれている文化・空気感"}>
                 <p className="text-sm text-gray-800 leading-relaxed">{analysis.attractedCulture}</p>
               </DiagnosisCard>
             )}
@@ -262,8 +289,10 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
         </Section>
       )}
 
-      {/* ===== 詳細（折りたたみ） ===== */}
-      {(analysis.styleStructure || analysis.whyThisResult || analysis.dailyAdvice?.length || analysis.actionPlan?.length || analysis.buyingPriority?.length) && (
+      {/* ===== 詳細（折りたたみ・self のみ） ===== */}
+      {/* dailyAdvice/buyingPriority/actionPlan/whyThisResult/plainSummary/styleStructure は
+          すべて本人向け advisory・introspection なので public では一切表示しない。 */}
+      {!isPublic && (analysis.styleStructure || analysis.whyThisResult || analysis.dailyAdvice?.length || analysis.actionPlan?.length || analysis.buyingPriority?.length) && (
         <details className="bg-white border border-gray-100 rounded-2xl">
           <summary className="cursor-pointer px-5 py-4 text-xs tracking-widest text-gray-400 uppercase hover:text-gray-600">
             もっと詳しく見る
@@ -335,8 +364,9 @@ export function DiagnosisDisplay({ analysis, showShare = false }: {
         </details>
       )}
 
-      {/* ===== Section 5: アクション ===== */}
-      {showShare && (
+      {/* ===== Section 5: アクション(本人向けのみ) ===== */}
+      {/* Actions(共有・再診断)は本人向け。public では将来 M3 で「フォロー」等に置換予定。 */}
+      {showShare && !isPublic && (
         <Section title="Actions" subtitle="アクション">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
