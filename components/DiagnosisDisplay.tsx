@@ -282,7 +282,13 @@ export function DiagnosisDisplay({
               >
                 <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Influencer</p>
                 <h3 className="text-base font-medium text-gray-900 mb-2">{person.subject_name}</h3>
-                <p className="text-sm text-gray-700 leading-relaxed">{person.reason}</p>
+                {/* M2-3: public モードで reason は pickPublicFields によって "" に
+                    マスクされる(本人回答ラベルの引用漏洩を防ぐため)。
+                    その時 p タグごと出さない一般防御(self では既存データの reason は常に
+                    埋まっているので表示不変)。 */}
+                {person.reason && (
+                  <p className="text-sm text-gray-700 leading-relaxed">{person.reason}</p>
+                )}
               </div>
             ))}
           </div>
