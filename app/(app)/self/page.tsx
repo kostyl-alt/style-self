@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
@@ -17,6 +18,11 @@ import type {
 // ---- 型 ----
 
 type SelfTab = "diagnosis" | "body" | "worldview" | "history" | "posts";
+
+// D1-2x: URL クエリ ?tab=xxx の有効値ガード(/outfit /discover と同型)
+function isSelfTab(v: string | null): v is SelfTab {
+  return v === "diagnosis" || v === "body" || v === "worldview" || v === "history" || v === "posts";
+}
 
 // ---- 身体情報の選択肢 ----
 
@@ -774,8 +780,19 @@ const TABS: { value: SelfTab; label: string }[] = [
   { value: "history",   label: "履歴" },
 ];
 
-export default function SelfPage() {
-  const [activeTab, setActiveTab] = useState<SelfTab>("diagnosis");
+function SelfInner() {
+  // D1-2x: URL クエリ ?tab=xxx で初期タブを決める(/outfit /discover と同型)。
+  // 不正値 / ?tab= なし は既存デフォルト "diagnosis"(=「世界観」タブ・SelfTab 命名トリック)。
+  const params = useSearchParams();
+  const initialTab = params.get("tab");
+  const [activeTab, setActiveTab] = useState<SelfTab>(isSelfTab(initialTab) ? initialTab : "diagnosis");
+
+  // URL が後から変わった場合に同期(/outfit /discover と同型)
+  useEffect(() => {
+    const t = params.get("tab");
+    if (isSelfTab(t) && t !== activeTab) setActiveTab(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -809,5 +826,14 @@ export default function SelfPage() {
         {activeTab === "history"   && <HistoryTab />}
       </div>
     </div>
+  );
+}
+
+// D1-2x: useSearchParams を使うため Suspense でラップ(/outfit /discover と同型)
+export default function SelfPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <SelfInner />
+    </Suspense>
   );
 }
