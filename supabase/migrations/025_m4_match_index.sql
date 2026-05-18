@@ -1,0 +1,47 @@
+-- ビジョンマップ MVP M4-1: 世界観マッチング DB 基盤
+--
+-- 【背景】
+-- M4(世界観マッチング)で .overlaps(worldview_tags, myTags) = SQL `&&`
+-- 演算子による投稿候補絞り込みを多用する。
+-- 公開投稿が数千件規模になると seq scan は遅くなるため、posts.worldview_tags
+-- に GIN インデックスを追加し、msec オーダーで応答できるようにする。
+--
+-- 【設計の確定事項(設計ドキュメント参照)】
+-- - 判断: posts.worldview_tags(text[] 直接列)にのみ GIN を追加
+-- - worldview_profiles 側は当面追加しない:
+--     - worldview_tags は result jsonb の中(直接列ではない)
+--     - 式インデックス(create index ... using gin ((result->'worldview_tags')))が
+--       必要で、メンテ負担が発生する
+--     - 公開プロフィール母数 = is_public=true ユーザー数 = 当面〜数十人で
+--       全件 SELECT(50ms 以内)で十分
+--     - 母数が数百〜数千になってから式インデックスを足す
+--
+-- 【変更内容】
+-- 1. posts.worldview_tags に GIN インデックス追加
+--    インデックス名は M3-1 の命名規約に合わせる:
+--      posts_<column>_<kind>_idx
+--    本ケースは:
+--      posts_worldview_tags_gin_idx
+--
+-- 【安全性】
+-- - 既存データ(posts 行)には触らない。インデックス追加のみ
+-- - 既存ポリシー(RLS)・既存インデックス(M3-1 の 2 本)無変更
+-- - create index if not exists で冪等
+--
+-- 【冪等性】
+-- - create index if not exists で何度流しても安全
+--
+-- 【ロールバック手順】
+--   drop index if exists public.posts_worldview_tags_gin_idx;
+--
+-- 適用時の確認:
+-- - 既存テーブル posts は無変更
+-- - 既存インデックス 2 本(posts_author_created_idx / posts_public_created_idx)無変更
+-- - posts_worldview_tags_gin_idx が新規追加される
+-- - explain (analyze) select * from posts where worldview_tags && array['dark']
+--   で "Bitmap Index Scan on posts_worldview_tags_gin_idx" が現れる
+
+-- ---- 1. GIN インデックス ----
+-- posts.worldview_tags(text[])への &&(overlaps)演算の高速化
+create index if not exists posts_worldview_tags_gin_idx
+  on public.posts using gin (worldview_tags);
