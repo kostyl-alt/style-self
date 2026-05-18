@@ -6,18 +6,20 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import InspirationView from "@/components/discover/InspirationView";
 import LearnView from "@/components/learn/LearnView";
 import CultureView from "@/components/discover/CultureView";
+import WorldviewMatchView from "@/components/discover/WorldviewMatchView";
 import type { StyleDiagnosisResult } from "@/types/index";
 
-type DiscoverTab = "inspiration" | "learn" | "culture";
+type DiscoverTab = "inspiration" | "learn" | "culture" | "worldview-match";
 
 const TABS: { value: DiscoverTab; label: string; description: string }[] = [
-  { value: "inspiration", label: "インスピレーション", description: "抽象語・テーマからコーデを生成して、新しい表現を見つける" },
-  { value: "learn",       label: "ブランドを学ぶ",     description: "ブランド哲学・トレンドの取り入れ方・参照を読む" },
-  { value: "culture",     label: "カルチャー",         description: "あなたの世界観に合う音楽・映画・香水と、その理由" },
+  { value: "inspiration",     label: "インスピレーション", description: "抽象語・テーマからコーデを生成して、新しい表現を見つける" },
+  { value: "learn",           label: "ブランドを学ぶ",     description: "ブランド哲学・トレンドの取り入れ方・参照を読む" },
+  { value: "culture",         label: "カルチャー",         description: "あなたの世界観に合う音楽・映画・香水と、その理由" },
+  { value: "worldview-match", label: "世界観が近い",       description: "あなたと近い世界観の投稿・人を、共通する世界観要素の数で並べます" },
 ];
 
 function isDiscoverTab(v: string | null): v is DiscoverTab {
-  return v === "inspiration" || v === "learn" || v === "culture";
+  return v === "inspiration" || v === "learn" || v === "culture" || v === "worldview-match";
 }
 
 function DiscoverInner() {
@@ -81,9 +83,10 @@ function DiscoverInner() {
         {activeTabMeta && (
           <p className="text-xs text-gray-500 mt-3 mb-6 leading-snug">{activeTabMeta.description}</p>
         )}
-        {activeTab === "inspiration" && <InspirationView embedded analysis={analysis} />}
-        {activeTab === "learn"       && <LearnView embedded />}
-        {activeTab === "culture"     && <CultureView analysis={analysis} />}
+        {activeTab === "inspiration"     && <InspirationView embedded analysis={analysis} />}
+        {activeTab === "learn"           && <LearnView embedded />}
+        {activeTab === "culture"         && <CultureView analysis={analysis} />}
+        {activeTab === "worldview-match" && <WorldviewMatchView />}
       </div>
     </div>
   );
