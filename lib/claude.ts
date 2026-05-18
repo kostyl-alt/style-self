@@ -1,9 +1,20 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { writeFile } from "fs/promises";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// M5-4a: Anthropic クライアントを lazy 化。
+// 旧: module top-level eager init で import 時点の process.env.ANTHROPIC_API_KEY を
+//     snapshot していたため、tsx 直実行スクリプト(env を後から readFileSync で読む)で
+//     undefined を握ったまま固定される問題があった。
+// 新: 初回呼出時に env を解決して生成・以降同一インスタンスを再利用。
+//     Next.js API ルートでは Next.js が起動時に .env を自動ロード済のため、初回呼出
+//     (=リクエスト処理中)に env 解決済の状態で生成 = 旧 eager init と挙動同等。
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _anthropic;
+}
 
 // デフォルトモデル(Sonnet)。CLAUDE.md「モデルは必ず claude-sonnet-4-6 を使用する」の原則。
 export const MODEL = "claude-sonnet-4-6";
@@ -45,7 +56,7 @@ export async function callClaude({
   temperature,
   model,
 }: ClaudeRequestOptions): Promise<string> {
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: model ?? MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
@@ -93,7 +104,7 @@ export async function callClaudeWithImage<T>(
   userMessage = "この画像のアイテムを解析してください。",
   maxTokens = 1024,
 ): Promise<T> {
-  const message = await anthropic.messages.create({
+  const message = await getAnthropic().messages.create({
     model: MODEL,
     max_tokens: maxTokens,
     system: systemPrompt,
