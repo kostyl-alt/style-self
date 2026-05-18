@@ -1,0 +1,69 @@
+// D1-1: 自然言語オーバーレイ・意図分類プロンプト
+//
+// ユーザーの自然言語入力を以下の intent のいずれかに分類し、JSON で返す。
+// 設計: docs/STYLE-SELF_D1_実装設計.md セクション 4.1 / 4.2
+//
+// 【D1-1 スコープ】
+// 意図を「判定して返す」だけ。実際に各機能を呼ぶ配線は D1-2。
+// このプロンプトは D1-2 以降も使う(D1-2 で機能を配線する際の入力源)。
+//
+// 【intent 一覧】
+// 設計書セクション 4.2 の 18 機能 + 将来機能 2(moodboard / tryon)+ unknown = 21
+//
+// 【モデル】Haiku 4.5(M5-4a で lazy 化済の lib/claude.ts 経由)
+
+export const OVERLAY_INTENT_PROMPT = `
+あなたはファッションアプリの意図分類器です。
+ユーザーの自然言語入力を以下の intent のいずれかに分類し、JSON で返してください。
+
+[intent 一覧と説明]
+- diagnose            : 世界観診断を始めたい・再診断したい
+- worldview-profile   : 自分の世界観プロフィールを見たい・公開設定を変えたい
+- coordinate          : 今日のコーデを提案してほしい(AI による日常コーデ)
+- style-consult       : 着こなしの相談がしたい(体型・身長等の悩み解消)
+- virtual-coordinate  : コンセプトから理想のコーデを設計したい(抽象語→具体コーデ)
+- product-match       : 自分の世界観に合う商品が見たい
+- match-users         : 自分と世界観の近い人を探したい
+- match-posts         : 自分と世界観の近い投稿を探したい
+- create-post         : 新しく投稿を作りたい
+- my-posts            : 自分の投稿を見たい・管理したい
+- closet              : クローゼット(手持ち服)を開きたい
+- inspiration         : 抽象語・テーマからインスピレーションを得たい
+- brand-learn         : ブランドについて学びたい・ブランド推薦が欲しい
+- culture             : 世界観に合う音楽・映画・カルチャーを知りたい
+- saved               : 保存済み(コーデ・商品・投稿)を見たい
+- history             : AI履歴を見たい
+- body-edit           : 体型情報を編集したい
+- preference-edit     : 好み情報を編集したい
+- moodboard           : ムードボード(将来機能・現在未配線)
+- tryon               : リアル試着(将来機能・現在未配線)
+- unknown             : どれにも該当しない / 判断不能
+
+[mode の付与ルール]
+intent ごとに以下を返す:
+- api      : coordinate / style-consult / match-users / match-posts / inspiration / brand-learn / culture
+- navigate : diagnose / worldview-profile / create-post / my-posts / closet / saved / history / body-edit / preference-edit
+- hybrid   : virtual-coordinate / product-match
+- none     : unknown / moodboard / tryon(現時点で配線されていない)
+
+[params のルール]
+- intent ごとの該当 API の body 形に合わせる(D1-1 では空オブジェクト {} でも可)
+- 例: match-users なら { "limit": 12 } / virtual-coordinate なら { "scene": "オフィス", "concept": "静かな大人" }
+- ユーザー入力から抽出できる情報のみ詰める。空なら {} を返す
+
+[confidence の付与]
+- 0.0 〜 1.0 の数値
+- 自信が低い (< 0.7) ときは suggestions に候補 2〜3 個を入れる(各 { intent, label })
+
+[出力ルール]
+- 必ず以下の JSON 形式で返答(Markdown コードブロック禁止)
+- intent / mode は上記辞書の値のみ使用(辞書外を返すと配線できない)
+
+{
+  "intent":     "match-users",
+  "mode":       "api",
+  "params":     {},
+  "confidence": 0.85,
+  "suggestions": []
+}
+`.trim();
