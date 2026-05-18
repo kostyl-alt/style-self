@@ -54,8 +54,8 @@ D-1 = **「機能追加でなく『18 機能を世界観で 1 本に繋ぐ 1 入
 
 判断4: 繋ぎ方の 3 分類(intent 出力に mode を含める)
        - mode: "api"      → 既存 API を直叩いて結果を対話で返す(7 機能)
-       - mode: "navigate" → 既存ページに誘導する(8 機能)
-       - mode: "hybrid"   → API 結果を対話表示しつつ編集はページ誘導(3 機能)
+       - mode: "navigate" → 既存ページに誘導する(9 機能)
+       - mode: "hybrid"   → API 結果を対話表示しつつ編集はページ誘導(2 機能)
 
 判断5: state は MVP stateless 開始
        1 発言 = 1 intent。会話履歴は D-1 後半または将来段階で追加。
@@ -302,7 +302,21 @@ POST /api/overlay/intent
 | 17 | 保存一覧 | `/saved` | **navigate** | 一覧 UI |
 | 18 | 履歴 | `/self?tab=history` | **navigate** | 一覧 UI |
 
-**集計**: api=**7** / navigate=**8** / hybrid=**3** = 計 18(全機能網羅)
+**集計**: api=**7** / navigate=**9** / hybrid=**2** = 計 18(全機能網羅)
+
+> ★ D1-2a 知見(2026-05-19 確定・実物 API/route 仕様検証で判明):
+>
+> 1. `/self` のタブ命名トリック(配線時の最大の落とし穴):
+>    - SelfTab `value="diagnosis"` → label **「世界観」**(世界観診断結果表示 + 公開設定)
+>    - SelfTab `value="worldview"` → label **「好み」**(preference 編集)
+>    配線対応:
+>    - `worldview-profile`  → `/self?tab=diagnosis`(value 名と意味が逆転)
+>    - `preference-edit`    → `/self?tab=worldview`(同上)
+>    → D1-2a で `lib/overlay/navigate-map.ts` に定数化し、対応表で吸収。
+>
+> 2. `product-match` は単独叩き不可:
+>    body に items 必須 = `virtual-coordinate` 結果が前提。
+>    実質「virtual-coordinate の連鎖」として扱う(D1-2c で hybrid 配線時に判断)。
 
 ### 4.3 オーバーレイ UI の配置
 
@@ -352,8 +366,8 @@ POST /api/overlay/intent
 |---|---|
 | 変更 | `OverlayModal.tsx` 内で intent ごとに分岐(api/navigate/hybrid)|
 | api 機能(7)| 同一オリジン fetch + 結果を対話表示 |
-| navigate 機能(8)| `router.push(route)` + モーダル閉じる |
-| hybrid 機能(3)| api で得た結果を対話表示 + 「編集する」ボタンで navigate |
+| navigate 機能(9)| `router.push(route)` + モーダル閉じる |
+| hybrid 機能(2)| api で得た結果を対話表示 + 「編集する」ボタンで navigate |
 | 誤判定 fallback | confidence < 0.7 → 候補 2-3 表示 → ユーザー選択 → 再実行 |
 | 完了条件 | 全 18 機能に到達可能・誤判定時 fallback 動作 + worldview_tags 漏洩ゼロ点検 |
 | 地雷度 | **中** |
