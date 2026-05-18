@@ -9,6 +9,8 @@
 
 import type { BodyProfile } from "@/types/index";
 import { getSeasonContext } from "@/lib/utils/season";
+// M5-3: 詩的 keywords は完全保持・別キー coreTags(英語スラッグ31語辞書)を併産
+import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
 
 const BASE_CONCEPT_TRANSLATE_PROMPT = `
 あなたはファッションコンセプトの翻訳専門家です。
@@ -34,6 +36,8 @@ const BASE_CONCEPT_TRANSLATE_PROMPT = `
 - recommendedSilhouettes: 具体的なシルエット 3〜5個（例：「縦長」「ドレープ」「ストレート」「ゆったり」「Aライン」）
 - requiredAccessories: 必須の小物・アクセサリー 2〜4個（カテゴリ＋具体形・例：「細いシルバーリング」「レザーサンダル」「薄ベルト」「シルバーピアス」）
 - ngElements: 避ける要素 3〜5個（例：「光沢」「派手な色」「装飾過多」「ロゴ」「テカリ素材」）
+- coreTags: 商品マッチング用の英語スラッグ配列（最大5個・以下の正準辞書からのみ選ぶ・該当が無ければ空配列・既存 keywords とは独立に併産する）
+  辞書: ${PRODUCT_WORLDVIEW_TAGS.join(", ")}
 
 以下のJSON形式で必ず返答してください（Markdownコードブロックは付けない）：
 {
@@ -47,7 +51,8 @@ const BASE_CONCEPT_TRANSLATE_PROMPT = `
   "recommendedMaterials":   ["素材1", "素材2", "素材3"],
   "recommendedSilhouettes": ["シルエット1", "シルエット2", "シルエット3"],
   "requiredAccessories":    ["小物1", "小物2"],
-  "ngElements":             ["NG1", "NG2", "NG3"]
+  "ngElements":             ["NG1", "NG2", "NG3"],
+  "coreTags":               ["coreTag1", "coreTag2"]
 }
 `.trim();
 

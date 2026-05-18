@@ -12,7 +12,8 @@ export interface ScoringResult {
 }
 
 export interface ScoringContext {
-  conceptKeywords?: string[];   // interpretation.keywords + matchedRuleKeywords
+  conceptKeywords?: string[];   // interpretation.keywords + matchedRuleKeywords(★詩的日本語・テイスト一致継続使用)
+  userCoreTags?:    string[];   // M5-3: interpretation.coreTags(英語スラッグ31語辞書・worldview スコア用)
   ngElements?:      string[];   // interpretation.ngElements + user.preference.ngElements
   bodyConcerns?:    string[];   // user.body_profile.concerns
   currentSeason?:   string;     // "春"/"夏"/"秋"/"冬"。未指定時は getSeasonJST() で算出
@@ -77,13 +78,17 @@ export function scoreProduct(
 
   // ---- Sprint 41 拡張スコアリング ----
 
-  // worldview_tags がコンセプトキーワードと共通項を持つ → +40
-  if (ctx.conceptKeywords && ctx.conceptKeywords.length > 0 && product.worldviewTags.length > 0) {
-    const overlap = product.worldviewTags.some((t) =>
-      ctx.conceptKeywords!.some((c) => c.includes(t) || t.includes(c)),
-    );
-    if (overlap) {
-      score += 40;
+  // M5-3: worldview スコアは coreTags 完全 overlap で評価(M4 同型)
+  // 旧: ctx.conceptKeywords(詩的日本語)と部分一致 includes
+  // 新: ctx.userCoreTags(英語スラッグ31語辞書)と完全文字列 overlap
+  // userCoreTags が空(後方互換 / 古い保存済 result)時は何もしない=既存挙動と同等
+  // テイスト一致(L142-153)は引き続き ctx.conceptKeywords を参照する=設計思想B(詩的を潰さない)
+  if (ctx.userCoreTags && ctx.userCoreTags.length > 0 && product.worldviewTags.length > 0) {
+    const userSet  = new Set(ctx.userCoreTags);
+    const overlapN = product.worldviewTags.filter((t) => userSet.has(t)).length;
+    if (overlapN > 0) {
+      // overlap 数で段階加点: 1個 +40 / 2個 +50 / 3個以上 +60(上限)
+      score += Math.min(40 + (overlapN - 1) * 10, 60);
       reasons.push("世界観");
     }
   }

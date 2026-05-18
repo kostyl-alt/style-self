@@ -25,5 +25,6 @@ export function normalizeInterpretation(raw: unknown): ConceptInterpretation {
     recommendedSilhouettes: asStringArray(r.recommendedSilhouettes, 5),
     requiredAccessories:    asStringArray(r.requiredAccessories, 4),
     ngElements:             asStringArray(r.ngElements, 5),
+    coreTags:               asStringArray(r.coreTags, 5),   // M5-3: 商品マッチング用 coreTags
   };
 }

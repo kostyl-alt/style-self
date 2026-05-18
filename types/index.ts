@@ -673,6 +673,8 @@ export interface VirtualCoordinateItem {
 }
 
 // Sprint 36 v1.2: コンセプト翻訳結果
+// M5-3: coreTags(英語スラッグ31語辞書)を併産。詩的 keywords は完全保持。
+//       後方互換のため optional。古い保存済 result でも壊れない。
 export interface ConceptInterpretation {
   keywords:                string[];
   emotion:                 string;
@@ -685,6 +687,7 @@ export interface ConceptInterpretation {
   recommendedSilhouettes:  string[];
   requiredAccessories:     string[];
   ngElements:              string[];
+  coreTags?:               string[];   // M5-3: 商品マッチング用の coreTags 31 語(optional)
 }
 
 export type ConceptSource = "knowledge_base" | "ai_generated";

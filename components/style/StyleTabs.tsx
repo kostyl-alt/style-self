@@ -617,10 +617,12 @@ function VirtualResult({
       ...(result.conceptInterpretation?.keywords ?? []),
     ]));
     const ngElements = result.conceptInterpretation?.ngElements ?? [];
+    // M5-3: coreTags は詩的 conceptKeywords と並列で渡す(設計思想B・worldview スコア用)
+    const coreTags = result.conceptInterpretation?.coreTags ?? [];
     fetch("/api/products/match", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: result.items, conceptKeywords, ngElements }),
+      body: JSON.stringify({ items: result.items, conceptKeywords, ngElements, coreTags }),
     })
       .then((r) => r.json())
       .then((data: ProductMatchResponse) => setMatches(data.matches ?? []))

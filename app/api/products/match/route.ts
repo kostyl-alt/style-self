@@ -107,10 +107,11 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
 
-    const { items, conceptKeywords, ngElements } = await request.json() as {
+    const { items, conceptKeywords, ngElements, coreTags } = await request.json() as {
       items: VirtualCoordinateItem[];
       conceptKeywords?: string[];
       ngElements?: string[];
+      coreTags?: string[];   // M5-3: 商品マッチング用の coreTags(英語スラッグ31語辞書)
     };
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "items 配列が必要です" }, { status: 400 });
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
 
     const ctx: ScoringContext = {
       conceptKeywords: conceptKeywords ?? [],
+      userCoreTags:    coreTags ?? [],   // M5-3: worldview スコア用(テイスト一致はconceptKeywords継続)
       ngElements: [
         ...(ngElements ?? []),
         ...((userData?.style_preference?.ngElements ?? []) as string[]),
