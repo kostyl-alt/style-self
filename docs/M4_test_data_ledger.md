@@ -37,6 +37,31 @@ M4(世界観マッチング)の実装と検証には、オーナー(7ed5d391)か
 | 3 | 00000000-0000-4000-8000-000000000003 | test+seed3@style-self.local | [TEST] Quiet Intellectual | 静謐な観察者     | 2(中)|
 | 4 | 00000000-0000-4000-8000-000000000004 | test+seed4@style-self.local | [TEST] Edge Experimental  | 逸脱する作り手   | 1(縁)|
 | 5 | 00000000-0000-4000-8000-000000000005 | test+seed5@style-self.local | [TEST] Soft Natural       | やわらかな自然体 | 0(遠)|
+| 6 | 00000000-0000-4000-8000-000000000006 | test+seed6@style-self.local | [TEST] No Diagnosis       | (診断未完了)     | —(マッチ対象外)|
+
+### 6 番目「No Diagnosis」(M4-5 で追加)
+
+- **用途**: `diagnosis_required` UI(/discover の WorldviewMatchView の
+  EmptyState「世界観を診断するとマッチが見えます」)を本人視点で実機確認するため。
+- **作るもの**: `auth.users` 行 + `public.users` 行(display_name=`[TEST] No Diagnosis`)のみ。
+- **作らないもの(意図的)**: `worldview_profiles` 行・`posts` 行は作らない。
+  seed スクリプトの PERSONAS で `skipProfile: true` を付け、【6】【7】ループの先頭で
+  `continue` する設計。
+- **既存5ペルソナへの影響**: なし。母集団 = `worldview_profiles where is_public=true` に
+  行が存在しないため、人マッチ・投稿マッチの結果に出てこない(overlap 階段 3/2/2/1/0
+  / 人マッチ 4 件 / 自己除外 すべて不変)。
+- **teardown**: 既存スクリプト(`scripts/teardown-m4-test-data.ts`)が email pattern
+  `test+seed%@style-self.local` で対象を抽出するため、6 人目も自動的に削除される。
+  スクリプトの修正は不要。
+- **ログイン credential**: email `test+seed6@style-self.local` / password
+  `seed-not-real-6-do-not-use`(既存5人と同じ規約)。
+  オーナーはこの credential で /login → /discover?tab=worldview-match を開き、
+  diagnosis_required EmptyState が出ることを確認する。
+- **実機確認結果(2026-05-18)**: seed 実行ログ上、【6】worldview_profiles と
+  【7】posts の両ループで「6 skip(skipProfile=true)」が出力され
+  skip 動作を実証済。6 人目でログインして /discover?tab=worldview-match を開き、
+  EmptyState「世界観を診断するとマッチが見えます」+ 診断 CTA が表示されることを
+  実機確認済(docs/STYLE-SELF_M4_実装設計.md セクション 13 知見4-③)。
 
 ### tags 構築ルール
 

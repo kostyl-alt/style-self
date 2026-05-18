@@ -678,6 +678,72 @@ M4-2 初版は順位・overlap 計算・自己除外・プライバシー(worldv
 M3-5 の 6bd309dd 教訓と同じ作法が引き続き有効。
 ```
 
+### 知見4: M4-5 実機確認結果(2026-05-18)
+
+> M4-5 は「現状調査の結果、新規実装が必要な機能 0 件」と判明。
+> 既に M4-1〜M4-4 で全状態分岐が本実装済(loading / error /
+> auth_required / diagnosis_required / 両 0 件 / 通常表示)。
+> M4-5 は **実機確認とプライバシー点検のみで完結**した。
+
+#### ① 自己除外(API 層 + UI 層の二重検証)
+
+- API 層: M4-3 commit `d54ce49` で `.neq("author_user_id", user.id)` /
+  `.neq("user_id", user.id)` を実機実証済(検証データで自分が結果に出ない)
+- UI 層: M4-4 スクショで PEOPLE 4 件・POSTS 8 件すべてが `[TEST] xxx` のみ。
+  オーナー自身(`7ed5d391`)は人マッチ・投稿マッチどちらにも出現しないことを
+  実機で再確認
+
+#### ② 未認証保護(/login リダイレクト + EmptyState の二層)
+
+```
+想定: 未ログインで /discover を開く → reason:"auth_required" の
+      EmptyState「ログインで世界観マッチが見られます」が出る
+実機: 未ログインで /discover にアクセスすると middleware が
+      /login にリダイレクトする(ページごと非描画)
+→ プライバシー面で想定より堅い(/discover の HTML 自体が未認証
+  ユーザーに届かない)
+→ EmptyState は API 直叩き等のエッジケース用の二重防御として本実装維持
+```
+
+#### ③ diagnosis_required(6 人目 [TEST] No Diagnosis で実機確認)
+
+- 検証データに 6 番目を追加(`scripts/seed-m4-test-data.ts` に `skipProfile` フラグ)
+- 6 人目 = `auth.users` + `public.users` のみ存在・`worldview_profiles` 行なし
+- 6 人目でログイン → /discover?tab=worldview-match →
+  EmptyState「世界観を診断するとマッチが見えます」+ /onboarding CTA が出ることを実機確認
+- API レスポンス `{ ok:true, posts:[]/users:[], reason:"diagnosis_required" }`
+  → UI 側 [WorldviewMatchView.tsx:119-127](../components/discover/WorldviewMatchView.tsx#L119-L127)
+  の分岐到達を実機実証
+
+#### ④ プライバシー View Source 点検(M2-3 教訓継承の最終確認)
+
+```
+点検対象: M4-4 通常表示(オーナーログイン)+ M4-5 diagnosis_required
+         (6 人目ログイン)の両状態
+
+検索キー(英語スラッグ 12 種 + "worldview_tags" 文字列):
+  dark / gothic / minimal / structured / deconstruction /
+  refined / monochrome / avant-garde / sensual / romantic /
+  soft / natural / worldview_tags
+
+結果:
+- "worldview_tags" 文字列: 両状態とも 0 件
+- 英語スラッグ実質 0 件
+  - "dark" のみ 1 件 HIT したが、Next.js の @media
+    (prefers-color-scheme: dark) で worldview とは無関係(無害)
+- 全状態で worldview_tags 漏洩ゼロを実機実証
+
+→ M2-3「量産型」HTML inline 漏洩 / M3-4 SELECT 列絞り の教訓は
+  M4 でも完全に継承され、各状態の View Source で確認できた。
+```
+
+#### ⑤ 検証データ teardown は M5 着手後に判断
+
+- 5 ペルソナ + 6 人目「No Diagnosis」+ 10 投稿は M5 でもマッチ素材として
+  価値がある(diagnosis_required / 投稿マッチ / 人マッチの母集団として継続利用可)
+- M4 完結時点では teardown 実行せず・台帳に手順を残したまま保留
+- M5 完結後 or 本番展開時に teardown 実行を判断
+
 ---
 
 ## 14. このドキュメントの位置づけ

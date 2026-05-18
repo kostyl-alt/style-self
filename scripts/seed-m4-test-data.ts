@@ -69,6 +69,8 @@ interface PersonaSpec {
   firstPieceKeyword: string;
   bgHex:             string;
   textHex:           string;
+  // M4-5: diagnosis_required UI 確認用。true なら worldview_profiles と posts を作らない。
+  skipProfile?:      boolean;
 }
 
 const PERSONAS: PersonaSpec[] = [
@@ -166,6 +168,29 @@ const PERSONAS: PersonaSpec[] = [
     firstPieceName: "オフホワイトのざっくりニット",
     firstPieceKeyword: "白ニット",
     bgHex: "f7ede0", textHex: "6b5a47",
+  },
+  // M4-5: diagnosis_required UI 確認用。worldview_profiles を意図的に作らない。
+  // 既存5ペルソナの overlap 階段(3/2/2/1/0)・人マッチ4件・自己除外には影響しない
+  // (母集団 is_public=true な worldview_profiles に行が存在しないため構造的に出ない)。
+  {
+    idx: 6,
+    uuid: "00000000-0000-4000-8000-000000000006",
+    email: `${EMAIL_PREFIX}6@${EMAIL_DOMAIN}`,
+    displayName: "[TEST] No Diagnosis",
+    worldviewName: "(診断未完了)",
+    coreIdentity: "",
+    idealSelf: "",
+    attractedCulture: "",
+    targetOverlap: 0,
+    fillerTags: [],
+    colors: [],
+    materials: [],
+    silhouettes: [],
+    brands: [],
+    firstPieceName: "",
+    firstPieceKeyword: "",
+    bgHex: "ffffff", textHex: "888888",
+    skipProfile: true,
   },
 ];
 
@@ -342,6 +367,10 @@ async function ensureAuthUser(supabase: SupabaseClient, p: PersonaSpec): Promise
   // 【6】worldview_profiles upsert
   console.log("【6】worldview_profiles upsert(is_public=true)");
   for (const c of computed) {
+    if (c.skipProfile) {
+      console.log(`  ${c.idx} skip(skipProfile=true・diagnosis_required 確認用)`);
+      continue;
+    }
     const result = buildResult(c, c.tags);
     const { error } = await supabase
       .from("worldview_profiles")
@@ -361,6 +390,10 @@ async function ensureAuthUser(supabase: SupabaseClient, p: PersonaSpec): Promise
   // 【7】posts INSERT(各 persona × 2 件・upsert で冪等)
   console.log("【7】posts upsert(各2件・is_public=true)");
   for (const c of computed) {
+    if (c.skipProfile) {
+      console.log(`  ${c.idx} skip(skipProfile=true・投稿も作らない)`);
+      continue;
+    }
     for (let postNum = 1; postNum <= 2; postNum++) {
       const postId   = `00000000-0001-4000-8000-0000000000${c.idx}${postNum}`;
       const label    = c.displayName.replace("[TEST] ", "");
