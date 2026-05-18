@@ -11,7 +11,7 @@
 
 ---
 
-## 0. D-1 の本質
+## 0. D-1 の本質(対話中心・改訂版)
 
 ```
 MVP(M1〜M5): 機能はすべて揃った
@@ -20,7 +20,7 @@ MVP(M1〜M5): 機能はすべて揃った
 
 しかしオーナーの違和感:
   「ボタンが多く分散していて分かりにくい」
-  「ChatGPT のように『少ない入口で多機能』にしたい」
+  「ChatGPT / Gemini / Claude Code のような対話形式が良い」
 
 棚卸し実物で確定した問題:
   ・引き出し合計 18(ボトム 5 + サブ 13)
@@ -31,20 +31,41 @@ MVP(M1〜M5): 機能はすべて揃った
   ・中心動線「→」がコード上一切表現されていない(並列カタログ構造)
 ```
 
-D-1 = **「機能追加でなく『18 機能を世界観で 1 本に繋ぐ 1 入口』を新層として被せる」**。
+### 改訂のきっかけ(2026-05-19 オーナー実機フィードバック)
+
+```
+当初は navigate 中心(intent 判定→ router.push で既存画面に飛ばす)で D1-2a を実装。
+実機確認で「俺ですら使いにくい・離脱が多すぎる。ChatGPT / Claude Code のような
+対話形式が良い」とのオーナー判断。体験方針を navigate 中心 → 対話中心 に転換。
+詳細経緯は docs/STYLE-SELF_D1_対話中心_改訂案.md(本本体に統合済)。
+```
+
+### D-1 の本質(対話中心)
+
+```
+D-1 = 「18 機能を 1 つの対話画面で 1 本に繋ぐ 1 入口」を新層として被せる。
+
+普通の応答は対話画面の中で完結し、
+専用 UI が本質的に必要な機能だけ「○○しますね →」と一拍置いて引き継ぐ。
+
+= ChatGPT / Claude / Gemini / Claude Code が、
+  普通の応答は会話で返し、画像生成・コード編集・ファイル操作などの
+  「本質的に専用 UI が要るもの」だけキャンバスや専用 UI に展開するのと同じ思想。
+```
+
 オーバーレイ型で既存 18 機能・全ルート・M2-3 プライバシー・M4-2 RLS・M3 画像処理は
-**一切変更しない**。中心動線「→」を意図ルーターで自然言語から駆動する。
+**一切変更しない**。中心動線「→」を意図ルーター + 対話の流れで自然言語から駆動する。
 
 ---
 
-## 1. 確定した設計判断(オーナー確定)
+## 1. 確定した設計判断(オーナー確定・対話中心 5 判断を含む)
 
 ```
 判断1: D-1 オーバーレイ型(既存温存・新層追加のみ)
        既存 18 機能・全ルート・M2-3/M4-2/M3 プライバシー設計を一切変更しない
 
 判断2: 確定スコープは ①②③(②③は利用者の声で必須化済)
-       ① 意図ルーター + 既存 18 機能配線
+       ① 意図ルーター + 既存 18 機能配線(対話完結 8 + 専用 UI 引き継ぎ 10)
        ② ムードボード
        ③ リアル試着(自分写真 + 服 → 着せた合成画像生成)
 
@@ -52,16 +73,23 @@ D-1 = **「機能追加でなく『18 機能を世界観で 1 本に繋ぐ 1 入
        M5-4a `0f86efc` で lazy 化済の lib/claude.ts を再利用。
        意図分類は単純タスク・Haiku で十分・¥0.001/件想定。
 
-判断4: 繋ぎ方の 3 分類(intent 出力に mode を含める)
-       - mode: "api"      → 既存 API を直叩いて結果を対話で返す(7 機能)
-       - mode: "navigate" → 既存ページに誘導する(9 機能)
-       - mode: "hybrid"   → API 結果を対話表示しつつ編集はページ誘導(2 機能)
+判断4: 機能の 2 分類(対話中心・改訂後)
+       - 対話完結         (8 機能): 結果を吹き出し / 結果カードで返し対話の中で見せる
+       - 専用 UI 引き継ぎ (10 機能): 「○○しますね →」ボタン + navigate-map 転用で
+                                      専用画面に滑らかに引き継ぐ
+       (旧 navigate / api / hybrid の 3 分類は廃止・上記 2 分類に統合)
 
-判断5: state は MVP stateless 開始
-       1 発言 = 1 intent。会話履歴は D-1 後半または将来段階で追加。
-       「さっきの〜」は MVP では未対応・該当時は再入力を促す。
+判断5: ★ オーナー実機フィードバックを受けた 5 判断(対話中心化の確定)
+       ① 対話画面の表示形態     = モーダル拡張(全画面化は将来検討)
+       ② 会話文脈の永続化       = セッション内 React state のみ(MVP)
+                                  localStorage / DB 保存は将来
+       ③ virtual-coordinate → product-match 連鎖 = MVP に含む
+                                  (product-match は単独叩き不可と D1-2a で確定済)
+       ④ 本体設計書の改訂タイミング = 改訂を先行し、実装は本体改訂後
+       ⑤ ?tab= バグ修正(/self が useSearchParams を読まない既存仕様の不具合)
+                                  = D1-2x として独立 commit
 
-判断6: ★ ③ は D1-3 完了後の GO ゲートで再判断
+判断6: ★ ③ は D1-3 完了後の GO ゲートで再判断(★完全不変)
        D1-4(調査専用ステップ)を挟む。外部 try-on API 選定 + コスト見積もり +
        プライバシー設計確定 + 規約整備が GO 条件。
 ```
@@ -161,27 +189,32 @@ virtual try-on は ¥10-30 / 1 試着。100 アクティブユーザー × 月 1
   - D1-4 でコスト見積もりを実測 → GO 判断後に D1-5 実装
 ```
 
-### 🔴 地雷5: 既存 BottomNav との共存
+### 🔴 地雷5: 既存 BottomNav との共存(★判断5-①: モーダル拡張で確定)
 
 ```
 オーバーレイは追加層。既存 BottomNav 5 タブを消すか・隠すか・共存させるかの判断。
 
-対策(MVP):
+対策(MVP・判断5-①: モーダル拡張で確定):
   - 既存 BottomNav は完全保持(オーナーの「全機能を残したい」要件)
-  - オーバーレイは追加 UI(FAB / 上部入力欄)で被せる
+  - オーバーレイは追加 UI(FAB + モーダル拡張)で被せる
+  - 全画面化は MVP では採用せず・将来検討
   - 既存タブからの遷移も維持(オーバーレイ未使用ユーザーへの後方互換)
   - 将来 D-2 で BottomNav 簡素化を再検討(本ドキュメントスコープ外)
 ```
 
-### 🔴 地雷6: 会話履歴 state が無いことのユーザー混乱
+### 🔴 地雷6: 会話履歴 state(★判断5-②: セッション内 state で確定)
 
 ```
-MVP stateless では「さっきの理想コーデの商品をマッチ」が動かない。
+対話中心なので「さっきの理想コーデの商品をマッチ」を成立させる必要がある。
+特に virtual-coordinate → product-match 連鎖は MVP 含有(★判断5-③)。
 
-対策(MVP):
-  - intent 出力に「直前の入力が必要です」フォールバック intent を含める
-  - 会話 UI で過去発話を画面上に表示(UI 上は履歴あり・サーバ側は stateless)
-  - 将来 D-1 後半で会話履歴 state を追加
+対策(MVP・判断5-② 確定):
+  - 会話文脈はセッション内 React state のみで保持(永続化なし)
+  - モーダル/オーバーレイを閉じると履歴消滅(MVP 想定の体験)
+  - 直前の virtual-coordinate 結果(items + conceptKeywords + coreTags)を
+    state に保持し、product-match 連鎖で再利用
+  - localStorage / DB 保存は将来(MVP 範囲外)
+  - 上記以外の「さっきの〜」は MVP 未対応・該当時は再入力誘導
 ```
 
 ### 🔴 地雷7: middleware.ts への新ルート追加
@@ -251,80 +284,125 @@ D-1 検証中も残置(マッチ素材として有用)・最終 teardown は MVP
 
 ## 4. アーキテクチャ
 
-### 4.1 `/api/overlay/intent` 設計
+### 4.1 `/api/overlay/intent` 設計(★ D1-1 で実装済・対話中心化で不変)
 
 ```
 POST /api/overlay/intent
-  body:    { utterance: string, contextHint?: string }
-  cookie:  認証必須(既存パターン同等)
+  body:    { text: string }
+  cookie:  認証必須(既存パターン同等・anon client)
   returns:
     {
       ok:          true,
-      intent:      "match-users" | "virtual-coordinate" | "diagnosis" | ...,
-      mode:        "api" | "navigate" | "hybrid",
+      intent:      "match-users" | "virtual-coordinate" | "diagnose" | ...,
+      mode:        "api" | "navigate" | "hybrid" | "none",
       params:      { ... },          // API 直叩き時の payload(該当 API の body 形)
-      route:       "/discover?tab=worldview-match",  // navigate 時の遷移先
       confidence:  0.0 - 1.0,
       suggestions?: [                // confidence 低時の候補 2-3
         { intent: "...", label: "○○ですか?" }
       ],
     }
 
-実装方針:
+実装(D1-1 commit 6acfec9・対話中心化後も変更なし):
   - lib/claude.ts の callClaudeJSON + HAIKU_MODEL を使用
   - systemPrompt に 既存 18 機能の intent 列挙(enum)+ 各機能の説明を明示
-  - userMessage = utterance を渡す
-  - JSON 構造化出力で {intent, mode, params, confidence} を取り出し
-  - M5-2 と同型の「辞書外を返させない」厳格 prompt
-  - 失敗時は fallback intent("unknown")+ 候補 2-3 提示
+  - JSON 構造化出力で {intent, mode, params, confidence, suggestions} を取り出し
+  - 辞書外を返した場合は ALLOWED_INTENTS / ALLOWED_MODES のフィルタで弾く
+  - 失敗時は fallback intent("unknown" / mode="none")+ 候補 2-3 提示
+
+★対話中心化での扱い(対話 UI 側の解釈):
+  - mode は内部識別子として残るが、対話 UI は最終的に「対話完結 / 引き継ぎ」の 2 分類で処理
+  - api / hybrid / none を「対話完結 8 + 連鎖 1」に集約
+  - navigate を「専用 UI 引き継ぎ 10」に集約
+  - intent ルーター自体は不変・解釈側で対話中心に変換
 ```
 
-### 4.2 既存 18 機能の intent 対応表
+### 4.2 既存 18 機能の対話中心 対応表(対話完結 vs 専用 UI 引き継ぎ)
 
-| # | 機能 | 起動 API / 遷移先 | mode | 根拠 |
+#### A. 対話完結群(8 機能・吹き出し / 結果カードで返す)
+
+| # | 機能 | intent | API | 対話に乗せる形 |
 |---|---|---|---|---|
-| 1 | 世界観診断 | `/onboarding` | **navigate** | 16 問 + 体型 + 確認・対話 1 往復では収まらない |
-| 2 | 公開プロフィール表示 | `/u/[id]` | **navigate** | URL シェアが本質的価値 |
-| 3 | 公開設定変更 | `/self?tab=worldview` | **navigate** | 設定 UI 必要 |
-| 4 | AI コーデ提案 | `POST /api/ai/coordinate` | **api** | 1 ターン応答可能 |
-| 5 | 着こなし相談 | `POST /api/ai/style-consult` | **api** | 対話と相性良 |
-| 6 | 理想コーデ生成 | `POST /api/ai/virtual-coordinate` body `{scene, concept, mood}` | **hybrid** | 結果対話表示 + 編集なら `/outfit?tab=virtual` 誘導 |
-| 7 | 商品マッチ(M5) | `POST /api/products/match` body `{items, conceptKeywords, ngElements, coreTags}` | **hybrid** | items 必須・virtual-coordinate 経由で得る前提 |
-| 8 | 人マッチ(M4)| `GET /api/match/users?limit=` | **api** | cookie 認証・1 ターンで返る |
-| 9 | 投稿マッチ(M4) | `GET /api/match/posts?limit=` | **api** | 同上 |
-| 10 | 投稿作成 | `/self/new-post` | **navigate** | EXIF 除去・HEIC・Storage 重い |
-| 11 | 投稿閲覧 | `/p/[id]` | **navigate** | URL シェア本質 |
-| 12 | 自分の投稿一覧 | `/self?tab=posts` | **navigate** | 管理 UI 必要 |
-| 13 | クローゼット | `/outfit?tab=closet` | **navigate** | 一覧 + 編集 UI |
-| 14 | インスピレーション(抽象語コーデ) | `POST /api/ai/abstract-coordinate` | **api** | 対話と相性良 |
-| 15 | ブランド推薦 | `POST /api/brands/recommend` | **api** | 単発レスポンス |
-| 16 | カルチャー解説 | `POST /api/ai/culture-explain` | **api** | 30 日キャッシュあり |
-| 17 | 保存一覧 | `/saved` | **navigate** | 一覧 UI |
-| 18 | 履歴 | `/self?tab=history` | **navigate** | 一覧 UI |
+| 1 | AI コーデ提案 | `coordinate` | POST `/api/ai/coordinate` body `{scene, mood?}` | コーデ JSON を結果カード(各アイテム名 + 色 + 素材 + 理由)で吹き出しに |
+| 2 | 着こなし相談 | `style-consult` | POST `/api/ai/style-consult` body `{consultation}` | 相談回答テキストを通常の吹き出しで |
+| 3 | インスピレーション | `inspiration` | POST `/api/ai/abstract-coordinate` body `{abstractWords?, theme?}` | 抽象語→コーデを結果カードで |
+| 4 | 人マッチ(M4) | `match-users` | GET `/api/match/users?limit=` | 似た人カード列(display_name + worldview_name + 共通点 N) |
+| 5 | 投稿マッチ(M4) | `match-posts` | GET `/api/match/posts?limit=` | 投稿サムネ列(image + caption + 共通 N) |
+| 6 | カルチャー解説 | `culture` | POST `/api/ai/culture-explain` body `{culturalAffinities}` | music / films / fragrance の 3 セクションカード |
+| 7 | ブランド推薦 | `brand-learn` | POST `/api/brands/recommend` body `{styleAnalysis?, userId?}` | ブランドカード列(name + 哲学・worldview_tags は日本語表現で) |
+| 8 | 理想コーデ生成(概要)| `virtual-coordinate` | POST `/api/ai/virtual-coordinate` body `{scene, concept, mood?}` | conceptInterpretation + items + 商品概要を結果カードで(詳細編集だけ `/outfit?tab=virtual` 引き継ぎ)|
 
-**集計**: api=**7** / navigate=**9** / hybrid=**2** = 計 18(全機能網羅)
+#### B. 専用 UI 引き継ぎ群(10 機能・「○○しますね →」+ navigate-map 転用)
 
-> ★ D1-2a 知見(2026-05-19 確定・実物 API/route 仕様検証で判明):
->
-> 1. `/self` のタブ命名トリック(配線時の最大の落とし穴):
+| # | 機能 | intent | 引き継ぎ先 | 理由 |
+|---|---|---|---|---|
+| 9  | 世界観診断 | `diagnose` | `/onboarding` | 16 問 + 体型 + 確認・対話 1 往復で完結不能 |
+| 10 | 公開プロフィール / 公開設定 | `worldview-profile` | **`/self?tab=diagnosis`** ★ | SelfTab 命名トリック(value=diagnosis = label「世界観」)|
+| 11 | 投稿作成 | `create-post` | `/self/new-post` | EXIF 除去 / HEIC / Storage アップロードの専用 UI 必須 |
+| 12 | 自分の投稿一覧 | `my-posts` | `/self?tab=posts` | 投稿一覧 + 削除確認モーダルの管理 UI |
+| 13 | クローゼット | `closet` | `/outfit?tab=closet` | 一覧 + 編集 |
+| 14 | 保存一覧 | `saved` | `/saved` | 3 セクション(コーデ・商品・投稿)|
+| 15 | 履歴 | `history` | `/self?tab=history` | AI 履歴一覧(タイプ別カード)|
+| 16 | 体型情報編集 | `body-edit` | `/self?tab=body` | フォーム UI |
+| 17 | 好み情報編集 | `preference-edit` | **`/self?tab=worldview`** ★ | SelfTab 命名トリック(value=worldview = label「好み」)|
+| 18 | 商品マッチ(M5)| `product-match` | virtual-coordinate の連鎖 → `/outfit?tab=virtual` | 単独叩き不可(body に items 必須・virtual-coordinate 結果が前提)|
+
+#### C. 将来機能 2(両用)
+
+| 機能 | intent | 扱い |
+|---|---|---|
+| ムードボード | `moodboard` | 対話で「ボード作成しますね」→ 作成 UI 起動 / 閲覧は対話に乗せる |
+| リアル試着 | `tryon` | 対話で「自分の写真を選んでください」→ アップロード UI → 結果は対話に乗せる |
+
+#### 集計
+
+```
+対話完結:           8 機能
+専用 UI 引き継ぎ:  10 機能
+合計:              18 機能
+将来両用:           2 機能(moodboard / tryon)
+```
+
+#### ★ 対話中心化 知見(2026-05-19 D1-2a 実機 FB 起点で確定)
+
+> 1. `/self` のタブ命名トリック(配線時の最大の落とし穴・★ 引き継ぎ表で吸収):
 >    - SelfTab `value="diagnosis"` → label **「世界観」**(世界観診断結果表示 + 公開設定)
 >    - SelfTab `value="worldview"` → label **「好み」**(preference 編集)
->    配線対応:
+>    対応:
 >    - `worldview-profile`  → `/self?tab=diagnosis`(value 名と意味が逆転)
 >    - `preference-edit`    → `/self?tab=worldview`(同上)
->    → D1-2a で `lib/overlay/navigate-map.ts` に定数化し、対応表で吸収。
+>    → D1-2a で `lib/overlay/navigate-map.ts` に定数化済・対話中心化後も転用。
 >
-> 2. `product-match` は単独叩き不可:
+> 2. `/self?tab=` が画面に反映されない既存バグ(D1-2a で顕在化):
+>    `/self/page.tsx` は useSearchParams を読まず固定 "diagnosis" 初期値で常に
+>    「世界観」タブが開く。`/outfit` `/discover` と同パターン(useSearchParams +
+>    useEffect 同期)を追加で修正可能。**D1-2x として独立 commit**(★判断5-⑤)。
+>
+> 3. `product-match` は単独叩き不可:
 >    body に items 必須 = `virtual-coordinate` 結果が前提。
->    実質「virtual-coordinate の連鎖」として扱う(D1-2c で hybrid 配線時に判断)。
+>    対話中心では「virtual-coordinate の連鎖」として処理(★判断5-③ MVP 含む)。
 
-### 4.3 オーバーレイ UI の配置
+### 4.3 オーバーレイ UI の配置(★判断5-①: モーダル拡張で確定)
 
 | 候補 | 評価 | 採用 |
 |---|---|---|
-| (A) FAB(右下浮動ボタン)→ タップでモーダル展開 | BottomNav と被らない・モーダル内で対話 | ★ 推奨(MVP)|
-| (B) 上部固定入力欄(常時表示)| 入口の発見性最高・スクロールで邪魔になる | 検討余地 |
-| (C) 専用画面 `/overlay` | 中心動線として最強だが既存 BottomNav の意味が薄れる | D-2 で検討 |
+| (A) FAB(右下浮動ボタン)→ タップで**対話モーダル展開** | BottomNav と共存・対話画面はモーダル内で完結 | ★ **MVP 採用**(判断5-①)|
+| (B) 全画面オーバーレイ | ChatGPT 型・対話に集中できる | 将来検討(D-2 候補)|
+| (C) 専用画面 `/overlay` | 中心動線として最強だが既存 BottomNav の意味が薄れる | 将来検討(D-2)|
+
+#### 対話モーダル UI の構造(D1-2b' で実装)
+
+```
+モーダル(D1-1 OverlayModal を拡張):
+  上部     : メッセージ履歴(吹き出し列・ユーザー / アシスタント交互)
+  中部     : 結果カード(コーデ / 似た人 / 投稿 / カルチャー 等を吹き出し内に展開)
+  下部固定 : 入力欄(常時表示・連続発話可能)
+  右上     : [×] 閉じる
+
+会話文脈(★判断5-②):
+  - セッション内 React state のみ(履歴 / 直前の virtual-coordinate 結果 等)
+  - モーダル閉じると state 消滅
+  - 永続化(localStorage / DB)は将来
+```
 
 → **MVP は (A) FAB + モーダル**で開始・BottomNav と完全共存。
 
@@ -350,7 +428,7 @@ POST /api/overlay/intent
 
 ## 5. ステップ分割(確定)
 
-### D1-1: 意図ルーター API + オーバーレイ UI 骨格
+### D1-1: 意図ルーター API + オーバーレイ UI 骨格(★ 完了・commit 6acfec9)
 
 | 項目 | 内容 |
 |---|---|
@@ -360,17 +438,77 @@ POST /api/overlay/intent
 | 完了条件 | FAB タップでモーダル開く・入力 → intent JSON が返る・confidence 表示 |
 | 地雷度 | **低** |
 
-### D1-2: ①18 機能の intent 配線
+→ **対話中心化後も完全に温存**(intent ルーター本体は不変・対話 UI 側で結果の処理方法を変えるだけ)。
+
+### D1-2a: 旧 navigate 配線(★ 完了・commit db63f4f・対話中心化で更新対象)
 
 | 項目 | 内容 |
 |---|---|
-| 変更 | `OverlayModal.tsx` 内で intent ごとに分岐(api/navigate/hybrid)|
-| api 機能(7)| 同一オリジン fetch + 結果を対話表示 |
-| navigate 機能(9)| `router.push(route)` + モーダル閉じる |
-| hybrid 機能(2)| api で得た結果を対話表示 + 「編集する」ボタンで navigate |
-| 誤判定 fallback | confidence < 0.7 → 候補 2-3 表示 → ユーザー選択 → 再実行 |
-| 完了条件 | 全 18 機能に到達可能・誤判定時 fallback 動作 + worldview_tags 漏洩ゼロ点検 |
-| 地雷度 | **中** |
+| 配線 | navigate 群 9 + 未配線案内 3 を OverlayModal.tsx に追加 |
+| 新規 | `lib/overlay/navigate-map.ts`(タブ命名トリック吸収済)|
+| 設計書 | 本文 7/8/3 を 7/9/2 に修正 + D1-2a 知見(タブ命名トリック)追記 |
+
+→ **navigate-map.ts は破棄せず、専用 UI 引き継ぎ群 10 の URL 表として対話中心化後も転用**。
+   OverlayModal.tsx の判定結果分岐は D1-2b' 以降で段階的に対話 UI に書き換え。
+
+### D1-2x: `/self?tab=` バグ修正(★判断5-⑤: 独立 commit)
+
+| 項目 | 内容 |
+|---|---|
+| 変更 | `app/(app)/self/page.tsx` に useSearchParams + useEffect 同期パターン追加(`/outfit` `/discover` と同型)|
+| 差分 | 10-15 行程度 |
+| 既存 | 既存 SelfTab / タブ UI / 認証ガードは無変更 |
+| 完了条件 | `/self?tab=body` 等の URL で正しいタブが開く(M2 以前から潜在していた既存バグの修正)|
+| 地雷度 | **低**(既存仕様のバグ修正のみ・対話中心化と独立)|
+
+→ **D1-2b'(対話 UI 土台)着手前に独立 commit**。専用 UI 引き継ぎ群 10 の遷移が動作する前提。
+
+### D1-2b': 対話 UI 土台(OverlayModal 拡張・★判断5-① モーダル拡張 / ②セッション内 state)
+
+| 項目 | 内容 |
+|---|---|
+| 変更 | `components/overlay/OverlayModal.tsx` を対話画面に拡張 |
+| 構造 | 上部: メッセージ履歴(吹き出し列)/ 中部: 結果カード展開エリア / 下部固定: 入力欄(連続発話)/ 右上: 閉じる |
+| state | React state のみで履歴保持(セッション内・モーダル閉で消滅)|
+| 入力 | 連続発話可能(履歴が積み上がる)・既存の判定結果分岐(D1-2a)を吹き出しに置換 |
+| 既存 | D1-1 `/api/overlay/intent` は無変更で再利用 |
+| 完了条件 | モーダルが対話画面として動作・連続発話 → 履歴蓄積 → 結果は吹き出し内に表示される土台ができる |
+| 地雷度 | **中**(履歴 state の管理・既存 D1-2a の判定結果 UI と段階置換)|
+
+### D1-2c': 対話完結群 8 配線(結果カード)
+
+| 項目 | 内容 |
+|---|---|
+| 配線対象 | 対話完結群 8(coordinate / style-consult / inspiration / match-users / match-posts / culture / brand-learn / virtual-coordinate 概要)|
+| 各 intent | 同一オリジン fetch で既存 API を叩く + レスポンスを結果カードで吹き出しに展開 |
+| 結果カード型 | intent ごとに専用カード(セクション 4.2 A 群参照)|
+| プライバシー | worldview_tags 英語スラッグを **絶対露出させない**(M4 / M5-3 確立)。「共通点 N 個」等の抽象表現 |
+| 完了条件 | 対話完結 8 全てが吹き出し / 結果カードで返る + 既存 18 機能無変更 |
+| 地雷度 | **中**(結果カードのサイズ管理・プライバシー漏洩点検)|
+
+### D1-2d': 専用 UI 引き継ぎ群 10 配線(「○○しますね →」ボタン)
+
+| 項目 | 内容 |
+|---|---|
+| 配線対象 | 専用 UI 引き継ぎ群 10(diagnose / worldview-profile / create-post / my-posts / closet / saved / history / body-edit / preference-edit / product-match)|
+| 引き継ぎ方式 | 「○○しますね →」アシスタント吹き出し + [開く] ボタン → モーダル閉じ + `router.push(navigate-map[intent].url)` |
+| 前提 | **D1-2x で `/self?tab=` バグ修正済**(タブ命名トリック吸収済の navigate-map と整合)|
+| navigate-map 転用 | D1-2a で作成した定数表をそのまま「専用 UI 引き継ぎ表」として再利用 |
+| 既存 | 既存画面の認証ガード(middleware appRoutes)が裏で守る |
+| 完了条件 | 専用 UI 引き継ぎ群 10 全てが「対話で一拍 → 滑らかに専用画面へ引き継ぐ」動作 + ?tab= が正しく開く |
+| 地雷度 | **中**(タブ命名トリック・引き継ぎ表現の自然さ)|
+
+### D1-2e': virtual-coordinate → product-match 連鎖 + 仕上げ + 点検(★判断5-③ 連鎖 MVP 含む)
+
+| 項目 | 内容 |
+|---|---|
+| 連鎖 | 直前の virtual-coordinate 結果(items + conceptKeywords + ngElements + coreTags)をセッション内 state に保持 → 次の発話で `product-match` が呼ばれたら state から items を引き継いで `POST /api/products/match` を呼ぶ |
+| 連鎖外の「さっきの〜」| MVP 未対応・再入力誘導(D1 完結後の余地)|
+| プライバシー点検 | View Source / Network レスポンスで worldview_tags 英語スラッグが 0 件であることを確認(M4 同型・★必須)|
+| 退行点検 | 既存 BottomNav / 18 機能 / 公開ページ `/u/[id]` `/p/[id]` の通常動線が無変更 |
+| 知見 docs 追記 | 設計書セクション 13(M5 と同型の知見小節)に D1-2 実装で得た知見を追記 |
+| 完了条件 | 連鎖が機能 + 漏洩ゼロ + 退行ゼロ + docs 追記済 |
+| 地雷度 | **中**(連鎖の state 管理・漏洩点検が肝)|
 
 ### D1-3: ②ムードボード
 
@@ -428,16 +566,26 @@ D1-4 以降(③)の実装 GO は ここで再判断:
 | 完了条件 | 試着画像生成成功 + EXIF 除去 + RLS 本人専用 + 利用回数制限動作 + プライバシー漏洩ゼロ |
 | 地雷度 | **★最大**(顔写真 + コスト)|
 
-### 依存関係
+### 依存関係(対話中心化版)
 
 ```
-D1-1(意図ルーター + UI 骨格)
+D1-1(意図ルーター + UI 骨格・完了 6acfec9)
   ↓ 新規外部依存ゼロ・Haiku のみ
-D1-2(18 機能配線)
-  ↓ 既存 API 直叩き / navigate / hybrid を全網羅
-D1-3(ムードボード)
-  ↓ M3 資産再利用・新規外部依存ゼロ
-★ D1-3 完了後 GO ゲート ★
+D1-2a(旧 navigate 配線・完了 db63f4f)
+  ↓ navigate-map.ts 作成・対話中心化後は専用 UI 引き継ぎ表に転用
+D1-2x(/self?tab= バグ修正・独立 commit・★判断5-⑤)
+  ↓ 専用 UI 引き継ぎ群 10 の遷移が正しく動作する前提
+D1-2b'(対話 UI 土台・モーダル拡張・履歴 state)
+  ↓ ★判断5-① / ②
+D1-2c'(対話完結 8 配線・結果カード)
+  ↓ プライバシー漏洩点検(M4 同型)
+D1-2d'(専用 UI 引き継ぎ 10 配線・navigate-map 転用)
+  ↓ ?tab= 修正前提
+D1-2e'(virtual-coordinate → product-match 連鎖・★判断5-③ + 仕上げ + 点検)
+  ↓
+D1-3(ムードボード・M3 資産再利用・新規外部依存ゼロ)
+  ↓
+★ D1-3 完了後 GO ゲート ★(完全不変)
   ↓
 D1-4(③調査専用・実装なし)
   ↓ GO 条件が揃えば
@@ -584,20 +732,26 @@ D-1 は以下を完全踏襲する:
 
 ---
 
-## 10. オーナー実機確認の要点(M2 / M3 / M4 / M5 教訓)
+## 10. オーナー実機確認の要点(M2 / M3 / M4 / M5 教訓・対話中心版)
 
 ```
-D1-1 後: FAB タップ → モーダル開く + 1 発話で intent JSON が返る
-D1-2 後:🔴 18 機能全てに到達できる + 誤判定 fallback 動作 +
-         View Source で worldview_tags 英語スラッグ漏洩ゼロ点検(M4 同型)
-D1-3 後: ムードボード作成 + 公開 トグル + /u/[id] で公開ボードが見える +
-         非公開ボードが他者から見えない(M3-4 同型)
-★ D1-3 完了 = GO ゲート審査 ★
-D1-4 後: コスト見積もり + プライバシー設計確定 + 規約整備完了
-D1-5 後:🔴 試着画像生成 + 本人専用 RLS + 月 N 回制限動作 +
-         顔写真漏洩経路ゼロ(View Source + Network + Storage URL 直叩き)
-D-1 完結: 自然言語入口 1 つから 18 機能 + ムードボード + リアル試着の
-         全てに到達できる(中心動線「→」が成立)
+D1-1 後:  ✅完了 FAB タップ → モーダル開く + 1 発話で intent JSON が返る
+D1-2a 後: ✅完了 旧 navigate 配線・退行ゼロ実証(対話中心化で UI 部は段階更新)
+D1-2x 後:  /self?tab=body 等 URL で正しいタブが開く + /outfit /discover の動作不変
+D1-2b' 後: 対話モーダルで連続発話 → 履歴 蓄積 → 既存判定結果が吹き出しに移行
+D1-2c' 後:🔴 対話完結 8 全てが結果カードで返る +
+           View Source / Network で worldview_tags 英語スラッグ漏洩ゼロ(M4 同型)
+D1-2d' 後: 専用 UI 引き継ぎ 10 全てが「○○しますね →」+ 専用画面に正しく遷移
+D1-2e' 後: virtual-coordinate → product-match 連鎖が同一セッション内で動く +
+           漏洩点検 + 退行点検(既存 18 機能 / 公開ページ無変更)+ 知見 docs 追記
+D1-3 後:  ムードボード作成 + 公開 トグル + /u/[id] で公開ボードが見える +
+           非公開ボードが他者から見えない(M3-4 同型)
+★ D1-3 完了 = GO ゲート審査 ★(完全不変)
+D1-4 後:  コスト見積もり + プライバシー設計確定 + 規約整備完了
+D1-5 後: 🔴 試着画像生成 + 本人専用 RLS + 月 N 回制限動作 +
+           顔写真漏洩経路ゼロ(View Source + Network + Storage URL 直叩き)
+D-1 完結: 対話画面 1 つから 18 機能 + ムードボード + リアル試着の
+           全てに到達できる(中心動線「→」が対話の流れで成立)
 ```
 
 ---
