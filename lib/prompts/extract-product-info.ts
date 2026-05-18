@@ -5,6 +5,11 @@
 //
 // 8軸の判断情報（silhouette/balance/season等）も同時に推測する。
 // 推測できない項目は null/空配列を返してOK（部分的成功を許容）。
+//
+// M5-2: worldviewTags は coreTags 正準辞書(31語)からのみ選ぶ仕様に変更
+// (日本語自由形 → 英語スラッグ統一)。他フィールドは無変更。
+
+import { WORLDVIEW_TAGS_PROMPT_BLOCK } from "@/lib/knowledge/product-worldview-tags";
 
 export const EXTRACT_PRODUCT_INFO_PROMPT = `
 あなたはECページのメタデータからファッション商品の情報と判断軸を抽出する専門家です。
@@ -59,8 +64,7 @@ export const EXTRACT_PRODUCT_INFO_PROMPT = `
 - bodyCompatTags:   解決できる体型悩みの配列（looks_young / short_legs / broad_shoulders /
   wide_hips / short_torso / top_heavy / bottom_heavy のいずれか、複数可）
   自信なければ空配列。例: ハイウエストパンツ → ["short_legs"]
-- worldviewTags:    商品名・ブランド・素材感から世界観タグを推測（最大3個）
-  例: "墨色のリネンシャツ" → ["ストア派", "ミニマル"]
+${WORLDVIEW_TAGS_PROMPT_BLOCK}
 - curationNotes:    1〜2文の所見（80字以内）
   例: "ハリのあるリネンが ストア派の静謐さを支える。墨色×ドレープで縦長ラインを作る一着。"
 - curationPriority: 0-100 の優先度。デフォルトは 50 を返す（admin が後で調整）

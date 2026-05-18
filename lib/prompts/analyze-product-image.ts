@@ -4,6 +4,11 @@
 // admin が商品ページのスクショをアップロードして AI に解析させる。
 //
 // extract-product-info.ts と同じレスポンス型 + materialComposition を返す。
+//
+// M5-2: worldviewTags は coreTags 正準辞書(31語)からのみ選ぶ仕様に変更
+// (日本語自由形 → 英語スラッグ統一)。他フィールドは無変更。
+
+import { WORLDVIEW_TAGS_PROMPT_BLOCK } from "@/lib/knowledge/product-worldview-tags";
 
 export const ANALYZE_PRODUCT_IMAGE_PROMPT = `
 あなたは商品ページのスクリーンショットからファッション商品情報を抽出する専門家です。
@@ -60,8 +65,7 @@ export const ANALYZE_PRODUCT_IMAGE_PROMPT = `
 - bodyCompatTags:   解決できる体型悩みの配列（looks_young / short_legs / broad_shoulders /
   wide_hips / short_torso / top_heavy / bottom_heavy のいずれか、複数可）
   自信なければ空配列
-- worldviewTags:    商品名・ブランド・素材感から世界観タグを推測（最大3個）
-  例: "墨色のリネンシャツ" → ["ストア派", "ミニマル"]
+${WORLDVIEW_TAGS_PROMPT_BLOCK}
 - curationNotes:    1〜2文の所見（80字以内）
 - curationPriority: デフォルト 50
 
