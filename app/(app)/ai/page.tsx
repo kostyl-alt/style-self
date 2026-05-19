@@ -57,11 +57,29 @@ const CONFIDENCE_THRESHOLD = 0.7;
 const MAX_MESSAGES = 30;
 
 // D1-2b': メッセージ型(設計案 B2.2)
+// P1-C-1.5a 追加: kind:"reply"(会話 AI スタイリスト・自然文 + 補助 actions)
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
-  | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス
+  | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
+  | { kind: "reply";         text: string; actions?: SuggestionItem[] }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a)
   | { kind: "loading" }                                            // 「考えています…」
   | { kind: "error";         message: string };                   // 通信 / API エラー
+
+// P1-C-1.5a: 段階B 対象 intent(MVP-1 は diagnose のみ・1.5b で closet 追加)
+// ★ ここに無い intent は従来通り intent-result(NavigateConfirm 等)で表示する。
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose"]);
+
+// P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
+interface StylistChatResponse {
+  ok:       boolean;
+  reply?:   string;
+  actions?: SuggestionItem[];
+  reason?:  "auth_required" | "empty_input" | "intent_out_of_scope";
+  error?:   string;
+}
+
+// P1-C-1.5a: 段階B に渡す history(直近 N=3・本体 7.4 抑制策)
+const STYLIST_CHAT_HISTORY_MAX = 3;
 
 interface Message {
   id:        string;
@@ -137,7 +155,59 @@ export default function ChatPage() {
         });
         return;
       }
-      // 成功: loading を intent-result に置換
+
+      // ★ P1-C-1.5a: 段階A→段階B 繋ぎ(分岐 1 箇所)
+      // intent が会話AIスタイリスト対象(MVP-1 は diagnose のみ)なら
+      // /api/ai/stylist-chat を呼んで自然文 reply に置換する。
+      // それ以外の intent は ★1 文字も変えず★ 従来通り intent-result(NavigateConfirm 等)で表示。
+      const isStylistTarget =
+        data.ok
+        && data.reason === undefined
+        && typeof data.intent === "string"
+        && STYLIST_CHAT_INTENTS.has(data.intent);
+
+      if (isStylistTarget) {
+        // 直近 N=3 履歴を組立(client 側で slice・本体 7.4 抑制策の一段目)
+        const recentHistory = buildStylistHistory(messages);
+        try {
+          const replyRes = await fetch("/api/ai/stylist-chat", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({
+              text:    trimmed,
+              intent:  data.intent,
+              history: recentHistory,
+            }),
+          });
+          const replyData = await replyRes.json() as StylistChatResponse;
+
+          if (!replyRes.ok) {
+            // 段階B 失敗時は ★既存 intent-result(NavigateConfirm) にフォールバック★
+            // (P1-C-1 挙動退行ゼロ・ユーザーは少なくとも遷移ボタンで diagnose に到達できる)
+            console.warn("[stylist-chat] failed, falling back to intent-result");
+            replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
+            return;
+          }
+          // 段階B が reason を返した場合も従来挙動にフォールバック
+          if (replyData.reason || !replyData.reply) {
+            replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
+            return;
+          }
+          // 成功: 自然文 reply に置換(末尾に補助 actions)
+          replaceMessage(setMessages, loadingId, {
+            kind:    "reply",
+            text:    replyData.reply,
+            actions: replyData.actions,
+          });
+        } catch (err) {
+          // 通信エラーも intent-result フォールバック(退行ゼロ)
+          console.warn("[stylist-chat] error, falling back:", err);
+          replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
+        }
+        return;
+      }
+
+      // MVP-1 範囲外 intent: 従来通り intent-result(P1-C-1 挙動・1 文字も変えず)
       replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
     } catch (err) {
       replaceMessage(setMessages, loadingId, {
@@ -227,6 +297,23 @@ function replaceMessage(
   setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)));
 }
 
+// P1-C-1.5a: /api/ai/stylist-chat に渡す直近 N=3 履歴を組立てる。
+// kind:"text"(user)と kind:"reply"/"intent-result"(assistant)の本文だけ取り出す
+// (loading / error / intent-result の構造体は履歴に入れない・自然文だけ)。
+// 「★」記号や JSON は混入させず、AI が世界観 / 内部 ID を学習しないようにする。
+function buildStylistHistory(messages: Message[]): { role: "user" | "assistant"; text: string }[] {
+  const out: { role: "user" | "assistant"; text: string }[] = [];
+  for (const m of messages) {
+    if (m.role === "user" && m.content.kind === "text") {
+      out.push({ role: "user", text: m.content.text });
+    } else if (m.role === "assistant" && m.content.kind === "reply") {
+      out.push({ role: "assistant", text: m.content.text });
+    }
+    // intent-result / loading / error は履歴に入れない(構造化情報・通信状態のため)
+  }
+  return out.slice(-STYLIST_CHAT_HISTORY_MAX);
+}
+
 // ---- 履歴空のヒント ----
 
 function EmptyHistoryHint() {
@@ -301,10 +388,54 @@ function AssistantContent({
       </div>
     );
   }
-  // intent-result : D1-2a 既存 ResultView を シグネチャ無変更で 再利用
+  // P1-C-1.5a: 会話 AI スタイリスト 自然文 reply(末尾に補助 actions・最小新規)
+  if (content.kind === "reply") {
+    return (
+      <div className="space-y-2">
+        <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 whitespace-pre-wrap break-words leading-relaxed">
+          {content.text}
+        </div>
+        {content.actions && content.actions.length > 0 && (
+          <AssistantActions actions={content.actions} onNavigate={onNavigate} />
+        )}
+      </div>
+    );
+  }
+  // 既存 intent-result : D1-2a 既存 ResultView を ★シグネチャ無変更で★ 再利用
+  // (MVP-1 範囲外 intent では P1-C-1 挙動を 1 文字も変えない)
   return (
     <div className="rounded-2xl rounded-bl-md overflow-hidden">
       <ResultView result={content.result} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+// P1-C-1.5a: reply 末尾の補助 action ボタン(小さい・最小新規)
+// ★全画面 NavigateConfirm カードは使わない(本体 4.7・降格仕様)
+// onClick は ResultView/NavigateConfirm/SuggestionList と完全同じ onNavigate(intent) で navigate-map 既存関数を介す。
+function AssistantActions({
+  actions,
+  onNavigate,
+}: {
+  actions:    SuggestionItem[];
+  onNavigate: (intent: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 px-1">
+      {actions.map((a, i) => {
+        const target = resolveNavigateTarget(a.intent);
+        if (!target) return null;  // 配線なし intent は出さない(navigate-map 整合)
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onNavigate(a.intent)}
+            className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-50 transition-colors"
+          >
+            {a.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

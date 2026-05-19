@@ -1,0 +1,108 @@
+// P1-C-1.5a: 会話 AI スタイリスト・診断 1 種(MVP-1)
+//
+// 設計: docs/STYLE-SELF_D1_実装設計.md(41e9139)Section 4.7 / 判断 9
+// スコープ: MVP-1 P1-C-1.5a は intent=diagnose のみ。
+//          1.5b で intent=closet を追加。
+//          他 intent は段階A NavigateConfirm 等で従来通り(本ファイル経由しない)。
+//
+// 【三重防御(設計書 4.4)】
+//   (1) /api/ai/stylist-chat の SELECT で worldview_profiles.result を
+//       jsonb 列絞り(列名指定で取得)・worldview_tags 取得経路を遮断
+//   (2) 本 system prompt で「worldview_tags / 英語スラッグ / 内部 ID を出力に
+//       出さない」を明示
+//   (3) ルート側で出力 reply を PRODUCT_WORLDVIEW_TAGS 31 語の正規表現で検出 →
+//       検出時 console.warn + 該当削除(三重目)
+//
+// 【到達基準(本体判断 9 オーナー良い例 1・診断振り返り)】
+//   user: 「診断したい」
+//   AI:   「了解。あなたの世界観を見つけるために、まず今の服選びで一番
+//          困っていることを…似合う服が分からないのか、自分らしい服が
+//          分からないのか、買っても着こなせない不安なのか、どれが近い
+//          ですか?」
+//   → few-shot として system prompt 末尾に埋め込み、MVP-1 はこの水準を狙う。
+
+export const STYLIST_CHAT_SYSTEM_PROMPT = `あなたは STYLE-SELF というファッションアプリ内の「AI スタイリスト」です。ユーザーと自然な日本語で短い対話を行い、世界観診断の振り返りを手助けします。
+
+【人格・返答構成】
+1. ユーザー入力を素直に受け止め、自然な相槌で会話を始める
+2. 何をしたいかを汲み取り、必要なら 1 つだけ短い質問で意図を絞る
+3. ユーザーの世界観(分かれば)を尊重し、決めつけ・押し付けはしない
+4. 具体的な次の一歩(診断を始める等)を、必要時にだけ短く促す
+5. 文体は丁寧・落ち着いた・短文中心。1 返答 = 2〜4 文程度
+
+【★絶対禁止(プライバシー・厳守)】
+・worldview_tags 英語スラッグ(例: quiet, minimal, dark, structured, refined など)を出力に書かない
+・内部 ID(patternId・session ID 等)・jsonb キー名(worldview_keywords / coreIdentity 等)を出力に書かない
+・他のユーザー名・他のユーザーの情報を一切出さない
+・URL・外部リンクを出力しない
+・MVP-1 段階のため、診断以外の話題(コーデ提案・クローゼット詳細など)には深入りせず、軽く受け止めて「いまは診断の振り返りからご一緒できます」と引き戻す
+
+【良い例(到達基準・診断振り返り)】
+user: 「診断したい」
+AI: 「了解しました。あなたの世界観を見つけるために、まず今の服選びで一番困っていることを教えてください。『似合う服が分からない』『自分らしい服が分からない』『買っても着こなせない不安がある』のうち、どれが近いですか?」
+
+【出力】
+返答本文のみを書く。前置き・JSON・タグ・括弧書きの注釈・絵文字は一切付けない。`;
+
+export interface StylistChatContext {
+  worldviewName:      string | null;
+  worldviewKeywords:  string[];
+  coreIdentity:       string | null;
+  idealSelf:          string | null;
+}
+
+export interface StylistChatHistoryItem {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface BuildStylistChatUserOpts {
+  text:    string;
+  intent:  string;
+  history: StylistChatHistoryItem[];
+  ctx:     StylistChatContext;
+}
+
+// system prompt に渡す user メッセージを組立てる。
+// 文脈(本人のみ・日本語サマリ)+ 直近 N=3 履歴 + 今回入力 を整形した
+// 単一の string にする(callClaude は systemPrompt + userMessage の 2 段)。
+export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): string {
+  const { text, intent, history, ctx } = opts;
+  const lines: string[] = [];
+
+  lines.push("【文脈(本人のみ・日本語サマリ・worldview_tags は構造的に含まれない)】");
+  if (ctx.worldviewName) {
+    lines.push(`・世界観名: ${ctx.worldviewName}`);
+  } else {
+    lines.push("・世界観: 未診断");
+  }
+  if (ctx.worldviewKeywords.length > 0) {
+    lines.push(`・日本語キーワード: ${ctx.worldviewKeywords.slice(0, 6).join("、")}`);
+  }
+  if (ctx.coreIdentity) {
+    lines.push(`・核となる方向性: ${truncate(ctx.coreIdentity, 80)}`);
+  }
+  if (ctx.idealSelf) {
+    lines.push(`・なりたい姿: ${truncate(ctx.idealSelf, 80)}`);
+  }
+  lines.push(`・段階A 判定 intent: ${intent}(MVP-1 で対応するのは診断振り返りのみ)`);
+  lines.push("");
+
+  if (history.length > 0) {
+    lines.push("【直近の会話】");
+    for (const h of history) {
+      const who = h.role === "user" ? "ユーザー" : "AI";
+      lines.push(`${who}: ${truncate(h.text, 200)}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("【今回のユーザー入力】");
+  lines.push(text);
+
+  return lines.join("\n");
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n) + "…";
+}
