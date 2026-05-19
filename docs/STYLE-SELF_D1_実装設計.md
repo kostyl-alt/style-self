@@ -24,7 +24,7 @@ MVP(M1〜M5): 機能はすべて揃った
   「保存・自分・クローゼット・設定 = 右上メニュー + チャットコマンド」
 ```
 
-### D-1 体験方針の 4 段階純化史(設計の経緯記録)
+### D-1 体験方針の 5 段階純化史(設計の経緯記録)
 
 ```
 転換 1: 当初プラン「navigate 中心(オーバーレイ型)」
@@ -43,11 +43,20 @@ MVP(M1〜M5): 機能はすべて揃った
         ↓ 2026-05-20 オーナー実機 FB(午後)
         「3 タブのままだとまだ『タブある普通アプリ』に見える。
          下部ナビ自体を撤去・補助は右上メニューとチャットコマンドに」
-転換 4: 「タブなし完全チャット型(案A・本ドキュメントの最終形)」← 今ここ
-        メイン画面 = /ai のチャット画面のみ・下部ナビ廃止
-        補助は右上メニュー [≡] + チャットコマンド(「保存見せて」等)
-        既存 18 機能はチャットコマンド + navigate-map で全到達(新規実装ゼロ)
-        詳細経緯・A/B 比較: docs/STYLE-SELF_D1_案A案B比較.md(本本体に統合済)
+転換 4: 「タブなし完全チャット型(案A)」へ転換
+        メイン画面 = /ai のチャット画面のみ・下部ナビ廃止(P1-C-1 で器が完成・0fd4168)
+        補助は右上メニュー [≡] + チャットコマンド(navigate-map をそのまま転用)
+        詳細経緯・A/B 比較: docs/STYLE-SELF_D1_案A案B比較.md(本体統合済)
+        ↓ 2026-05-20 オーナー実機 FB(P1-C-1 完了後)
+        「問題は見た目でなく AI の返答そのもの。器はできたが中身は
+         『ページ案内 AI』(intent 判定→『移動する→』カード)のまま。
+         欲しいのは『会話する AI スタイリスト』」
+転換 5: 「会話 AI スタイリスト(2 段構成:intent 裏 / 会話表)」← 今ここ
+        ★ 中身を「ページ案内 AI」から「会話する AI スタイリスト」に
+        段階 A: intent 判定(/api/overlay/intent・D1-1 そのまま・裏・処理選択用)
+        段階 B: 会話応答生成(/api/ai/stylist-chat・新規・自然文 reply + 補助 actions)
+        「移動する」カードは最初に出さない → 文章後の補助アクションに降格
+        詳細経緯: docs/STYLE-SELF_D1_会話AIスタイリスト_設計案.md(本本体に統合済)
 ```
 
 ### D-1 の本質(案A・タブなし完全チャット型)
@@ -158,6 +167,42 @@ M2-3 worldview_tags 非露出原則
        既存資産は全て到達可(到達マップ:本ドキュメント 4.4 参照・迷子ゼロ)
        ★ /u/[id] /p/[id] 公開ページは public ルートグループ独立で BottomNav 撤去の影響ゼロ
        詳細経緯・8 観点比較: docs/STYLE-SELF_D1_案A案B比較.md(本体統合済)
+
+判断9: ★ オーナー実機 FB を受けた会話 AI 5 判断(2026-05-20 P1-C-1 完了後)
+       1) ステップ組込 = 案 X(P1-C-1.5 を P1-C-2 の前に挟む・「中身 → 器」の順)
+       2) 段階 B モデル = ★まず Haiku 4.5 で会話品質検証 → 不足なら Sonnet 4.6 昇格
+                           (品質達成基準 = オーナー良い例 1-3 と実機比較で同等以上)
+       3) MVP 初手 = MVP-1(良い例 1-2 = 診断 / クローゼットの 2 種から)
+                     8 種類を一度に作らない(M5 教訓・小さくまとめる)
+       4) コスト許容 = MVP 検証期間(オーナー 1 人)は ¥77-225/月で誤差として進める。
+                       ★ 将来のユーザー増時の「利用回数制限」は ★本ドキュメント 7 章
+                       コスト管理章に「会話 AI コスト + 将来対応」として明記
+                       (今は実装しない・③ コスト管理章と同じ思想・本判断 8 章で詳細)
+       5) 本体改訂タイミング = 合意直後・本体と実装の乖離を最小化(=本コミット)
+
+       2 段構成の本質:
+         段階 A(裏・処理選択):/api/overlay/intent(D1-1 そのまま・Haiku ¥0.001/件)
+                                ★ ユーザー非表示(intent / mode / confidence は内部識別子)
+         段階 B(表・会話):  /api/ai/stylist-chat(新規・★ まず Haiku 検証 → Sonnet 昇格)
+                                ★ ユーザーに見えるのは 自然文 reply のみ
+                                必要時のみ文章後に補助 actions(navigate-map 経由のリンクボタン)
+
+       「移動する」カードは最初に出さない → 文章後の補助アクションに降格。
+       詳細経緯: docs/STYLE-SELF_D1_会話AIスタイリスト_設計案.md(本体統合済)
+
+       ★ オーナー良い例 3 つ(到達基準・MVP で必達):
+         [1] 「診断したい」→ 「了解。あなたの世界観を見つけるために、まず今の服選びで
+              一番困っていることを教えてください。似合う服が分からないのか、自分らしい服が
+              分からないのか、買っても着こなせない不安なのか、どれが近いですか?」
+         [2] 「クローゼット見せて」→ 「今登録されている服を確認します。ブラック系アイテム、
+              ベージュ系のボトムス、バッグが登録されています。この中からコーデを組みますか?
+              それとも一覧で見ますか?」
+         [3] 「黒系で静かだけど印象に残るコーデにしたい」→ 「あなたの世界観なら、黒を
+              ただ暗く使うより、素材と重心で差を出す方が合います。低光沢の黒、短丈
+              トップス、長めのパンツ、重めの靴で組むと、静かだけど印象に残ります。
+              手持ち服で組みますか?それとも買える商品から探しますか?」
+       → AI スタイリストとして会話。ページ案内係にしない。
+         実機で本基準と比較し、達成しない場合は段階 B プロンプト改修 or Sonnet 昇格。
 ```
 
 ---
@@ -686,6 +731,152 @@ Phase 2 / 3 で追加:
 ③ リアル試着 Phase 3-4 のコスト見積もりは ★本ドキュメント 7 章のまま完全不変★。
 ```
 
+### 4.7 会話応答生成 `/api/ai/stylist-chat`(★ 判断 9・P1-C-1.5 で新規実装)
+
+判断 9 確定の **2 段構成** の段階 B を担う新規 API。段階 A の `/api/overlay/intent`(D1-1 そのまま)
+を裏で呼び、その結果と参照データを使って自然文の会話応答を生成する。
+
+#### API 設計
+
+```
+POST /api/ai/stylist-chat
+  body: {
+    text:         string,        // ユーザー発話
+    intent:       string,        // 段階 A の結果(処理選択用)
+    contextData?: object,        // intent ごとに収集(本人 RLS 経由のみ)
+    history:      Message[]      // 直近 N=3 件(コスト抑制)
+  }
+  returns: {
+    ok:     true,
+    reply:  string,              // ★ 自然文(これだけがユーザーに見える)
+    actions?: [                  // 任意・補助アクション(intent ごと)
+      { kind: "navigate", intent: string, label: string }   // navigate-map(D1-2a)経由
+      { kind: "follow-up", text: string }                    // 次入力候補
+    ]
+  }
+```
+
+#### AI スタイリスト人格・返答構成(system プロンプト方針)
+
+```
+[人格]
+  ・ChatGPT のように丁寧・端的
+  ・ページ案内係ではなく スタイリスト
+  ・ユーザーを「あなた」と呼ぶ
+  ・機能名 / intent 名(英語スラッグ)を返答に出さない
+
+[返答構成]
+  1. 自然な返事(短く・一文)
+  2. 意図理解の言い換え(必要なら)
+  3. 参照情報からの提案(具体的に・服の形・素材・色で)
+  4. 必要なら 1 つだけ質問(複数質問しない)
+
+[避けること]
+  ・「ボタンを押して」「画面を開いて」等の操作指示(補助アクションは別レイヤー)
+  ・「あなたの worldview_tags は dark, gothic」等の内部識別子の露出
+  ・100 字を大きく超える長文(モバイルで読み疲れる)
+```
+
+#### 文脈プライバシー境界(★ 設計書 4.4 遵守・M2-3 / M4 教訓継承)
+
+| 入れる(日本語・抽象表現)| 入れない(★ 露出ゼロ)|
+|---|---|
+| `worldviewName`(日本語名・例「黒い美術館の住人」)| ★ `worldview_tags` 英語スラッグ(dark / gothic 等・M4 教訓)|
+| `worldview_keywords`(3-5 語・日本語)| `pattern_id` / 内部識別子 |
+| `body_profile` 概要(身長 / 体型 / 悩み)| 画像 URL の生データ |
+| `style_preference` 概要(好む系統 / 避けたい印象)| `user_id` / `email` / その他個人識別子 |
+| `wardrobe_items` 要約(色系統別件数 + カテゴリ別件数)| 他人の `wardrobe_items` / `worldview_profiles` |
+| 既存 API 経由 or 本人 RLS SELECT のみ | service_role 不使用 |
+
+**二重防御**:
+1. system プロンプトに「英語スラッグを出力しない」を明示
+2. 出力後の text-level フィルタ(英語スラッグ正規表現で弾く)
+
+#### intent → 参照データ + 処理選択 マップ(8 種類の会話化)
+
+| intent | 段階 B で参照するデータ | 処理意図 |
+|---|---|---|
+| `diagnose` | `users.style_analysis`(既存診断結果) | 初回ヒアリング質問を返す(良い例 1)|
+| `closet` | `wardrobe_items`(本人 RLS) | 色系統 + カテゴリ要約を会話で(良い例 2)|
+| `virtual-coordinate` / `coordinate` | `worldview` + `body_profile` + `wardrobe_items` | 世界観 × 身体 × 手持ちでコーデ提案(良い例 3)|
+| `style-consult` | `body_profile` / `style_preference` / `style_analysis` | 体型悩み解消を会話で提案 |
+| `product-match` | 直前の `virtual-coordinate` 結果(state)| 商品紹介(連鎖・★判断 5-③ MVP 含む)|
+| `match-users` / `match-posts` | `worldview_profiles.worldview_tags`(本人 + 候補)| 似た世界観の人 / 投稿を会話で紹介 |
+| `inspiration` / `brand-learn` / `culture` | `worldview` + 抽象語 / ブランド DB / culturalAffinities | 各機能を会話で提案 |
+| `body-edit` / `preference-edit` / `create-post` / `my-posts` / `closet`(編集系) | 引き継ぎ系 | 「○○しますね」会話 + 補助 actions [編集画面を開く] |
+| `moodboard` / `tryon` | (将来)| 「まだ準備中ですが、今できる範囲で…」会話 |
+| `unknown` | (全文脈)| 「もう少し詳しく教えてください」+ 例示会話 |
+
+→ ★ intent はあくまで **裏側の処理選択スイッチ**。会話文には intent 名が一切出ない。
+
+#### MVP 着手順序(判断 9-3)
+
+```
+MVP-1(★ まず 2 種で型を確立):
+  ・ オーナー良い例 1(診断)→ intent=diagnose
+  ・ オーナー良い例 2(クローゼット)→ intent=closet
+  → 「会話している感覚」を実機で達成
+  → Haiku で良い例レベル達成可否を判定
+
+MVP-2(コーデ系 3 種):
+  ・ オーナー良い例 3(黒系で静かに)→ intent=virtual-coordinate
+  ・ コーデ作って → intent=coordinate
+  ・ この服に何合わせれば → intent=coordinate + 画像 / 商品 URL
+
+MVP-3(残り 3 種):
+  ・ 世界観に合う服 → intent=product-match / inspiration
+  ・ 買うか迷ってる → intent=style-consult
+  ・ 体型悩み → intent=style-consult
+```
+
+#### コスト試算(判断 9-4・M5-4a 作法)
+
+```
+段階 A: /api/overlay/intent(既存 D1-1・Haiku)
+  入力 ~900 tokens / 出力 ~80 tokens / 1 件 ≒ ¥0.15
+
+段階 B: /api/ai/stylist-chat(新規・★まず Haiku 検証)
+  入力 ~2,000 tokens(system 800 + contextData 500 + history N=3 × 100 + 発話 200)
+  出力 ~200 tokens(自然文 reply)
+  Haiku: 1 件 ≒ ¥0.36   / Sonnet: 1 件 ≒ ¥1.35
+
+→ 2 段合計 / 1 相談:
+  Haiku 採用:  ¥0.51 / 相談
+  Sonnet 採用: ¥1.50 / 相談(品質不足時の昇格)
+
+→ 1 ユーザー月 150 相談想定:
+  Haiku:  ¥77 / 月 / ユーザー   → 1000 アクティブで月 ¥77,000
+  Sonnet: ¥225 / 月 / ユーザー  → 1000 アクティブで月 ¥225,000
+
+★ 本体 4.6 想定(1 段・¥3.7/月)比 ★ 20-60 倍に増加 ★
+```
+
+#### 抑制策(M5-4a 作法・本体 4.6 5 つに 1 つ追加 = 6 つ)
+
+```
+1. 1 段に統合できないか(intent 判定 + 会話生成を Sonnet 1 回で行う・将来検討)
+2. history を N=3 に絞る(N=5 比で入力 200 tokens 減 → ¥0.05 削減)
+3. 提案チップ経由は段階 A スキップ(Haiku 1 回節約)
+4. contextData は最小化(wardrobe 全件でなく色系統別件数のみ等)
+5. 送信中は送信ボタン disabled(D1-2b' 既存・継続)
+6. 「考えています…」中の入力無効化(D1-2b' 既存・継続)
+```
+
+→ ★ ③ リアル試着のコスト管理(本ドキュメント 7 章)は **完全不変**。
+
+#### D1-2b' / D1-2a 資産の転用方針(判断 9 統合下)
+
+| 資産 | 転用方針 |
+|---|---|
+| `/api/overlay/intent`(D1-1)| ★ 段階 A で **裏使用**(ユーザー非表示)|
+| `OVERLAY_INTENT_PROMPT` | ★ 完全保持(21 intent が段階 B 処理選択に活きる)|
+| `lib/overlay/navigate-map.ts`(D1-2a)| ★ **補助アクションのリンク表**に転用(`actions.navigate.intent` → URL 解決)|
+| `NavigateConfirm` スタイル(D1-2a・5 サブ) | スタイルだけ補助ボタンに転用(全画面表示やめる)|
+| `NoneNotice` / `SuggestionList` / `ApiHybridPlaceholder` | 段階 B reply 内に文章化 → 5 サブのうち 3 つは廃止可 |
+| `ResultView` / `AssistantContent`(D1-2b')| 改変:`reply` kind の分岐を追加・既存 `intent-result` kind は段階 B 移行後に廃止可 |
+| `Bubble` / `EmptyHistoryHint` / 履歴 state(`messages: Message[]`)| ★ 完全保持(`MessageContent` に `reply` kind 追加のみ)|
+| `MAX_MESSAGES=30` / 自動スクロール | ★ 完全保持 |
+
 ---
 
 ## 5. ステップ分割(Phase 1-4 + P1-A〜G・チャット主役型最終版)
@@ -698,6 +889,9 @@ Phase 2 / 3 で追加:
 | D1-2a | 旧 navigate 配線 + navigate-map.ts(タブ命名トリック吸収)+ 本文 7/9/2 修正 | `db63f4f` | ✅ 完了・チャット主役型でも navigate-map は **専用 UI 引き継ぎ表として転用** |
 | D1-2x | `/self?tab=` 既存バグ修正(useSearchParams 同型化)| `00ce6b8` | ✅ 完了・専用 UI 引き継ぎの前提 |
 | D1-2b' | 対話 UI 土台(履歴 state + 吹き出し + 連続入力)| `483cef4` | ✅ 完了・★ チャット主役型 ChatPage に **シグネチャ無変更で転用**(後述 8 章)|
+| P1-A | 起動導線変更(/ai 新規 + redirect + middleware)| `c77a54c` | ✅ 完了 |
+| P1-B | BottomNav 5 → 3 タブ集約(チャット主役 3 タブ版)| `79a76be` | ✅ 完了・P1-C-2 で全廃 |
+| P1-C-1 | ChatPage 器化(OverlayModal transfer・モーダル枠除去)| `0fd4168` | ✅ 完了・中身は P1-C-1.5(会話 AI)で更新 |
 
 → 旧 D1-2c' / D1-2d' / D1-2e' / D1-3 / D1-4 / D1-5 は本改訂で **Phase 1-4 に再配置**(下記)。
 
@@ -736,20 +930,38 @@ Phase 2 / 3 で追加:
 | 完了条件 | BottomNav が 3 タブ表示・既存タブの直接 URL アクセスは従来通り動作 |
 | 地雷度 | **低**(BottomNav の `NAV_ITEMS` 配列を書き換えるだけ・既存画面に触らない)|
 
-#### P1-C: ChatPage 構築 + 下部ナビ廃止 + 右上メニュー追加(★ 案A 統合工程)
+#### ★ P1-C-1.5: 会話 AI スタイリスト(★判断 9・中身を「会話する AI」に転換)
 
 | 項目 | 内容 |
 |---|---|
-| 変更 | `app/(app)/ai/page.tsx` を ChatPage として実装(P1-A で骨格作成・ここで中身)|
-| 転用 | D1-2b' の OverlayModal から:履歴 state(`messages: Message[]`)/ Bubble / ResultView 等 5 サブ / MAX_MESSAGES = 30 / 自動スクロール / 連続入力フロー を **シグネチャ無変更で移植** |
+| 新規 API | `/api/ai/stylist-chat`(段階 B・★まず Haiku 検証 → 不足なら Sonnet 昇格)|
+| 新規プロンプト | `lib/prompts/stylist-chat.ts`(AI スタイリスト人格・返答構成 4 ステップ・出力禁止項目)|
+| ChatPage 改修 | `handleSubmit` を 2 段構成に書き換え:段階 A(`/api/overlay/intent` 既存・裏)+ 段階 B(`/api/ai/stylist-chat` 新規・自然文 reply 取得)|
+| MessageContent 型 | `kind: "reply"`(新)を追加・`reply: string` + `actions?: ActionItem[]` を保持 |
+| AssistantContent 分岐 | `kind === "reply"` 分岐を追加(自然文表示 + actions ボタン群)|
+| 「移動する」カード降格 | 既存 `NavigateConfirm` を全画面メイン表示から **文章後の補助アクションボタン**に縮小転用(`actions.navigate` を navigate-map で URL 解決)|
+| 5 サブの扱い | `NoneNotice` / `SuggestionList` / `ApiHybridPlaceholder` は段階 B reply 内に文章化 → 段階移行後に廃止可。`ResultView` / `AssistantContent` の `intent-result` 分岐は段階 B 移行後に廃止可 |
+| 文脈プライバシー境界 | ★ Section 4.7 の境界表に従う(worldview_tags 英語スラッグ非露出・本人 RLS のみ・出力フィルタ二重防御)|
+| MVP 段階分割 | MVP-1(良い例 1-2 = 診断 / クローゼットのみ)→ MVP-2(コーデ系 3)→ MVP-3(残り 3)|
+| ★ 達成基準 | オーナー良い例 1-3 を実機で比較し、同等以上の自然さ・具体性に到達(達成しなければ Sonnet 昇格 or プロンプト改修)|
+| コスト管理 | 1 相談 ¥0.51(Haiku)/¥1.50(Sonnet)・将来利用回数制限は ★本ドキュメント 7 章「将来対応」項に明記(今実装しない)|
+| 既存温存 | `/api/overlay/intent`(D1-1)/ `navigate-map`(D1-2a)/ Bubble / 履歴 state(D1-2b')完全保持・既存 18 機能 API / DB 完全不変 |
+| 完了条件 | MVP-1 の 2 種が良い例レベルで自然文応答 + プライバシー漏洩点検(M4 同型・worldview_tags 0 件)+ 既存退行ゼロ + コスト実測ログ |
+| 地雷度 | **★ 高**(D-1 最大の体験品質工程・新規 API + プロンプト + 2 段配線・M5 教訓に沿い MVP-1 から段階展開)|
+
+#### P1-C: ChatPage 器の仕上げ(下部ナビ廃止 + 右上メニュー追加)(★ 案A 統合工程・P1-C-1.5 後)
+
+| 項目 | 内容 |
+|---|---|
+| 変更 | `app/(app)/ai/page.tsx` の中身(対話 UI)は P1-C-1.5 まで完成済 |
 | 転用(チャットコマンド)| `/api/overlay/intent`(D1-1)+ `lib/overlay/navigate-map.ts`(D1-2a)を **そのまま転用**(9 件の専用 UI 引き継ぎが新規実装ゼロで成立)|
 | ★ 下部ナビ廃止(判断 8)| `components/BottomNav.tsx` を撤去 or メインチャット画面では非表示化(P1-B の 3 タブ定義を削除 or 条件レンダリング)。**旧画面 `/home /discover /outfit /saved /self` の URL 直アクセスは生存(判断 7-2)** |
 | ★ 右上メニュー追加(判断 8)| `components/overlay/MenuDrawer.tsx`(仮称・新規)+ ChatPage 上部 `[≡]` ボタン。展開で「あなたの世界観 / クローゼット / 保存 / 身体・好み / 履歴 / 投稿 / 設定 / ログアウト」を表示し navigate-map 経由で各画面へ |
 | 廃止 | `components/overlay/OverlayFab.tsx`(削除)・`app/(app)/layout.tsx` の `<OverlayFab />` 1 行除去 |
-| 廃止 | OverlayModal のモーダル枠(`fixed inset-0 z-50 ...`)→ ChatPage の通常画面構造に置換 |
+| 廃止 | OverlayModal のモーダル枠(`fixed inset-0 z-50 ...`)→ ChatPage の通常画面構造に置換(★ P1-C-1 で完了)|
 | 既存温存 | `/api/overlay/intent`(D1-1)/ `lib/overlay/navigate-map.ts`(D1-2a)完全不変 |
-| 完了条件 | `/ai` で対話画面が動作 + 連続発話 + 履歴 + 既存判定結果分岐(navigate / none / suggestions / placeholder)が吹き出し内で動く + 下部ナビなし + 右上メニューから既存機能に全到達(到達マップ 4.4 通り)|
-| 地雷度 | **中**(資産転用 + ナビ撤去 + 右上メニュー新規・M5 教訓に沿い小さくまとめる)|
+| 完了条件 | `/ai` で会話 AI が動作(P1-C-1.5)+ 下部ナビなし + 右上メニューから既存機能に全到達(到達マップ 4.4 通り)|
+| 地雷度 | **中**(器の完成・MenuDrawer 新規・M5 教訓に沿い小さくまとめる)|
 
 #### P1-D: 上部世界観カード + 入力欄近接ボタン + 初回提案チップ 5 種(★ 案A 版)
 
@@ -978,6 +1190,66 @@ N の値:
 3. オーバーレイは「今月の試着回数を使い切りました」と対話で返す
 ```
 
+### 7.4 会話 AI コスト + 将来対応(★ 判断 9-4)
+
+> ★ 7.1〜7.3 は ③ リアル試着のコスト管理(本ドキュメント核心)で **完全不変**。
+> 本小節は判断 9 で追加された「会話 AI(段階 B)」のコスト管理を別項として記録。
+> ③ リアル試着の既存設計(月 N 回制限 / 利用ログ / 上限フォールバック)には一切干渉しない。
+
+#### 4.7 章のコスト試算サマリ
+
+```
+段階 A(/api/overlay/intent・既存 Haiku): ¥0.15 / 件
+段階 B(/api/ai/stylist-chat・新規):
+  Haiku(まず検証):  ¥0.36 / 件 → 2 段合計 ¥0.51 / 相談
+  Sonnet(品質不足時): ¥1.35 / 件 → 2 段合計 ¥1.50 / 相談
+
+1 ユーザー月 150 相談想定:
+  Haiku:  ¥77 / 月 / ユーザー
+  Sonnet: ¥225 / 月 / ユーザー
+
+→ 本体 4.6 想定(1 段・¥3.7/月)比 ★ 20-60 倍に増加
+```
+
+#### MVP 検証期間の許容判断(判断 9-4)
+
+```
+オーナー 1 人で MVP-1 〜 MVP-3 を検証する期間:
+  Haiku:  ¥77 / 月  → 誤差として進める
+  Sonnet: ¥225 / 月 → 誤差として進める
+
+→ ★ 進める(現時点で利用制限は実装しない)。
+```
+
+#### 将来対応:ユーザー増時の利用回数制限(今は実装しない)
+
+```
+本体 7.1-7.3 の ③ リアル試着 月 N 回制限と同じ思想で、
+会話 AI(段階 B)にも将来「ユーザー月 N 相談まで」の上限を設ける余地を残す。
+
+実装は今しない(MVP 検証段階・オーナー 1 人で誤差)。
+将来実装する場合の置き所:
+  - users.chat_count_month / chat_month_key を追加
+  - /api/ai/stylist-chat 内で月キー判定 → N 超で 429 + 来月再開
+  - 上限到達時は対話で「今月の上限に達しました。来月から再開できます」と返す
+  - ★ ③ リアル試着の 7.1-7.3 機構と完全に独立した別経路(③ には干渉しない)
+
+トリガ条件(オーナー判断時に再検討):
+  - 月 1000 アクティブ超で月 ¥77,000 / ¥225,000 が許容できなくなる時点
+  - or オーナー指定の利用者数 / 月額予算閾値
+```
+
+#### 抑制策(段階 B 開始時から実装・本体 4.6 5 つに 1 つ追加)
+
+```
+1. 1 段に統合できないか(将来検討・現状は 2 段分離で進める)
+2. history を N=3 に絞る(★ 開始時から)
+3. 提案チップ経由は段階 A スキップ(★ 開始時から)
+4. contextData は最小化(色系統別件数のみ等・★ 開始時から)
+5. 送信中は送信ボタン disabled(D1-2b' 既存・継続)
+6. 「考えています…」中の入力無効化(D1-2b' 既存・継続)
+```
+
 ---
 
 ## 8. スコープ外 / 将来
@@ -1076,10 +1348,12 @@ docs/STYLE-SELF_ビジョン統合マップ.md(最上位)
   ├ STYLE-SELF_M3_実装設計.md(③繋がる 基盤・完了)
   ├ STYLE-SELF_M4_実装設計.md(③繋がる 本体・完了)
   ├ STYLE-SELF_M5_実装設計.md(②変換 本体・完了)
-  ├ STYLE-SELF_D1_実装設計.md(このファイル・UX 再編第一弾・★ 案A タブなし完全チャット型 最終版)
+  ├ STYLE-SELF_D1_実装設計.md(このファイル・UX 再編第一弾・★ 案A + 会話 AI スタイリスト 最終版)
   ├ STYLE-SELF_D1_対話中心_改訂案.md(改訂中間 1・対話中心化の議論材料・統合済)
   ├ STYLE-SELF_D1_チャット主役型_設計案.md(改訂中間 2・チャット主役 3 タブ化の議論材料・統合済)
-  ├ STYLE-SELF_D1_案A案B比較.md(★最終純化・案A 採用の議論材料・本コミットで統合済)
+  ├ STYLE-SELF_D1_案A案B比較.md(改訂中間 3・案A 採用の議論材料・統合済)
+  ├ STYLE-SELF_D1_P1-C設計調査.md(P1-C 4 サブ分割・継続有効)
+  ├ STYLE-SELF_D1_会話AIスタイリスト_設計案.md(★ 中身の会話化・2 段構成・本コミットで統合済)
   └ M4_test_data_ledger.md(検証データ台帳)
 
 M2 / M3 / M4 / M5 と同じ「調査→設計→ステップ実装」の型。
