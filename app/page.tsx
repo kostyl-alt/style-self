@@ -12,7 +12,10 @@ export default async function HomePage() {
       .select("onboarding_completed")
       .eq("id", user.id)
       .single() as unknown as { data: { onboarding_completed: boolean } | null };
-    redirect(data?.onboarding_completed ? "/home" : "/onboarding");
+    // P1-A: 判断 3(チャット主役型)/home → /ai に切替。
+    // 認証済 + onboarding 完了ユーザーは起動時にチャットメイン画面へ。
+    // ★ 未認証 / onboarding 未完了の既存分岐は変更なし(/login や /onboarding はそのまま)。
+    redirect(data?.onboarding_completed ? "/ai" : "/onboarding");
   }
 
   return (
