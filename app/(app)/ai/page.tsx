@@ -65,9 +65,11 @@ type MessageContent =
   | { kind: "loading" }                                            // 「考えています…」
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
-// P1-C-1.5a: 段階B 対象 intent(MVP-1 は diagnose のみ・1.5b で closet 追加)
+// P1-C-1.5a / 1.5b-i: 段階B 対象 intent(MVP-1b-i は {diagnose, closet})
 // ★ ここに無い intent は従来通り intent-result(NavigateConfirm 等)で表示する。
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose"]);
+// ★ API 側 `app/api/ai/stylist-chat/route.ts` の同名 Set と完全一致させる(両側同期)
+// ★ L4-A 切替検出は 1.5b-ii で別工程投入(本変更では未対応・L4=C 維持・1.5a 挙動継承)
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet"]);
 
 // P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
 interface StylistChatResponse {

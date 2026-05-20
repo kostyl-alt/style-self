@@ -31,6 +31,7 @@
 //   ・1 相談あたり概算 ¥0.50(段階A Haiku + 段階B Haiku 計)
 
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaude, HAIKU_MODEL } from "@/lib/claude";
 import {
@@ -40,12 +41,15 @@ import {
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
+import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
-// MVP-1 P1-C-1.5a 対応 intent(段階B を通す対象)
+// MVP-1 P1-C-1.5a + 1.5b-i 対応 intent(段階B を通す対象)
 // ★ ここを広げる前に system prompt の対応領域 + 出力フィルタの再点検が必要
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose"]);
+// ★ UI 側 `app/(app)/ai/page.tsx` の同名 Set と完全一致させる(両側同期)
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 const MAX_HISTORY = 3;
@@ -107,31 +111,15 @@ export async function POST(request: NextRequest) {
     const history = sanitizeHistory(body.history);
 
     // 3) ★ contextData はサーバ自前 SELECT(client 渡しは受けない)
-    //    ★ worldview_profiles を jsonb 列絞り SELECT
-    //    (result 丸ごと禁止・worldview_tags 取得経路を構造的に遮断)
-    //
-    //    PostgREST の `result->key` は jsonb の特定キーを取り出して、
-    //    rightmost key 名のカラムとして返す(alias で明示)。
-    //    worldview_tags(英語スラッグ)は ★ そもそも SELECT 句に書かない ★ → 取得経路無し
-    //
-    //    types/database.ts に worldview_profiles 行型が無いため、as 経由で
-    //    型を吸収(既存 posts/route.ts 同型パターン)。
-    //    maybeSingle: 行が無い(診断未完了)= null → 「未診断」として扱う
-    const { data: profileRow } = await supabase
-      .from("worldview_profiles")
-      .select(
-        "name:result->worldviewName,keywords:result->worldview_keywords,core:result->coreIdentity,ideal:result->idealSelf"
-      )
-      .eq("user_id", userId)
-      .maybeSingle() as unknown as {
-        data: {
-          name:     unknown;
-          keywords: unknown;
-          core:     unknown;
-          ideal:    unknown;
-        } | null;
-      };
-    const ctx = extractContext(profileRow);
+    //    intent ごとに取得先テーブルを切替(両者とも ★ 列絞り SELECT で worldview_tags 構造遮断)
+    //    - diagnose: worldview_profiles から jsonb 列絞り(1.5a)
+    //    - closet:   wardrobe_items から category, color のみ列絞り(1.5b-i)
+    let ctx: StylistChatContext;
+    if (intent === "closet") {
+      ctx = await fetchClosetContext(supabase, userId);
+    } else {
+      ctx = await fetchDiagnoseContext(supabase, userId);
+    }
 
     // 4) Claude(Haiku 4.5)呼出
     const systemPrompt = STYLIST_CHAT_SYSTEM_PROMPT;
@@ -202,7 +190,84 @@ function sanitizeHistory(raw: unknown): StylistChatHistoryItem[] {
   return out;
 }
 
-// jsonb 列絞り SELECT の戻り値を日本語サマリ型に正規化。
+// ====================================================================
+// contextData fetchers(intent 別に取得先テーブル + 列絞り SELECT を切替)
+// ====================================================================
+
+// diagnose: worldview_profiles から jsonb 列絞り SELECT(1.5a 既存ロジック)。
+// ★ worldview_tags(英語スラッグ)は SELECT 句に書かない → 取得経路無し(三重防御 1)
+async function fetchDiagnoseContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<StylistChatContext> {
+  const { data: profileRow } = await supabase
+    .from("worldview_profiles")
+    .select(
+      "name:result->worldviewName,keywords:result->worldview_keywords,core:result->coreIdentity,ideal:result->idealSelf",
+    )
+    .eq("user_id", userId)
+    .maybeSingle() as unknown as {
+      data: {
+        name:     unknown;
+        keywords: unknown;
+        core:     unknown;
+        ideal:    unknown;
+      } | null;
+    };
+  return extractContext(profileRow);
+}
+
+// closet: wardrobe_items から category, color のみ列絞り SELECT(1.5b-i 新規)。
+// ★ worldview_tags 列は SELECT 句に書かない → 取得経路無し(三重防御 1)
+// ★ .eq("user_id", userId) で本人データのみ(cookie-bound RLS + 二重 guard)
+async function fetchClosetContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<StylistChatContext> {
+  const { data: itemsRaw } = await supabase
+    .from("wardrobe_items")
+    .select("category, color")
+    .eq("user_id", userId);
+  const items = (itemsRaw ?? []) as Array<{
+    category: string | null;
+    color:    string | null;
+  }>;
+
+  // 集計: 色系統別(normalizeColor で正規化) + カテゴリ別 件数
+  const colorCounts: Map<string, number> = new Map();
+  const categoryCounts: Map<string, number> = new Map();
+  for (const it of items) {
+    const system = normalizeColor(it.color);
+    colorCounts.set(system, (colorCounts.get(system) ?? 0) + 1);
+    const cat = (typeof it.category === "string" && it.category.trim() !== "")
+      ? it.category.trim()
+      : "(その他)";
+    categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+  }
+
+  const colorBuckets = Array.from(colorCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+  const categoryBuckets = Array.from(categoryCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    // diagnose 用フィールドは空(closet では使わない)
+    worldviewName:     null,
+    worldviewKeywords: [],
+    coreIdentity:      null,
+    idealSelf:         null,
+    // closet 用サマリ
+    closetSummary: {
+      totalItems: items.length,
+      colorBuckets,
+      categoryBuckets,
+    },
+  };
+}
+
+// jsonb 列絞り SELECT の戻り値を日本語サマリ型に正規化(fetchDiagnoseContext から使う)。
 // row が null = 診断未完了 → 全 null。
 function extractContext(row: {
   name:     unknown;
@@ -258,12 +323,19 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// 補助 actions(MVP-1: intent=diagnose → 「診断を始める」)
+// 補助 actions(navigate-map 9 entries 既存転用・新規エントリー追加なし)
+// - diagnose: 「診断を始める →」 (既存 /onboarding)
+// - closet:   「一覧で見る →」 (既存 /outfit?tab=closet)
+// ★ 「コーデを組む →」(coordinate intent)は navigate-map 9 entries に未登録のため
+//   本 1.5b-i では追加しない(指示通り対象外として報告)。
 // navigate-map 既存 entries のラベルと整合させる(ChatPage 側で resolveNavigateTarget で
 // URL 解決するため、本ルートは intent / label の組だけを返す)。
 function buildActions(intent: string): StylistChatActionItem[] {
   if (intent === "diagnose") {
     return [{ intent: "diagnose", label: "診断を始める →" }];
+  }
+  if (intent === "closet") {
+    return [{ intent: "closet", label: "一覧で見る →" }];
   }
   return [];
 }
