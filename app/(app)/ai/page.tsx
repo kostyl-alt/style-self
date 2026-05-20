@@ -61,7 +61,7 @@ const MAX_MESSAGES = 30;
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[] }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a)
+  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3)
   | { kind: "loading" }                                            // 「考えています…」
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
@@ -156,17 +156,29 @@ export default function ChatPage() {
         return;
       }
 
-      // ★ P1-C-1.5a: 段階A→段階B 繋ぎ(分岐 1 箇所)
+      // ★ P1-C-1.5a 会話連続性(L1 並列案 / L3 sessionIntent / L4 切替検出なし):
+      //   - 直前の assistant reply に sessionIntent があれば会話継続中
+      //   - 段階A `/api/overlay/intent` は ★常に呼ぶ★(L1 並列案・将来 1.5b の話題切替検出ログ用)
+      //   - 継続中は段階A 結果を破棄して段階B 直行(MVP-1a は切替検出しない・L4 案C)
+      //   - 新規セッション時は従来通り段階A の intent 判定で分岐
+      const sessionIntent = getSessionIntent(messages);
+      const isContinuingSession =
+        sessionIntent !== null && STYLIST_CHAT_INTENTS.has(sessionIntent);
+
       // intent が会話AIスタイリスト対象(MVP-1 は diagnose のみ)なら
       // /api/ai/stylist-chat を呼んで自然文 reply に置換する。
       // それ以外の intent は ★1 文字も変えず★ 従来通り intent-result(NavigateConfirm 等)で表示。
-      const isStylistTarget =
+      const isStylistTarget = isContinuingSession || (
         data.ok
         && data.reason === undefined
         && typeof data.intent === "string"
-        && STYLIST_CHAT_INTENTS.has(data.intent);
+        && STYLIST_CHAT_INTENTS.has(data.intent)
+      );
 
       if (isStylistTarget) {
+        // 継続セッション時は sessionIntent を、新規時は段階A 判定 intent を API に渡す。
+        // sessionIntent は MVP-1a では常に "diagnose"・API 側 STYLIST_CHAT_INTENTS にも含まれる。
+        const intentToSend = isContinuingSession ? sessionIntent! : (data.intent as string);
         // 直近 N=3 履歴を組立(client 側で slice・本体 7.4 抑制策の一段目)
         const recentHistory = buildStylistHistory(messages);
         try {
@@ -175,7 +187,7 @@ export default function ChatPage() {
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({
               text:    trimmed,
-              intent:  data.intent,
+              intent:  intentToSend,
               history: recentHistory,
             }),
           });
@@ -193,11 +205,12 @@ export default function ChatPage() {
             replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
             return;
           }
-          // 成功: 自然文 reply に置換(末尾に補助 actions)
+          // 成功: 自然文 reply に置換(末尾に補助 actions)+ sessionIntent を保持(L3)
           replaceMessage(setMessages, loadingId, {
-            kind:    "reply",
-            text:    replyData.reply,
-            actions: replyData.actions,
+            kind:          "reply",
+            text:          replyData.reply,
+            actions:       replyData.actions,
+            sessionIntent: intentToSend,
           });
         } catch (err) {
           // 通信エラーも intent-result フォールバック(退行ゼロ)
@@ -295,6 +308,23 @@ function replaceMessage(
   newContent: MessageContent,
 ): void {
   setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)));
+}
+
+// P1-C-1.5a 会話連続性(L3): 直前の assistant reply が保持する sessionIntent を取り出す。
+// 末尾から逆順走査し、reply に当たれば sessionIntent を返す。
+// reply 以外(user / intent-result / loading / error)に当たった時点でセッション切断 = null。
+// 「直前 message が reply かどうか」の判定と取得を 1 つの走査で行う(設計調査 第3章)。
+function getSessionIntent(messages: Message[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    if (m.content.kind === "reply") {
+      return m.content.sessionIntent ?? null;
+    }
+    // intent-result / loading / error が間に挟まったらセッション切断扱い
+    return null;
+  }
+  return null;
 }
 
 // P1-C-1.5a: /api/ai/stylist-chat に渡す直近 N=3 履歴を組立てる。
