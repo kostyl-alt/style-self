@@ -137,7 +137,10 @@ M2-3 worldview_tags 非露出原則
 
 判断5: ★ オーナー実機 FB を受けた対話中心 5 判断(2026-05-19・対話中心化時)
        ① 対話画面の表示形態     = モーダル拡張(★ 判断 5-A1 で「メイン画面化」に再判断)
-       ② 会話文脈の永続化       = セッション内 React state のみ(MVP)・★ 維持
+       ② 会話文脈の永続化       = セッション内 React state のみ(MVP)
+                                  ★ P1-C-1.5b-i+ (2026-05-21) で解釈精緻化:
+                                    localStorage 永続を採用(地雷 6 参照)・判断は覆さず
+                                    「ローカル端末のセッション永続」と再解釈
        ③ virtual-coordinate → product-match 連鎖 = MVP に含む(★ 維持)
        ④ 本体設計書の改訂タイミング = 改訂を先行し、実装は本体改訂後(★ 維持)
        ⑤ ?tab= バグ修正 = D1-2x として独立 commit(★ 完了済 00ce6b8)
@@ -151,8 +154,10 @@ M2-3 worldview_tags 非露出原則
                                      画面 URL は残置(Phase 1 段階削除・ディープリンク互換)
        3) 起動時の認証フロー       = app/page.tsx redirect を /home → /ai に全切替
                                      (認証済 + onboarding 完了ユーザー全員)
-       4) チャット履歴永続化       = セッション内 React state のみ(★ 判断 5-② を維持)
-                                     localStorage / DB 保存は将来
+       4) チャット履歴永続化       = ローカル端末のセッション永続(localStorage)・
+                                     同端末同ブラウザ内で復元(★ 判断 5-② の解釈精緻化・
+                                     P1-C-1.5b-i+ で適用)
+                                     DB 化(他デバイス同期)は将来 Phase2 以降
        5) 投稿管理の置き場所       = 自分タブ内維持(/self?tab=posts)・MVP 範囲外移動なし
        6) 本体設計書の再改訂タイミング = 合意直後・本体と実装の乖離を最小化
        7) Phase 1 着手時の最初     = P1-A(起動導線変更:/ai + redirect + middleware)
@@ -313,19 +318,32 @@ virtual try-on は ¥10-30 / 1 試着。100 アクティブユーザー × 月 1
   - 将来 D-2 で BottomNav 簡素化を再検討(本ドキュメントスコープ外)
 ```
 
-### 🔴 地雷6: 会話履歴 state(★判断5-②: セッション内 state で確定)
+### 🔴 地雷6: 会話履歴 state(★判断5-②: ローカル端末のセッション永続・localStorage)
 
 ```
 対話中心なので「さっきの理想コーデの商品をマッチ」を成立させる必要がある。
 特に virtual-coordinate → product-match 連鎖は MVP 含有(★判断5-③)。
 
-対策(MVP・判断5-② 確定):
-  - 会話文脈はセッション内 React state のみで保持(永続化なし)
-  - モーダル/オーバーレイを閉じると履歴消滅(MVP 想定の体験)
-  - 直前の virtual-coordinate 結果(items + conceptKeywords + coreTags)を
-    state に保持し、product-match 連鎖で再利用
-  - localStorage / DB 保存は将来(MVP 範囲外)
+対策(MVP・判断5-② 解釈精緻化済・P1-C-1.5b-i+ 2026-05-21 適用):
+  - 会話文脈は localStorage 永続(STORAGE_KEY "style-self:ai:messages:v1")
+  - 同端末同ブラウザ内で復元・/ai → /outfit → /ai 戻り時も維持・ブラウザ閉じても残る
+  - 直前の virtual-coordinate 結果(items + conceptKeywords + coreTags)も
+    messages state 経由で localStorage に同梱・product-match 連鎖で再利用
+  - MAX_MESSAGES=30 で trimByMax により既存上限あり = quota 安全
+  - DB 保存(他デバイス同期)は将来 Phase2 以降
   - 上記以外の「さっきの〜」は MVP 未対応・該当時は再入力誘導
+
+【プライバシー(★ Section6 ③専章本文 0 変更・顔写真の最大地雷とは別レイヤー)】
+  - localStorage に保存される reply は出力フィルタ stripCanonicalSlugs 適用済
+    (PRODUCT_WORLDVIEW_TAGS 31 語の英語スラッグは構造的に含まれない・三重防御3)
+  - 日本語の世界観名 / wardrobe 集計サマリ(色系統別・カテゴリ別件数)は残る
+  - スマホ単独利用前提・共有 PC 利用は想定外
+  - 将来 DB 化(他デバイス同期)時に暗号化検討
+
+【変更履歴】
+  - 2026-05-21 P1-C-1.5b-i+ 実機 FB(/ai → /outfit → /ai 戻り時の履歴消失 UX 棄損)を
+    受けて、判断 5-② を「ローカル端末のセッション永続(localStorage)」と解釈精緻化。
+    判断自体は覆さず、localStorage は同端末内のセッション扱いとする。
 ```
 
 ### 🔴 地雷7: middleware.ts への新ルート追加

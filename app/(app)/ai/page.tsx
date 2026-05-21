@@ -56,6 +56,12 @@ const CONFIDENCE_THRESHOLD = 0.7;
 // D1-2b': 履歴肥大防止
 const MAX_MESSAGES = 30;
 
+// P1-C-1.5b-i+: 履歴永続化(localStorage)
+// 本体判断 4 解釈更新: 「履歴セッション内のみ(揮発)」→「ローカル端末のセッション永続」
+// 同端末同ブラウザ内で復元・他デバイス同期は将来 DB 化で対応(Phase2 以降)。
+// v1 サフィックスは将来 Message 型変更時のスキーマ migration 用。
+const STORAGE_KEY = "style-self:ai:messages:v1";
+
 // D1-2b': メッセージ型(設計案 B2.2)
 // P1-C-1.5a 追加: kind:"reply"(会話 AI スタイリスト・自然文 + 補助 actions)
 type MessageContent =
@@ -111,6 +117,26 @@ export default function ChatPage() {
 
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
+
+  // P1-C-1.5b-i+: 履歴永続化 hydrate(初回 mount 時 localStorage から復元)
+  // SSR セーフ: useEffect 内のみで localStorage 参照・初期 state は [] で SSR と一致。
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setMessages(parsed as Message[]);
+      }
+    } catch { /* corrupt JSON 等は無視(空配列のまま続行) */ }
+  }, []);
+
+  // P1-C-1.5b-i+: 履歴永続化 persist(messages 変更で書き出し)
+  // MAX_MESSAGES=30 で trimByMax により既に上限ありなので quota 安全。
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch { /* quota 超過等は無視(永続化失敗してもセッション内は動く) */ }
+  }, [messages]);
 
   // メッセージ追加で末端へ自動スクロール
   useEffect(() => {
