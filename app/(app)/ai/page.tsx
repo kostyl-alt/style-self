@@ -118,6 +118,9 @@ export default function ChatPage() {
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
 
+  // P1-C-1.5b-i+ fix: hydrate 完了フラグ(persist の stale [] 上書き race を防止)
+  const hydratedRef = useRef(false);
+
   // P1-C-1.5b-i+: 履歴永続化 hydrate(初回 mount 時 localStorage から復元)
   // SSR セーフ: useEffect 内のみで localStorage 参照・初期 state は [] で SSR と一致。
   useEffect(() => {
@@ -128,11 +131,15 @@ export default function ChatPage() {
         if (Array.isArray(parsed)) setMessages(parsed as Message[]);
       }
     } catch { /* corrupt JSON 等は無視(空配列のまま続行) */ }
+    hydratedRef.current = true;
   }, []);
 
   // P1-C-1.5b-i+: 履歴永続化 persist(messages 変更で書き出し)
   // MAX_MESSAGES=30 で trimByMax により既に上限ありなので quota 安全。
+  // ★ hydrate 完了前は実行しない(stale closure messages=[] で保存済みデータを
+  //   "[]" で上書きする race を防止・真因切り分け済 2026-05-21)
   useEffect(() => {
+    if (!hydratedRef.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     } catch { /* quota 超過等は無視(永続化失敗してもセッション内は動く) */ }
