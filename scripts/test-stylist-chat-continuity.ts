@@ -23,8 +23,12 @@
 //   h-3 : hydrate 側 空配列復元防止(parsed.length>0 条件で弾く)
 //   i-1 : L4-A 切替 diagnose → closet
 //   i-2 : L4-A 逆方向切替 closet → diagnose
-//   i-3 : ★ L3 対象外 intent 継続維持(STYLIST_CHAT_INTENTS.has で自動 false)
+//   i-3 : ★ L3 対象外 intent 継続維持(brand-learn 使用・MVP-1c で coordinate を target 入り化したため置換)
 //   i-4 : ★ L2 低信頼継続(confidence < SWITCH_THRESHOLD で切替しない)
+//   j-1 : ★ MVP-1c coordinate 会話化(初回発話・段階B 直行・sessionIntent=coordinate)
+//   j-2 : ★ MVP-1c L4-A 切替 diagnose → coordinate(target 入り後の i-1 拡張)
+//   j-3 : ★ MVP-1c L4-A 切替 closet → coordinate(target 入り後の i-2 拡張)
+//   j-4 : ★ MVP-1c coordinate → diagnose 逆方向切替
 //
 // 【★ 連動更新ルール】本体改修時はテストも更新
 //   本ファイルは app/(app)/ai/page.tsx と app/api/ai/stylist-chat/route.ts のロジックを
@@ -60,7 +64,7 @@ import { PRODUCT_WORLDVIEW_TAGS } from "../lib/knowledge/product-worldview-tags"
 const CONFIDENCE_THRESHOLD       = 0.7;  // app/(app)/ai/page.tsx:54
 const MAX_MESSAGES               = 30;   // app/(app)/ai/page.tsx:57
 const STORAGE_KEY                = "style-self:ai:messages:v1"; // app/(app)/ai/page.tsx:63
-const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet"]); // app/(app)/ai/page.tsx:78
+const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet", "coordinate"]); // app/(app)/ai/page.tsx:78 (MVP-1c 拡張)
 const STYLIST_CHAT_HISTORY_MAX   = 3;    // app/(app)/ai/page.tsx:90
 const SWITCH_THRESHOLD           = 0.85; // app/(app)/ai/page.tsx:92
 
@@ -453,12 +457,14 @@ async function caseD() {
 }
 
 async function caseF() {
-  console.log("\n[f] MVP-1b スコープ外 intent → 従来 intent-result カード");
+  // ★ MVP-1c で coordinate が STYLIST_CHAT_INTENTS に入ったため、対象外 intent を
+  //   brand-learn に置き換え(i-3 と同じ理由・長期にわたって target 化されない見込み)。
+  console.log("\n[f] MVP-1c スコープ外 intent → 従来 intent-result カード");
   const fetchMock = createFetchMock({
-    "/api/overlay/intent": () => ({ ok: true, intent: "coordinate", confidence: 0.9, mode: "api" }),
+    "/api/overlay/intent": () => ({ ok: true, intent: "brand-learn", confidence: 0.9, mode: "navigate" }),
     // 段階B は呼ばれない想定
   });
-  const out = await simulateHandleSubmit({ text: "コーデ提案して", initialMessages: [], fetchMock });
+  const out = await simulateHandleSubmit({ text: "ブランドを学びたい", initialMessages: [], fetchMock });
   assertEqual(out.isStylistTarget, false, "isStylistTarget=false");
   assertEqual(out.segmentBCalled,  false, "段階B 呼ばれない");
   const last = out.finalMessages[out.finalMessages.length - 1];
@@ -590,16 +596,19 @@ async function caseI2() {
 }
 
 async function caseI3() {
+  // ★ MVP-1c で coordinate が STYLIST_CHAT_INTENTS に入ったため、対象外 intent を
+  //   brand-learn に置き換え(長期にわたって target 化されない見込みの intent)。
+  //   検証セマンティクスは同じ:対象外 intent 高信頼でも切替検出されず継続維持される。
   console.log("\n[i-3] ★ L3 対象外 intent 継続維持(高信頼でも intent-result カードに戻らない)");
   const initial: Message[] = [
     { id: "u1", role: "user",      content: { kind: "text",  text: "診断したい" },                                createdAt: 1 },
     { id: "a1", role: "assistant", content: { kind: "reply", text: "了解",   sessionIntent: "diagnose" }, createdAt: 2 },
   ];
   const fetchMock = createFetchMock({
-    "/api/overlay/intent": () => ({ ok: true, intent: "coordinate", confidence: 0.92, mode: "api" }), // 対象外+高信頼
+    "/api/overlay/intent": () => ({ ok: true, intent: "brand-learn", confidence: 0.92, mode: "navigate" }), // 対象外+高信頼
     "/api/ai/stylist-chat": () => ({ ok: true, reply: "続けますね、診断は何が気になっていますか?", actions: [] }),
   });
-  const out = await simulateHandleSubmit({ text: "コーデ提案して", initialMessages: initial, fetchMock });
+  const out = await simulateHandleSubmit({ text: "ブランドの話を学びたい", initialMessages: initial, fetchMock });
   assertEqual(out.isSwitchToOtherTarget, false,      "対象外 intent → 切替なし(STYLIST_CHAT_INTENTS.has で自動 false)");
   assertEqual(out.effectiveContinuing,   true,       "★ 継続維持");
   assertEqual(out.intentToSend,          "diagnose", "intentToSend=diagnose 不変");
@@ -622,6 +631,86 @@ async function caseI4() {
   assertEqual(out.effectiveContinuing,   true,       "継続維持");
   assertEqual(out.intentToSend,          "diagnose", "intentToSend=diagnose 不変");
   assertTrue((out.recentHistory ?? []).length > 0, "history 残置");
+}
+
+// ====================================================================
+// MVP-1c coordinate intent ケース(j-1 〜 j-4)
+// ====================================================================
+
+async function caseJ1() {
+  console.log("\n[j-1] ★ MVP-1c coordinate 会話化(初回発話・段階B 直行・sessionIntent=coordinate)");
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent": () => ({ ok: true, intent: "coordinate", confidence: 0.9, mode: "api" }),
+    "/api/ai/stylist-chat": () => ({ ok: true, reply: "あなたの世界観なら、黒をただ暗く使うより、素材と重心で差を出す方が合います。", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "黒系で静かだけど印象に残るコーデにしたい", initialMessages: [], fetchMock });
+  assertEqual(out.sessionIntent,         null,       "初回 sessionIntent=null");
+  assertEqual(out.isContinuingSession,   false,      "isContinuingSession=false");
+  assertEqual(out.isSwitchToOtherTarget, false,      "isSwitchToOtherTarget=false(初回)");
+  assertEqual(out.isStylistTarget,       true,       "★ isStylistTarget=true(coordinate が target に入った)");
+  assertEqual(out.segmentBCalled,        true,       "段階B 呼ばれる");
+  assertEqual(out.intentToSend,          "coordinate", "intentToSend=coordinate");
+  const last = out.finalMessages[out.finalMessages.length - 1];
+  assertTrue(last.role === "assistant" && last.content.kind === "reply", "末尾は assistant reply");
+  if (last.content.kind === "reply") {
+    assertEqual(last.content.sessionIntent, "coordinate", "★ 末尾.sessionIntent=coordinate 保持");
+  }
+}
+
+async function caseJ2() {
+  console.log("\n[j-2] ★ MVP-1c L4-A 切替 diagnose → coordinate(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "診断したい" },                                    createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "診断を始めますね", sessionIntent: "diagnose" }, createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent": () => ({ ok: true, intent: "coordinate", confidence: 0.95, mode: "api" }),
+    "/api/ai/stylist-chat": () => ({ ok: true, reply: "コーデを考えましょう", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "コーデ提案して", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "diagnose",   "切替前 sessionIntent=diagnose");
+  assertEqual(out.isSwitchToOtherTarget, true,         "★ 切替検出 true");
+  assertEqual(out.effectiveContinuing,   false,        "新セッション扱い");
+  assertEqual(out.intentToSend,          "coordinate", "intentToSend=coordinate(新 intent)");
+  assertEqual(out.recentHistory,         [],           "★ history=[](切替時リセット)");
+  const last = out.finalMessages[out.finalMessages.length - 1];
+  if (last.content.kind === "reply") {
+    assertEqual(last.content.sessionIntent, "coordinate", "新セッション sessionIntent=coordinate");
+  }
+}
+
+async function caseJ3() {
+  console.log("\n[j-3] ★ MVP-1c L4-A 切替 closet → coordinate(3 intent 三角・closet 起点)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "クローゼット" },                                    createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "ブラック系 5 点登録されています", sessionIntent: "closet" }, createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent": () => ({ ok: true, intent: "coordinate", confidence: 0.92, mode: "api" }),
+    "/api/ai/stylist-chat": () => ({ ok: true, reply: "コーデを組みましょう", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "これでコーデ提案して", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "closet",     "切替前 sessionIntent=closet");
+  assertEqual(out.isSwitchToOtherTarget, true,         "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "coordinate", "intentToSend=coordinate");
+  assertEqual(out.recentHistory,         [],           "★ history=[](切替時リセット)");
+}
+
+async function caseJ4() {
+  console.log("\n[j-4] ★ MVP-1c coordinate → diagnose 逆方向切替");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "コーデ提案" },                                    createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "黒で組みましょう", sessionIntent: "coordinate" }, createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent": () => ({ ok: true, intent: "diagnose", confidence: 0.9, mode: "navigate" }),
+    "/api/ai/stylist-chat": () => ({ ok: true, reply: "診断を始めます", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "やっぱり診断したい", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "coordinate", "切替前 sessionIntent=coordinate");
+  assertEqual(out.isSwitchToOtherTarget, true,         "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "diagnose",   "intentToSend=diagnose");
+  assertEqual(out.recentHistory,         [],           "★ history=[](切替時リセット)");
 }
 
 // ====================================================================
@@ -652,6 +741,10 @@ async function main() {
   await caseI2();
   await caseI3();
   await caseI4();
+  await caseJ1();
+  await caseJ2();
+  await caseJ3();
+  await caseJ4();
 
   console.log("\n==========================================");
   console.log(`Total: ${pass}/${pass + fail} passed`);

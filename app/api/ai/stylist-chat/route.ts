@@ -46,10 +46,10 @@ import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
-// MVP-1 P1-C-1.5a + 1.5b-i 対応 intent(段階B を通す対象)
+// MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c 対応 intent(段階B を通す対象)
 // ★ ここを広げる前に system prompt の対応領域 + 出力フィルタの再点検が必要
 // ★ UI 側 `app/(app)/ai/page.tsx` の同名 Set と完全一致させる(両側同期)
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet"]);
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 const MAX_HISTORY = 3;
@@ -111,12 +111,15 @@ export async function POST(request: NextRequest) {
     const history = sanitizeHistory(body.history);
 
     // 3) ★ contextData はサーバ自前 SELECT(client 渡しは受けない)
-    //    intent ごとに取得先テーブルを切替(両者とも ★ 列絞り SELECT で worldview_tags 構造遮断)
-    //    - diagnose: worldview_profiles から jsonb 列絞り(1.5a)
-    //    - closet:   wardrobe_items から category, color のみ列絞り(1.5b-i)
+    //    intent ごとに取得先テーブルを切替(各分岐とも ★ 列絞り SELECT で worldview_tags 構造遮断)
+    //    - diagnose:   worldview_profiles から jsonb 列絞り(1.5a)
+    //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
+    //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
     let ctx: StylistChatContext;
     if (intent === "closet") {
       ctx = await fetchClosetContext(supabase, userId);
+    } else if (intent === "coordinate") {
+      ctx = await fetchCoordinateContext(supabase, userId);
     } else {
       ctx = await fetchDiagnoseContext(supabase, userId);
     }
@@ -265,6 +268,56 @@ async function fetchClosetContext(
       categoryBuckets,
     },
   };
+}
+
+// coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
+// ★ いずれも列絞り SELECT で worldview_tags 取得経路を遮断(三重防御 1)
+// ★ .eq("...", userId) で本人データのみ(cookie-bound RLS + 二重 guard)
+// body_profile パターンは lib/prompts/concept-translate.ts:81-99 を踏襲。
+async function fetchCoordinateContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<StylistChatContext> {
+  const [diagCtx, closetCtx, bodyRow] = await Promise.all([
+    fetchDiagnoseContext(supabase, userId),
+    fetchClosetContext(supabase, userId),
+    supabase
+      .from("users")
+      .select("body_profile")
+      .eq("id", userId)
+      .maybeSingle() as unknown as Promise<{ data: { body_profile: unknown } | null }>,
+  ]);
+
+  return {
+    // diagnose 由来(worldview)
+    worldviewName:     diagCtx.worldviewName,
+    worldviewKeywords: diagCtx.worldviewKeywords,
+    coreIdentity:      diagCtx.coreIdentity,
+    idealSelf:         diagCtx.idealSelf,
+    // closet 由来(集計サマリ)
+    closetSummary:     closetCtx.closetSummary,
+    // body_profile 由来(日本語サマリ化)
+    bodyProfile:       extractBodyProfile(bodyRow?.data?.body_profile),
+  };
+}
+
+// users.body_profile jsonb を日本語表示用に正規化(未登録なら undefined)。
+// 型は types/index.ts:302 BodyProfile に対応(コンセプト翻訳実装と整合)。
+function extractBodyProfile(raw: unknown): StylistChatContext["bodyProfile"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const concerns = Array.isArray(r.concerns)
+    ? r.concerns.filter((c): c is string => typeof c === "string" && c.trim() !== "")
+    : [];
+  const height       = typeof r.height === "number" ? r.height : null;
+  const bodyType     = typeof r.bodyType === "string" && r.bodyType.trim() !== "" ? r.bodyType.trim() : null;
+  const skeletonType = typeof r.skeletonType === "string" && r.skeletonType.trim() !== "" ? r.skeletonType.trim() : null;
+  const proportionNote = typeof r.proportionNote === "string" && r.proportionNote.trim() !== "" ? r.proportionNote.trim() : null;
+  // 全フィールドが null/空 なら未登録扱い
+  if (height === null && bodyType === null && skeletonType === null && concerns.length === 0 && proportionNote === null) {
+    return undefined;
+  }
+  return { height, bodyType, skeletonType, concerns, proportionNote };
 }
 
 // jsonb 列絞り SELECT の戻り値を日本語サマリ型に正規化(fetchDiagnoseContext から使う)。
