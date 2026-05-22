@@ -34,6 +34,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
+import MenuDrawer from "@/components/chat/MenuDrawer";
 
 interface SuggestionItem {
   intent: string;
@@ -116,6 +117,8 @@ export default function ChatPage() {
   const [text, setText]         = useState("");
   const [loading, setLoading]   = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  // P1-C-3: 右上メニュー [≡] Drawer の開閉
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
@@ -286,15 +289,34 @@ export default function ChatPage() {
     router.push(target.url);
   }
 
+  // P1-C-3: 新しいチャット(案 A シンプル・race fix v2 案 C 整合)
+  // ★ removeItem は persist 経路外で動作・persist effect は messages.length===0 で早期 return
+  function handleNewChat() {
+    if (messages.length === 0) return;
+    if (!confirm("現在の会話履歴を削除して新規セッションを開始しますか?")) return;
+    setMessages([]);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }
+
   return (
     // ★ P1-C-1: 常時表示メイン画面構造(min-h-screen + flex-col の 3 段)。
     //          (app)/layout.tsx の pb-20(BottomNav 分の余白)は P1-C-1 では残置・
     //          BottomNav / OverlayFab 廃止は P1-C-2 で実施(C-1 では二重化を許容)。
     <div className="min-h-screen bg-white flex flex-col">
-      {/* ヘッダ(P1-C-3 で [≡] 右上メニュー追加予定・C-1 ではテキストのみ)*/}
-      <header className="px-5 pt-5 pb-3 border-b border-gray-100">
-        <p className="text-xs tracking-widest text-gray-400 uppercase">STYLE-SELF AI</p>
-        <h1 className="text-lg font-light text-gray-900 mt-0.5">何を相談しますか?</h1>
+      {/* ヘッダ(P1-C-3: 右上 [≡] メニュー追加済・案 A 補助機能集約点)*/}
+      <header className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between">
+        <div>
+          <p className="text-xs tracking-widest text-gray-400 uppercase">STYLE-SELF AI</p>
+          <h1 className="text-lg font-light text-gray-900 mt-0.5">何を相談しますか?</h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsMenuOpen(true)}
+          aria-label="メニューを開く"
+          className="text-gray-500 hover:text-gray-800 text-2xl leading-none px-2 py-1 -mr-2"
+        >
+          ≡
+        </button>
       </header>
 
       {/* 履歴エリア(スクロール) */}
@@ -338,6 +360,13 @@ export default function ChatPage() {
           </button>
         </div>
       </form>
+
+      {/* P1-C-3: 右上メニュー [≡] Drawer(navigate 7 + 新しいチャット + placeholder 2)*/}
+      <MenuDrawer
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        onNewChat={handleNewChat}
+      />
     </div>
   );
 }
