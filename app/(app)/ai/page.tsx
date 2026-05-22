@@ -74,7 +74,7 @@ type MessageContent =
 // P1-C-1.5a / 1.5b-i: 段階B 対象 intent(MVP-1b-i は {diagnose, closet})
 // ★ ここに無い intent は従来通り intent-result(NavigateConfirm 等)で表示する。
 // ★ API 側 `app/api/ai/stylist-chat/route.ts` の同名 Set と完全一致させる(両側同期)
-// ★ L4-A 切替検出は 1.5b-ii で別工程投入(本変更では未対応・L4=C 維持・1.5a 挙動継承)
+// ★ L4-A 切替検出は 1.5b-ii で投入済(SWITCH_THRESHOLD=0.85・別 target 高信頼で新セッション切替)
 const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet"]);
 
 // P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
@@ -88,6 +88,8 @@ interface StylistChatResponse {
 
 // P1-C-1.5a: 段階B に渡す history(直近 N=3・本体 7.4 抑制策)
 const STYLIST_CHAT_HISTORY_MAX = 3;
+// P1-C-1.5b-ii L4-A: 切替検出の信頼度しきい値(保守設定・1.5a 実測 75% 誤判定例を踏まえ)
+const SWITCH_THRESHOLD = 0.85;
 
 interface Message {
   id:        string;
@@ -201,11 +203,19 @@ export default function ChatPage() {
       const sessionIntent = getSessionIntent(messages);
       const isContinuingSession =
         sessionIntent !== null && STYLIST_CHAT_INTENTS.has(sessionIntent);
+      // P1-C-1.5b-ii L4-A: 会話継続中に高信頼別 target intent が来たら新セッション切替(L3 対象外 intent は継続維持)
+      const isSwitchToOtherTarget =
+        isContinuingSession
+        && typeof data.intent === "string"
+        && STYLIST_CHAT_INTENTS.has(data.intent)
+        && data.intent !== sessionIntent
+        && (data.confidence ?? 0) >= SWITCH_THRESHOLD;
+      const effectiveContinuing = isContinuingSession && !isSwitchToOtherTarget;
 
       // intent が会話AIスタイリスト対象(MVP-1 は diagnose のみ)なら
       // /api/ai/stylist-chat を呼んで自然文 reply に置換する。
       // それ以外の intent は ★1 文字も変えず★ 従来通り intent-result(NavigateConfirm 等)で表示。
-      const isStylistTarget = isContinuingSession || (
+      const isStylistTarget = effectiveContinuing || (
         data.ok
         && data.reason === undefined
         && typeof data.intent === "string"
@@ -215,9 +225,9 @@ export default function ChatPage() {
       if (isStylistTarget) {
         // 継続セッション時は sessionIntent を、新規時は段階A 判定 intent を API に渡す。
         // sessionIntent は MVP-1a では常に "diagnose"・API 側 STYLIST_CHAT_INTENTS にも含まれる。
-        const intentToSend = isContinuingSession ? sessionIntent! : (data.intent as string);
+        const intentToSend = effectiveContinuing ? sessionIntent! : (data.intent as string);
         // 直近 N=3 履歴を組立(client 側で slice・本体 7.4 抑制策の一段目)
-        const recentHistory = buildStylistHistory(messages);
+        const recentHistory = isSwitchToOtherTarget ? [] : buildStylistHistory(messages);
         try {
           const replyRes = await fetch("/api/ai/stylist-chat", {
             method:  "POST",
