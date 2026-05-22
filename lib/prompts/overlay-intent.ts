@@ -19,9 +19,11 @@ export const OVERLAY_INTENT_PROMPT = `
 [intent 一覧と説明]
 - diagnose            : 世界観診断を始めたい・再診断したい
 - worldview-profile   : 自分の世界観プロフィールを見たい・公開設定を変えたい
-- coordinate          : 今日のコーデを提案してほしい(AI による日常コーデ)
+- coordinate          : 日常コーデ提案全般(具体的な条件・色・雰囲気・テイスト指定を含む)
+                        例:「コーデ提案して」「コーデを組んで」「黒系で印象に残るコーデにしたい」「服の組み合わせを教えて」
 - style-consult       : 着こなしの相談がしたい(体型・身長等の悩み解消)
-- virtual-coordinate  : コンセプトから理想のコーデを設計したい(抽象語→具体コーデ)
+- virtual-coordinate  : 明示的な concept または scene を指定した翻訳設計のみ(★ 具体的なコーデ条件だけでは coordinate)
+                        例:「『静かな大人』のコンセプトで」「オフィスシーン用に変換」「世界観名をコーデに翻訳」
 - product-match       : 自分の世界観に合う商品が見たい
 - match-users         : 自分と世界観の近い人を探したい
 - match-posts         : 自分と世界観の近い投稿を探したい
@@ -38,6 +40,14 @@ export const OVERLAY_INTENT_PROMPT = `
 - moodboard           : ムードボード(将来機能・現在未配線)
 - tryon               : リアル試着(将来機能・現在未配線)
 - unknown             : どれにも該当しない / 判断不能
+
+[★ coordinate / virtual-coordinate / tryon 境界判定ルール]
+判定の優先順位は上から順に評価する:
+1. 視覚化・試着の要求(「これ着てみたい」「自分に着せて」)→ tryon
+2. concept または scene キーワード明示の翻訳設計(「『○○』のコンセプトで」「○○シーン用に変換」)→ virtual-coordinate
+3. 上記に該当しない日常コーデ提案(色・雰囲気・テイスト・アイテム指定を含む)→ coordinate
+
+★ 重要: 「組む」「組み合わせ」「コーデにしたい」等の日常表現は具体条件付きでも virtual に流さず coordinate に分類する。
 
 [mode の付与ルール]
 intent ごとに以下を返す:
