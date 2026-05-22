@@ -15,15 +15,19 @@
 **ChatGPT の服版 × リアル試着 × 世界観一貫** — 服を通して「自分を知る・選ぶ・組む・買う」
 を世界観を軸に一つの判断フローで扱えるワードローブ OS。Phase 1-4 で段階構築。
 
-### 1.2 既存達成サマリ(2026-05-22 時点・origin/main `3d1a740`)
+### 1.2 既存達成サマリ(2026-05-23 時点・origin/main `2ef689e`)
 | commit | 内容 | 状態 |
 |---|---|---|
 | `040078c` | 履歴永続化 race fix v2 案 C(useState 化 + 多層防御) | ✅ |
 | `60c7fa8` | L4-A 切替検出投入(SWITCH_THRESHOLD=0.85)| ✅ 1.5b 完成形 |
-| `3e39f99` | リグレッションテスト(97 assertion / 15 サブケース)| ✅ 安全網 |
+| `3e39f99` | リグレッションテスト(97 → 119 assertion)| ✅ 安全網 |
 | `985d00b` | コスト試算 再評価別 doc(¥250-300/月・将来制限策 P1-P5)| ✅ |
 | `ac834bb` | A-1-T1 doc7 ①知る再定義 最小統合(判断 10 確定)| ✅ |
 | `3d1a740` | A-1-T2 8 パターン廃止 監査(Phase C 準備資料)| ✅ |
+| `59fa4d6` | A-2 BottomNav / OverlayFab / OverlayModal 廃止(-632 行)| ✅ |
+| `11cf3de` | A-3 MenuDrawer + ChatPage [≡] + 新しいチャット(案 A シンプル) | ✅ |
+| `182c25b` | MVP-1c coordinate intent 単体投入(3 intent 拡張・119 PASS) | ✅ |
+| `2ef689e` | 段階 A プロンプト修正(virtual narrow / coordinate broad・MVP-1c 完成形) | ✅ |
 
 ### 1.3 本 doc の位置づけ
 - 本体 `ac834bb` = **設計軸**(章 0-11・確定設計判断 1-10)
@@ -32,7 +36,7 @@
 
 ---
 
-## 2. 設計原則(順序判断の基準・6 箇条)
+## 2. 設計原則(順序判断の基準・9 箇条)
 
 1. **既存積み上げを壊さない**(1.5b 完成形 / race fix v2 / L4-A / リグレッションテスト / コスト試算)
 2. **③ 安全装置 diff 0 行を最後まで守る**(③ プライバシー専章 / ③ コスト管理 / Phase 2 後ゲート)
@@ -40,6 +44,9 @@
 4. **体験のコア → 補完 → 拡張 → 先の Phase**(Phase 1 完成 → Phase 2 → ゲート → Phase 3/4)
 5. **ビジョンマップは「正解の問い」見直しの機会**・節目(Sprint 完了時)で統合
 6. **リスク大の工程(リアル試着)は最後**・Phase 2 後ゲートで GO/NO-GO 判断
+7. **実機で発見された課題は推測せず実物コードで真因切り分け**(本セッション仮説 H1 確定の作法・コード参照付き分析)
+8. **LLM 分類差はプロンプト精緻化で解決**(コード改修ではなく・段階 A 修正 `2ef689e` の作法)
+9. **3 レイヤー構造を維持**(本体 `ac834bb` 設計軸 + doc7 思想 + 本 doc 実装順序の役割分担)
 
 ---
 
@@ -50,13 +57,13 @@
 - **T2**: 8 パターン legacy 監査(全参照リスト・3 分類)→ ✅ **完了** `3d1a740`
 - **T3**: Phase C 実装(コード -600 行・マイグレ 0 件)→ **MVP-1c 完了後の別 Sprint**
 
-### 3.2 A-2 P1-C-2 — BottomNav / OverlayFab 廃止
-判断 8(タブなし完全チャット型・案 A)の物理実装。`(app)/layout.tsx` から BottomNav 撤去 +
-FAB 削除。/ai 以外の画面では既存ナビが残置するか右上 [≡] に集約するかの判断含む。
-→ ★ **A-1 完遂直後の次の一歩**
+### 3.2 A-2 P1-C-2 — BottomNav / OverlayFab 廃止 → ✅ **完了** `59fa4d6`
+判断 8(タブなし完全チャット型・案 A)の物理実装。BottomNav / OverlayFab / OverlayModal の
+3 ファイル完全削除(-632 行)・`(app)/layout.tsx` を DevAuthBadge + children のみに簡素化。
 
-### 3.3 A-3 P1-C-3 — MenuDrawer + ChatPage 右上 [≡]
-判断 8 補助機能集約点の実装。本体 4.3 §「右上メニュー [≡] 設計」参照。
+### 3.3 A-3 P1-C-3 — MenuDrawer + ChatPage 右上 [≡] → ✅ **完了** `11cf3de`
+判断 8 補助機能集約点の実装。`components/chat/MenuDrawer.tsx`(137 行)新規・navigate 7 件
++ 新しいチャット(案 A シンプル・race fix v2 伏線回収)+ placeholder 2 件。
 
 ### 3.4 A-4 P1-C-4 — チャットコマンド + 到達点検 + プライバシー漏洩点検
 全 intent が navigate-map 経由で正しく到達する確認 + worldview_tags 英語スラッグの非露出確認。
@@ -65,10 +72,11 @@ FAB 削除。/ai 以外の画面では既存ナビが残置するか右上 [≡]
 チャット画面に世界観カード(`worldviewName` / `worldview_keywords` 表示)+ 提案チップを追加。
 analyze-v2 schema 前提(判断 10 整合)。
 
-### 3.6 A-6 MVP-1c — 残 6 intent 会話化
-本体 4.7 マップ通り coordinate / style-consult / virtual-coordinate / product-match /
-match-users / brand-learn を段階 B に追加。`STYLIST_CHAT_INTENTS` を順次拡張・
-リグレッションテスト(`3e39f99`)を各 intent 追加時に拡張。
+### 3.6 A-6 MVP-1c — 残 6 intent 会話化 → 🟡 **部分完了**(coordinate 完遂・残 5 intent 未着手)
+- **coordinate**: ✅ 完遂 `182c25b` + `2ef689e`(段階 A プロンプト修正で完成形達成)
+- 残 5 intent(style-consult / virtual-coordinate / product-match / match-users / brand-learn):
+  本体 4.7 マップ通り段階 B に追加・`STYLIST_CHAT_INTENTS` 順次拡張・リグレッションテスト
+  (`3e39f99`)を各 intent 追加時に拡張。各 intent で段階 A プロンプト精緻化(原則 8)も併走。
 
 ### 3.7 A-7 P1-E — 対話完結 8 結果カード + 漏洩点検
 intent ごとの結果カード(NavigateConfirm 等)を会話完結型に。三重防御(列絞り / system 明示 /
@@ -166,18 +174,45 @@ stylist-chat route で上限判定 +20-30 行。
 
 ---
 
-## 11. 直近の次の一手(★ 最優先)
+## 11. 直近の次の一手(★ 最優先・現状 `2ef689e`)
 
-**現状(`3d1a740`)から見た次の一歩 = A-2(P1-C-2 BottomNav / OverlayFab 廃止)**
+**現状サマリ**: Sprint A の A-1 / A-2 / A-3 完遂 + MVP-1c coordinate 完成形達成。Phase 1 中身の
+半分が origin/main に保全済。残工程を優先順序付きで以下に整理。
 
-理由:
-- A-1 シリーズ完遂(T1 統合 + T2 監査)で ①知る再定義の方向修正完了
-- 既存達成(1.5b 完成形 + 安全網 + コスト整理)が origin に保全
-- Phase 1 中身は判断 8 の物理実装(BottomNav 撤去 = 案 A の核)を進める段階
-- T3(Phase C)は MVP-1c 完了後・衝突回避
+### 11.1 Sprint A 残工程(優先順序)
 
-**MVP-1c(A-6)は A-5(P1-D)後に推奨**:
-- 世界観カード + 提案チップ(P1-D)が先にあると MVP-1c の各 intent で活用可能
+**★ 優先 1: A-4 チャットコマンド + 到達点検 + プライバシー漏洩点検**(20-30 分・小)
+- 既存資産(`navigate-map.ts` 9 entries + チャットコマンド)の動作確認・追加修正
+- A-2 / A-3 後の到達経路実証(全 18 機能 + 公開 `/u` `/p` への迷子ゼロ)
+- worldview_tags 英語スラッグ非露出の全 reply 検証
+- ★ 集中力後半に最適(小規模)
+
+**★ 優先 2: A-6 MVP-1c 残 5 intent**(各 30-45 分・1 セッション 1 intent 単位)
+- style-consult / virtual-coordinate / product-match / match-users / brand-learn
+- 各 intent で段階 A プロンプト精緻化(`2ef689e` の作法踏襲・原則 8)も併走
+- リグレッションテスト(`3e39f99`)に各 intent ケース追加(現 119 → 拡張)
+
+**★ 優先 3: A-5 P1-D — 上部世界観カード + 提案チップ 5 + 入力欄近接 4 ボタン**(1 セッション・中)
+- 案 A 4.3 図示の見た目完成
+- 「黒い美術館の住人」カード + 提案チップ + 📎写真 / 🔗 商品 URL / 👕 クローゼット / 🎨 MB 4 ボタン
+- UI 新設計 + データ連携(`analyze-v2` schema 前提・判断 10 整合)
+
+**★ 優先 4: A-7 P1-E — 対話完結 8 結果カード**(1-1.5 セッション・中)
+- reply に商品/コーデカード統合
+- 三重防御(列絞り / system 明示 / 出力フィルタ)維持
+
+**★ 優先 5: A-8 P1-F — virtual → product 連鎖**(1 セッション・中)
+- 試着想定の商品リコメンド連鎖(判断 5-③ MVP 含む)
+- ★ Phase 2 / 3 への布石
+
+**★ 優先 6: A-9 P1-G — 仕上げ + 退行点検 + 知見 docs 追記**(0.5 セッション)
+- リグレッションテスト全件 PASS + オーナー実機検証
+- ★ Phase 1 完成宣言
+
+### 11.2 順序の根拠
+- 優先 1(A-4)が最小コストで A-2 / A-3 の成果を確証(到達網羅性検証は本セッションの実装直後が最効)
+- 優先 2(A-6 残 5)は intent 単位で小さく刻める(M5 教訓・原則 3)
+- 優先 3(A-5)以降は中規模 UI 改修・段階的に投入
 
 ---
 
@@ -194,10 +229,35 @@ stylist-chat route で上限判定 +20-30 行。
 
 ---
 
-## 13. 結論
+## 13. 横断 TODO(本セッション発生分・別 Sprint 管理)
+
+Sprint A〜G の本流とは別に、本セッション(2026-05-22 → 2026-05-23)で記録された
+横断 TODO を本章に整理(着手タイミングは個別判断)。
+
+### 13.1 履歴管理機能(オーナー指摘 1・MVP-2 等別 Sprint)
+- **現状**: 案 A シンプル(`setMessages([])` + `localStorage.removeItem` + `confirm()`)で「現在の会話だけクリア」する最小実装
+- **将来**: 案 B(過去会話 archive + 履歴サイドバー)/ 案 C(ハイブリッド)で過去会話を見返せる UX
+- **規模**: 設計 1 セッション + 実装 2-3 セッション
+- **着手タイミング**: Sprint A 完了後 or Phase 1 完成後の MVP-2 Sprint
+
+### 13.2 `stripCanonicalSlugs` の export 化(将来課題)
+- **現状**: [app/api/ai/stylist-chat/route.ts:299-324](../app/api/ai/stylist-chat/route.ts#L299-L324) で **non-export 内部関数**・リグレッションテスト(`3e39f99`)では同形コピー + 連動更新ルール明記で運用
+- **将来**: 他 route で同フィルタが必要になった時点で `lib/utils/` に切り出し export 化
+- **規模**: `lib/utils/` 新規 +30-50 行 + 既存コピー箇所の置換
+- **着手タイミング**: 他 route で `stripCanonicalSlugs` が必要になった時
+
+### 13.3 8 パターン legacy Phase C 実装(A-1-T3・MVP-1c 後)
+- **監査資料**: [docs/STYLE-SELF_8パターン廃止_監査.md](./STYLE-SELF_8パターン廃止_監査.md)(`3d1a740`)
+- **規模**: コード -約 600 行・マイグレ 0 件(Option B = nullable のまま keep・既適用)
+- **着手タイミング**: ★ **MVP-1c 残 5 intent 完了後**(優先 2 完遂後・衝突回避)
+- **判定**: X 系 6 ファイル削除 / Y 系 4 ファイル残置(案 a 過去診断温存) / Z 系 4 ファイル対応済
+
+---
+
+## 14. 結論
 
 - 本 doc が **ビジョン完全達成への羅針盤**
 - **3 レイヤー構造**: 本体 `ac834bb`(設計軸)+ doc7(思想)+ 本 doc(実装順序)
 - 各 Sprint 着手時に本 doc を参照・進捗反映可能
 - 新規設計判断や工程追加は **本 doc では行わない**(セッション内整理の忠実な doc 化)
-- 直近 = **A-2(P1-C-2 BottomNav / OverlayFab 廃止)から再開推奨**
+- 直近 = **A-4(P1-C-4 チャットコマンド + 到達点検 + プライバシー漏洩点検)から再開推奨**(章 11 優先 1)
