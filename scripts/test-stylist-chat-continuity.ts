@@ -56,6 +56,14 @@
 // 【方式】案 C(設計案 章 B):mock 主体・LLM / 実 API 呼ばない・コスト 0・決定性 100%
 
 import { PRODUCT_WORLDVIEW_TAGS } from "../lib/knowledge/product-worldview-tags";
+import { buildStylistChatUserMessage, type StylistChatContext } from "../lib/prompts/stylist-chat";
+import { MATERIAL_DICT, COLOR_DICT, LINE_DICT, RATIO_DICT } from "../lib/dictionaries";
+import {
+  getMaterialContext,
+  getColorContext,
+  getLineContext,
+  getRatioContext,
+} from "../lib/dictionaries/inject";
 
 // ====================================================================
 // 本体と同期する定数(コピー: app/(app)/ai/page.tsx)
@@ -714,6 +722,148 @@ async function caseJ4() {
 }
 
 // ====================================================================
+// A-10: Knowledge OS 連携(案A フル統合)検証
+// ====================================================================
+// 検証対象:
+//   - lib/prompts/stylist-chat.ts buildStylistChatUserMessage の KOS ブロック組立
+//   - app/api/ai/stylist-chat/route.ts fetchKnowledgeOSContext 入口 sanitize 等価式
+//     (route 側は非 export なので、ここでは buildStylistChatUserMessage に渡す
+//      knowledgeOS フィールドを test 側で組立てて検証する)
+//   - lib/dictionaries/inject.ts getRatioContext / 既存 3 helper の発話マッチ抽出
+
+// 本体 route.ts:fetchKnowledgeOSContext と同形の matcher(辞書キー部分一致)
+function matchDictionaryKeysForTest(text: string): {
+  materials: string[]; colors: string[]; silhouettes: string[]; ratios: string[];
+} {
+  return {
+    materials:   Object.keys(MATERIAL_DICT).filter((k) => text.includes(k)),
+    colors:      Object.keys(COLOR_DICT).filter((k) => text.includes(k)),
+    silhouettes: Object.keys(LINE_DICT).filter((k) => text.includes(k)),
+    ratios:      Object.keys(RATIO_DICT).filter((k) => text.includes(k)),
+  };
+}
+
+const EMPTY_DIAGNOSE_CTX: StylistChatContext = {
+  worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+};
+
+async function caseK1(): Promise<void> {
+  console.log("\n[k-1] ★ A-10 KOS undefined → user message に KOS ブロック不在(段階B 退行ゼロ・KOS 接続失敗時)");
+  const msg = buildStylistChatUserMessage({
+    text: "黒系で印象に残るコーデにしたい",
+    intent: "coordinate",
+    history: [],
+    ctx: { ...EMPTY_DIAGNOSE_CTX, knowledgeOS: undefined },
+  });
+  assertFalse(msg.includes("【参考(Knowledge OS"), "KOS ブロックヘッダ不在");
+  assertFalse(msg.includes("判断ルール"),           "判断ルール行 不在");
+  assertFalse(msg.includes("失敗パターン"),         "失敗パターン行 不在");
+}
+
+async function caseK2(): Promise<void> {
+  console.log("\n[k-2] ★ A-10 KOS 全件付き → user message に KOS ブロック存在(判断ルール + 失敗パターン + 4 辞書)");
+  const matched = matchDictionaryKeysForTest("黒で綿のオーバーサイズ・上3:下7 で組みたい");
+  const ctx: StylistChatContext = {
+    ...EMPTY_DIAGNOSE_CTX,
+    knowledgeOS: {
+      decisionRules:   [{ rule: "光沢を抑えた素材で重心を下げる", importance: 5 }],
+      failurePatterns: [{ title: "白すぎる靴で世界観を壊す", summary: "明るすぎる白を選ばない" }],
+      dictionaries: {
+        materials:   getMaterialContext(matched.materials),
+        colors:      getColorContext(matched.colors),
+        silhouettes: getLineContext(matched.silhouettes),
+        ratios:      getRatioContext(matched.ratios),
+      },
+    },
+  };
+  const msg = buildStylistChatUserMessage({
+    text: "黒で綿のオーバーサイズ・上3:下7 で組みたい",
+    intent: "coordinate",
+    history: [],
+    ctx,
+  });
+  assertContains(msg, "【参考(Knowledge OS",      "KOS ブロックヘッダ");
+  assertContains(msg, "光沢を抑えた素材で重心を下げる", "判断ルール本文");
+  assertContains(msg, "白すぎる靴で世界観を壊す",   "失敗パターン本文");
+  assertContains(msg, "素材辞書",                    "素材辞書セクション");
+  assertContains(msg, "色辞書",                      "色辞書セクション");
+  assertContains(msg, "シルエット辞書",              "シルエット辞書セクション");
+  assertContains(msg, "比率辞書",                    "比率辞書セクション");
+  assertContains(msg, "【綿】",                      "素材エントリ(綿)");
+  assertContains(msg, "【黒】",                      "色エントリ(黒)");
+  assertContains(msg, "【オーバーサイズ】",          "シルエットエントリ");
+  assertContains(msg, "【上3:下7】",                  "比率エントリ");
+}
+
+async function caseK3(): Promise<void> {
+  console.log("\n[k-3] ★ A-10 KOS 入口 sanitize 等価: 英語スラッグ 31 語含む rule/failure → stripCanonicalSlugs で除去");
+  // route 側 fetchKnowledgeOSContext は KOS 生戻り値を stripCanonicalSlugs に通してから contextData に注入する。
+  // 本ケースは「test 側で sanitize 後の文字列を knowledgeOS に入れたとき、英語スラッグ 31 語が一切残らない」を検証。
+  const ruleWithSlug    = "quiet な minimal を保ちつつ dark に振る判断ルール";
+  const failureWithSlug = "structured / refined を逸脱して preppy に流れる失敗";
+  const sanitizedRule    = stripCanonicalSlugs(ruleWithSlug).cleaned;
+  const sanitizedFailure = stripCanonicalSlugs(failureWithSlug).cleaned;
+  for (const tag of PRODUCT_WORLDVIEW_TAGS) {
+    const re = new RegExp(`\\b${escapeRegExp(tag)}\\b`, "i");
+    assertFalse(re.test(sanitizedRule),    `入口 sanitize: rule から "${tag}" 除去`);
+    assertFalse(re.test(sanitizedFailure), `入口 sanitize: failure から "${tag}" 除去`);
+  }
+  // buildStylistChatUserMessage に sanitize 済を渡した場合の user message も 31 語不在
+  const ctx: StylistChatContext = {
+    ...EMPTY_DIAGNOSE_CTX,
+    knowledgeOS: {
+      decisionRules:   [{ rule: sanitizedRule }],
+      failurePatterns: [{ title: sanitizedFailure }],
+      dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
+    },
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "coordinate", history: [], ctx });
+  for (const tag of PRODUCT_WORLDVIEW_TAGS) {
+    const re = new RegExp(`\\b${escapeRegExp(tag)}\\b`, "i");
+    assertFalse(re.test(msg), `user message: "${tag}" 不在`);
+  }
+}
+
+async function caseK4(): Promise<void> {
+  console.log("\n[k-4] ★ A-10 dictionaries 発話マッチ抽出(getRatioContext 含む 4 helper の関連語のみ抽出)");
+  const matched = matchDictionaryKeysForTest("黒の綿でスリムなシルエット、上4:下6 が好み");
+  assertTrue(matched.colors.includes("黒"),                "色: 黒 抽出");
+  assertTrue(matched.materials.includes("綿"),             "素材: 綿 抽出");
+  assertTrue(matched.silhouettes.includes("スリム"),       "シルエット: スリム 抽出");
+  assertTrue(matched.ratios.includes("上4:下6"),           "比率: 上4:下6 抽出");
+  // 発話に無い語彙は抽出されない
+  assertFalse(matched.colors.includes("白"),               "色: 白 不在(発話に無い)");
+  assertFalse(matched.materials.includes("シルク"),         "素材: シルク 不在(発話に無い)");
+  // helper 出力が日本語のみ(英語スラッグ 31 語不在)
+  const out = [
+    getMaterialContext(matched.materials),
+    getColorContext(matched.colors),
+    getLineContext(matched.silhouettes),
+    getRatioContext(matched.ratios),
+  ].join("\n");
+  for (const tag of PRODUCT_WORLDVIEW_TAGS) {
+    const re = new RegExp(`\\b${escapeRegExp(tag)}\\b`, "i");
+    assertFalse(re.test(out), `dictionaries 出力: "${tag}" 不在`);
+  }
+}
+
+async function caseK5(): Promise<void> {
+  console.log("\n[k-5] ★ A-10 3 intent 共通注入(diagnose / closet / coordinate で KOS ブロック同形)");
+  const ctx: StylistChatContext = {
+    ...EMPTY_DIAGNOSE_CTX,
+    knowledgeOS: {
+      decisionRules:   [{ rule: "テストルール" }],
+      failurePatterns: [],
+      dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
+    },
+  };
+  for (const intent of ["diagnose", "closet", "coordinate"]) {
+    const msg = buildStylistChatUserMessage({ text: "test", intent, history: [], ctx });
+    assertContains(msg, "テストルール", `intent=${intent}: KOS rule 注入確認`);
+  }
+}
+
+// ====================================================================
 // Main
 // ====================================================================
 async function main() {
@@ -745,6 +895,11 @@ async function main() {
   await caseJ2();
   await caseJ3();
   await caseJ4();
+  await caseK1();
+  await caseK2();
+  await caseK3();
+  await caseK4();
+  await caseK5();
 
   console.log("\n==========================================");
   console.log(`Total: ${pass}/${pass + fail} passed`);

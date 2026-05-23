@@ -65,6 +65,17 @@ export interface DecisionRule {
   confidence_score?: number | null;
 }
 
+// A-10: 失敗パターン(MCP server 側 get_failure_patterns の戻り型)
+export interface FailurePattern {
+  pattern:             string;
+  what_went_wrong:     string;
+  lesson:              string;
+  source_entry_id:     string;
+  source_entry_title:  string;
+  category:            string | null;
+  tags:                string[];
+}
+
 interface GetInfluencesArgs {
   subject_name?: string;
   category?: string;
@@ -87,6 +98,12 @@ interface GetDecisionRulesArgs {
 interface GetCategoriesArgs {
   parent_slug?: string;
   include_counts?: boolean;
+}
+
+// A-10: 失敗パターン取得の引数(MCP server 側 get_failure_patterns の入力)
+interface GetFailurePatternsArgs {
+  context?:          string;
+  related_features?: string[];
 }
 
 // ----- インメモリキャッシュ (P4) -----
@@ -192,4 +209,10 @@ export async function getDecisionRules(args: GetDecisionRulesArgs = {}): Promise
 
 export async function getCategories(args: GetCategoriesArgs = {}): Promise<CategoryData[]> {
   return callToolCached<CategoryData>("get_categories", args as Record<string, unknown>);
+}
+
+// A-10: 失敗パターン取得(getDecisionRules と同形・5 分キャッシュ + エラー時 [] 返却)
+// 注: getFashionRules は worldview_tags 配列を返すため A-10 では追加しない(構造的排除)
+export async function getFailurePatterns(args: GetFailurePatternsArgs = {}): Promise<FailurePattern[]> {
+  return callToolCached<FailurePattern>("get_failure_patterns", args as Record<string, unknown>);
 }

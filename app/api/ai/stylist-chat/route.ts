@@ -42,6 +42,14 @@ import {
 } from "@/lib/prompts/stylist-chat";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
 import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
+import { getDecisionRules, getFailurePatterns } from "@/lib/knowledge-os/client";
+import {
+  getMaterialContext,
+  getColorContext,
+  getLineContext,
+  getRatioContext,
+} from "@/lib/dictionaries/inject";
+import { MATERIAL_DICT, COLOR_DICT, LINE_DICT, RATIO_DICT } from "@/lib/dictionaries";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -115,14 +123,15 @@ export async function POST(request: NextRequest) {
     //    - diagnose:   worldview_profiles から jsonb 列絞り(1.5a)
     //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
     //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
-    let ctx: StylistChatContext;
-    if (intent === "closet") {
-      ctx = await fetchClosetContext(supabase, userId);
-    } else if (intent === "coordinate") {
-      ctx = await fetchCoordinateContext(supabase, userId);
-    } else {
-      ctx = await fetchDiagnoseContext(supabase, userId);
-    }
+    // A-10: 各 intent fetcher と Knowledge OS フェッチを ★ Promise.all で並列化(レイテンシ抑制)。
+    //       3 intent 共通注入(intent 別絞り込みは将来 Sprint)。
+    const [baseCtx, knowledgeOS] = await Promise.all([
+      intent === "closet"     ? fetchClosetContext(supabase, userId)
+      : intent === "coordinate" ? fetchCoordinateContext(supabase, userId)
+      :                            fetchDiagnoseContext(supabase, userId),
+      fetchKnowledgeOSContext(text),
+    ]);
+    const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
 
     // 4) Claude(Haiku 4.5)呼出
     const systemPrompt = STYLIST_CHAT_SYSTEM_PROMPT;
@@ -342,6 +351,82 @@ function extractContext(row: {
     worldviewKeywords: arr(row.keywords),
     coreIdentity:      str(row.core),
     idealSelf:         str(row.ideal),
+  };
+}
+
+// ====================================================================
+// A-10: Knowledge OS 連携(案A フル統合)
+// ====================================================================
+// stylist-chat 段階 B 専用の Knowledge OS context fetcher。
+// ・getDecisionRules + getFailurePatterns を並列フェッチ(MCP client が 5 分 in-memory cache 持つ)
+// ・dictionaries(material 14 / color 15 / line 10 / ratio 8)から発話に関連する語彙を抽出
+// ・★ 入口 sanitize: stripCanonicalSlugs を contextData 注入前に適用(三重防御 (1) 同型再適用)
+// ・★ KOS 接続失敗時は全フィールド空で undefined 相当 → buildStylistChatUserMessage 側で
+//    ブロック自体を出さない(段階 B reply 退行ゼロ)
+// ・getFashionRules は worldview_tags 配列を返すため使わない(構造的排除・A-10 設計案 9bfb0cc §3.4)
+const KOS_DECISION_RULES_LIMIT  = 10;
+const KOS_FAILURE_PATTERNS_LIMIT = 5;
+
+async function fetchKnowledgeOSContext(text: string): Promise<StylistChatContext["knowledgeOS"]> {
+  try {
+    const [rulesRaw, failuresRaw] = await Promise.all([
+      getDecisionRules({ importance_min: 4, limit: KOS_DECISION_RULES_LIMIT }),
+      getFailurePatterns({ context: "fashion-coordinate", related_features: undefined }),
+    ]);
+
+    // ★ 入口 sanitize: KOS 戻り値の rule / pattern / lesson 文字列にも 31 語フィルタを適用
+    const decisionRules = rulesRaw.slice(0, KOS_DECISION_RULES_LIMIT)
+      .map((r) => ({
+        rule:       stripCanonicalSlugs(r.rule ?? "").cleaned,
+        importance: r.importance,
+      }))
+      .filter((r) => r.rule.trim().length > 0);
+
+    const failurePatterns = failuresRaw.slice(0, KOS_FAILURE_PATTERNS_LIMIT)
+      .map((f) => ({
+        title:   stripCanonicalSlugs(f.pattern ?? "").cleaned,
+        summary: stripCanonicalSlugs(`${f.what_went_wrong ?? ""}${f.lesson ? "  教訓: " + f.lesson : ""}`).cleaned,
+      }))
+      .filter((f) => f.title.trim().length > 0);
+
+    // dictionaries: 発話 text に出てくる語彙のみ抽出(全 47 エントリ全載せはトークン浪費 + ノイズ)
+    const matched = matchDictionaryKeys(text);
+
+    return {
+      decisionRules,
+      failurePatterns,
+      dictionaries: {
+        materials:   getMaterialContext(matched.materials),
+        colors:      getColorContext(matched.colors),
+        silhouettes: getLineContext(matched.silhouettes),
+        ratios:      getRatioContext(matched.ratios),
+      },
+    };
+  } catch (err) {
+    // KOS / dictionaries 失敗時は undefined 相当(空オブジェクト)で段階 B 退行ゼロ
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[stylist-chat] knowledge-os fetch failed:", message);
+    return {
+      decisionRules:   [],
+      failurePatterns: [],
+      dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
+    };
+  }
+}
+
+// 発話 text に含まれる dictionary キー(日本語)を 4 種類抽出。
+// 単純な部分一致(辞書キーは日本語短語のため誤検出は低い)。
+function matchDictionaryKeys(text: string): {
+  materials:   string[];
+  colors:      string[];
+  silhouettes: string[];
+  ratios:      string[];
+} {
+  return {
+    materials:   Object.keys(MATERIAL_DICT).filter((k) => text.includes(k)),
+    colors:      Object.keys(COLOR_DICT).filter((k) => text.includes(k)),
+    silhouettes: Object.keys(LINE_DICT).filter((k) => text.includes(k)),
+    ratios:      Object.keys(RATIO_DICT).filter((k) => text.includes(k)),
   };
 }
 
