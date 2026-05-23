@@ -72,7 +72,7 @@ import {
 const CONFIDENCE_THRESHOLD       = 0.7;  // app/(app)/ai/page.tsx:54
 const MAX_MESSAGES               = 30;   // app/(app)/ai/page.tsx:57
 const STORAGE_KEY                = "style-self:ai:messages:v1"; // app/(app)/ai/page.tsx:63
-const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet", "coordinate"]); // app/(app)/ai/page.tsx:78 (MVP-1c 拡張)
+const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet", "coordinate", "style-consult"]); // app/(app)/ai/page.tsx:79 (A-6 拡張・4 intent)
 const STYLIST_CHAT_HISTORY_MAX   = 3;    // app/(app)/ai/page.tsx:90
 const SWITCH_THRESHOLD           = 0.85; // app/(app)/ai/page.tsx:92
 
@@ -864,6 +864,172 @@ async function caseK5(): Promise<void> {
 }
 
 // ====================================================================
+// A-6: style-consult intent 投入(MVP-1c 残5 intent 第1弾)検証
+// ====================================================================
+// 検証対象:
+//   - STYLIST_CHAT_INTENTS が "style-consult" を含む(両側同期)
+//   - buildStylistChatUserMessage で intent="style-consult" 時に新規 4 セクション統合
+//     (worldview + body + style_preference + avoid_items)
+//   - stylePreference / avoidItems 経路でも英語スラッグ 31 語非露出
+//   - A-10 KOS 共通注入が 4 intent 目(style-consult)でも動作
+//   - L4-A 切替検出が 4 intent 四角(代表方向)で動作
+
+async function caseS1(): Promise<void> {
+  console.log("\n[s-1] ★ A-6 STYLIST_CHAT_INTENTS が 'style-consult' を含む(4 intent 拡張・両側同期)");
+  assertTrue(STYLIST_CHAT_INTENTS.has("style-consult"), "STYLIST_CHAT_INTENTS.has('style-consult')");
+  assertEqual(STYLIST_CHAT_INTENTS.size, 4,             "Set size = 4(diagnose/closet/coordinate/style-consult)");
+}
+
+async function caseS2(): Promise<void> {
+  console.log("\n[s-2] ★ A-6 buildMessage intent='style-consult' で 4 セクション統合ヘッダ + 段階A intent ラベルが出る");
+  const ctx: StylistChatContext = {
+    worldviewName: "黒の住人", worldviewKeywords: ["静か", "重心"],
+    coreIdentity: "余白を持つ", idealSelf: null,
+    bodyProfile: { height: 158, bodyType: "slim", skeletonType: "wave", concerns: ["短足"], proportionNote: null },
+    stylePreference: {
+      likedColors: ["黒", "ベージュ"], dislikedColors: ["蛍光"],
+      likedMaterials: ["綿"], dislikedMaterials: [], likedSilhouettes: ["ストレート"], dislikedSilhouettes: [],
+      targetImpressions: ["落ち着き"], avoidImpressions: ["派手"],
+    },
+    avoidItems: ["フリル", "ロゴT"],
+  };
+  const msg = buildStylistChatUserMessage({
+    text: "低身長だけどロングコートを着たい",
+    intent: "style-consult", history: [], ctx,
+  });
+  assertContains(msg, "【文脈(本人のみ・着こなし相談・4 ソース統合", "着こなし相談 4 ソース統合ヘッダ");
+  assertContains(msg, "・段階A 判定 intent: style-consult",          "段階A 判定 intent 表示");
+  assertContains(msg, "着こなし相談",                                "対象 4 種類ラベルに着こなし相談");
+}
+
+async function caseS3(): Promise<void> {
+  console.log("\n[s-3] ★ A-6 stylePreference / avoidItems / bodyProfile が user message に表示される");
+  const ctx: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    bodyProfile: { height: 158, bodyType: "slim", skeletonType: "wave", concerns: ["短足"], proportionNote: null },
+    stylePreference: {
+      likedColors: ["黒", "ベージュ"], dislikedColors: ["蛍光"], likedMaterials: ["綿"], dislikedMaterials: [],
+      likedSilhouettes: ["ストレート"], dislikedSilhouettes: [],
+      targetImpressions: ["落ち着き"], avoidImpressions: ["派手"],
+    },
+    avoidItems: ["フリル", "ロゴT"],
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "style-consult", history: [], ctx });
+  assertContains(msg, "身長: 158cm",                "身長表示");
+  assertContains(msg, "体型: slim",                 "体型表示");
+  assertContains(msg, "好きな色: 黒、ベージュ",      "好きな色表示");
+  assertContains(msg, "苦手な色: 蛍光",             "苦手な色表示");
+  assertContains(msg, "好きな素材: 綿",             "好きな素材表示");
+  assertContains(msg, "好きなシルエット: ストレート","好きなシルエット表示");
+  assertContains(msg, "なりたい印象: 落ち着き",      "なりたい印象表示");
+  assertContains(msg, "避けたい印象: 派手",          "避けたい印象表示");
+  assertContains(msg, "避けたい服: フリル、ロゴT",   "avoid_items 表示");
+}
+
+async function caseS4(): Promise<void> {
+  console.log("\n[s-4] ★ A-6 三重防御維持(stylePreference / avoidItems に 31 語が混入 → user message でも除去後の値しか出ない)");
+  // route 側は extractStylePreference で日本語値前提・万一英語スラッグが混入しても出口フィルタが捕捉する。
+  // 本ケースは「sanitize 済の文字列が style-consult 経路 user message に乗っても 31 語が残らない」を検証。
+  const sanitizedLiked = PRODUCT_WORLDVIEW_TAGS.map((t) => stripCanonicalSlugs(t).cleaned).filter((s) => s.length > 0);
+  const ctx: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    stylePreference: {
+      likedColors: sanitizedLiked.slice(0, 3),
+      dislikedColors: [], likedMaterials: [], dislikedMaterials: [],
+      likedSilhouettes: [], dislikedSilhouettes: [],
+      targetImpressions: [], avoidImpressions: [],
+    },
+    avoidItems: sanitizedLiked.slice(3, 6),
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "style-consult", history: [], ctx });
+  for (const tag of PRODUCT_WORLDVIEW_TAGS) {
+    const re = new RegExp(`\\b${escapeRegExp(tag)}\\b`, "i");
+    assertFalse(re.test(msg), `style-consult user message: "${tag}" 不在`);
+  }
+}
+
+async function caseS5(): Promise<void> {
+  console.log("\n[s-5] ★ A-6 + A-10 KOS 共通注入(4 intent 目 style-consult でも KOS ブロック注入される)");
+  const ctx: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    knowledgeOS: {
+      decisionRules:   [{ rule: "縦比率を上げると低身長カバー" }],
+      failurePatterns: [],
+      dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
+    },
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "style-consult", history: [], ctx });
+  assertContains(msg, "【参考(Knowledge OS",       "style-consult でも KOS ブロック注入");
+  assertContains(msg, "縦比率を上げると低身長カバー", "KOS rule 内容");
+}
+
+async function caseL1(): Promise<void> {
+  console.log("\n[l-1] ★ A-6 L4-A 4 intent 四角切替: style-consult → coordinate(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "相談したい" },                                                   createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "何を相談しますか?", sessionIntent: "style-consult" },           createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "coordinate", confidence: 0.92, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "コーデを組みます", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "黒系で組んで", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "style-consult", "切替前 sessionIntent=style-consult");
+  assertEqual(out.isSwitchToOtherTarget, true,            "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "coordinate",    "intentToSend=coordinate");
+  assertEqual(out.recentHistory,         [],              "★ history=[](切替時リセット)");
+}
+
+async function caseL2(): Promise<void> {
+  console.log("\n[l-2] ★ A-6 L4-A 4 intent 四角切替: diagnose → style-consult(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "診断したい" },                                          createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "始めましょう", sessionIntent: "diagnose" },             createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "style-consult", confidence: 0.9, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ご相談どうぞ", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "やっぱり相談したい", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "diagnose",      "切替前 sessionIntent=diagnose");
+  assertEqual(out.isSwitchToOtherTarget, true,            "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "style-consult", "intentToSend=style-consult");
+  assertEqual(out.recentHistory,         [],              "★ history=[](切替時リセット)");
+}
+
+async function caseL3(): Promise<void> {
+  console.log("\n[l-3] ★ A-6 L4-A 4 intent 四角切替: closet → style-consult(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "クローゼット見せて" },                                  createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "8件あります", sessionIntent: "closet" },                createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "style-consult", confidence: 0.88, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ご相談どうぞ", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "服選びで悩んでる", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "closet",        "切替前 sessionIntent=closet");
+  assertEqual(out.isSwitchToOtherTarget, true,            "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "style-consult", "intentToSend=style-consult");
+}
+
+async function caseL4(): Promise<void> {
+  console.log("\n[l-4] ★ A-6 L4-A 4 intent 四角切替: coordinate → style-consult(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "コーデ提案" },                                          createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "黒で組みます", sessionIntent: "coordinate" },           createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "style-consult", confidence: 0.9, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ご相談どうぞ", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "似合わない気がして相談したい", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "coordinate",    "切替前 sessionIntent=coordinate");
+  assertEqual(out.isSwitchToOtherTarget, true,            "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "style-consult", "intentToSend=style-consult");
+}
+
+// ====================================================================
 // Main
 // ====================================================================
 async function main() {
@@ -900,6 +1066,15 @@ async function main() {
   await caseK3();
   await caseK4();
   await caseK5();
+  await caseS1();
+  await caseS2();
+  await caseS3();
+  await caseS4();
+  await caseS5();
+  await caseL1();
+  await caseL2();
+  await caseL3();
+  await caseL4();
 
   console.log("\n==========================================");
   console.log(`Total: ${pass}/${pass + fail} passed`);

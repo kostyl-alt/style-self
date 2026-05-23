@@ -54,10 +54,10 @@ import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
-// MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c 対応 intent(段階B を通す対象)
+// MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c + A-6 対応 intent(段階B を通す対象)
 // ★ ここを広げる前に system prompt の対応領域 + 出力フィルタの再点検が必要
 // ★ UI 側 `app/(app)/ai/page.tsx` の同名 Set と完全一致させる(両側同期)
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate"]);
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 const MAX_HISTORY = 3;
@@ -124,11 +124,12 @@ export async function POST(request: NextRequest) {
     //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
     //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
     // A-10: 各 intent fetcher と Knowledge OS フェッチを ★ Promise.all で並列化(レイテンシ抑制)。
-    //       3 intent 共通注入(intent 別絞り込みは将来 Sprint)。
+    //       3 intent + A-6 style-consult = 4 intent 共通注入(intent 別絞り込みは将来 Sprint)。
     const [baseCtx, knowledgeOS] = await Promise.all([
-      intent === "closet"     ? fetchClosetContext(supabase, userId)
-      : intent === "coordinate" ? fetchCoordinateContext(supabase, userId)
-      :                            fetchDiagnoseContext(supabase, userId),
+      intent === "closet"          ? fetchClosetContext(supabase, userId)
+      : intent === "coordinate"     ? fetchCoordinateContext(supabase, userId)
+      : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
+      :                                fetchDiagnoseContext(supabase, userId),
       fetchKnowledgeOSContext(text),
     ]);
     const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
@@ -308,6 +309,73 @@ async function fetchCoordinateContext(
     // body_profile 由来(日本語サマリ化)
     bodyProfile:       extractBodyProfile(bodyRow?.data?.body_profile),
   };
+}
+
+// A-6: style-consult intent 用 contextData fetcher。
+// ★ worldview + body_profile + style_preference + avoid_items の 4 ソース統合(wardrobe_items は読まない)
+// ★ いずれも列絞り SELECT で worldview_tags 取得経路を遮断(三重防御 1)
+// ★ .eq("id", userId) で本人データのみ(cookie-bound RLS + 二重 guard)
+async function fetchStyleConsultContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<StylistChatContext> {
+  const [diagCtx, userRow] = await Promise.all([
+    fetchDiagnoseContext(supabase, userId),
+    supabase
+      .from("users")
+      .select("body_profile, style_preference, avoid_items")
+      .eq("id", userId)
+      .maybeSingle() as unknown as Promise<{ data: {
+        body_profile:     unknown;
+        style_preference: unknown;
+        avoid_items:      unknown;
+      } | null }>,
+  ]);
+
+  return {
+    // diagnose 由来(worldview)
+    worldviewName:     diagCtx.worldviewName,
+    worldviewKeywords: diagCtx.worldviewKeywords,
+    coreIdentity:      diagCtx.coreIdentity,
+    idealSelf:         diagCtx.idealSelf,
+    // body_profile 由来(coordinate と同形 extractor 流用)
+    bodyProfile:       extractBodyProfile(userRow?.data?.body_profile),
+    // style_preference 由来(★ A-6 新規 extractor)
+    stylePreference:   extractStylePreference(userRow?.data?.style_preference),
+    // avoid_items 由来(Sprint 47 text[]・★ A-6 新規 extractor)
+    avoidItems:        extractAvoidItems(userRow?.data?.avoid_items),
+  };
+}
+
+// A-6: users.style_preference jsonb を日本語表示用に正規化(未登録なら undefined)。
+// 型は types/index.ts:277 StylePreference 13 フィールドから stylist-chat に必要な 8 フィールド抽出。
+function extractStylePreference(raw: unknown): StylistChatContext["stylePreference"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      : [];
+  const pref = {
+    likedColors:         arr(r.likedColors),
+    dislikedColors:      arr(r.dislikedColors),
+    likedMaterials:      arr(r.likedMaterials),
+    dislikedMaterials:   arr(r.dislikedMaterials),
+    likedSilhouettes:    arr(r.likedSilhouettes),
+    dislikedSilhouettes: arr(r.dislikedSilhouettes),
+    targetImpressions:   arr(r.targetImpressions),
+    avoidImpressions:    arr(r.avoidImpressions),
+  };
+  // 全フィールド空なら未登録扱い
+  const hasAny = Object.values(pref).some((v) => v.length > 0);
+  return hasAny ? pref : undefined;
+}
+
+// A-6: users.avoid_items text[] を正規化(未登録 or 空配列なら undefined)。
+function extractAvoidItems(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.filter((x): x is string => typeof x === "string" && x.trim() !== "");
+  return out.length > 0 ? out : undefined;
 }
 
 // users.body_profile jsonb を日本語表示用に正規化(未登録なら undefined)。
