@@ -42,7 +42,7 @@ import {
 } from "@/lib/prompts/stylist-chat";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
 import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
-import { getDecisionRules, getFailurePatterns } from "@/lib/knowledge-os/client";
+import { getDecisionRules, getFailurePatterns, getInfluences } from "@/lib/knowledge-os/client";
 import {
   getMaterialContext,
   getColorContext,
@@ -54,10 +54,10 @@ import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
-// MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c + A-6 対応 intent(段階B を通す対象)
+// MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c + A-6 + A-6b 対応 intent(段階B を通す対象)
 // ★ ここを広げる前に system prompt の対応領域 + 出力フィルタの再点検が必要
 // ★ UI 側 `app/(app)/ai/page.tsx` の同名 Set と完全一致させる(両側同期)
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult"]);
+const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 const MAX_HISTORY = 3;
@@ -124,11 +124,12 @@ export async function POST(request: NextRequest) {
     //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
     //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
     // A-10: 各 intent fetcher と Knowledge OS フェッチを ★ Promise.all で並列化(レイテンシ抑制)。
-    //       3 intent + A-6 style-consult = 4 intent 共通注入(intent 別絞り込みは将来 Sprint)。
+    //       A-6b は 5 intent 共通注入(diagnose / closet / coordinate / style-consult / brand-learn)。
     const [baseCtx, knowledgeOS] = await Promise.all([
       intent === "closet"          ? fetchClosetContext(supabase, userId)
       : intent === "coordinate"     ? fetchCoordinateContext(supabase, userId)
       : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
+      : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId)
       :                                fetchDiagnoseContext(supabase, userId),
       fetchKnowledgeOSContext(text),
     ]);
@@ -347,6 +348,75 @@ async function fetchStyleConsultContext(
   };
 }
 
+// A-6b: brand-learn intent 用 contextData fetcher。
+// ★ worldview + brands(curated 12件・maniac_level 順)+ style_preference の 3 ソース統合
+// ★ wardrobe_items / body_profile / ai_history は読まない(コスト削減・学習型相談)
+// ★ brands.worldview_tags は日本語タグ(PRODUCT_WORLDVIEW_TAGS とは別語彙・構造的安全)
+// ★ KOS getInfluences は fetchKnowledgeOSContext で共通注入(本 fetcher 内では呼ばない)
+const BRAND_LEARN_CURATED_LIMIT = 12;
+const BRAND_DESC_TRUNCATE_LEN   = 80;
+
+async function fetchBrandLearnContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<StylistChatContext> {
+  const [diagCtx, brandsRow, prefRow] = await Promise.all([
+    fetchDiagnoseContext(supabase, userId),
+    supabase
+      .from("brands")
+      .select("name, name_ja, country, description, worldview_tags, era_tags, maniac_level, price_range")
+      .eq("is_active", true)
+      .order("maniac_level", { ascending: false }) as unknown as Promise<{ data: Array<{
+        name:           string;
+        name_ja:        string | null;
+        country:        string | null;
+        description:    string;
+        worldview_tags: string[];
+        era_tags:       string[];
+        maniac_level:   number;
+        price_range:    string;
+      }> | null }>,
+    supabase
+      .from("users")
+      .select("style_preference")
+      .eq("id", userId)
+      .maybeSingle() as unknown as Promise<{ data: { style_preference: unknown } | null }>,
+  ]);
+
+  return {
+    worldviewName:     diagCtx.worldviewName,
+    worldviewKeywords: diagCtx.worldviewKeywords,
+    coreIdentity:      diagCtx.coreIdentity,
+    idealSelf:         diagCtx.idealSelf,
+    stylePreference:   extractStylePreference(prefRow?.data?.style_preference),
+    brandsCurated:     summarizeBrands(brandsRow?.data ?? []),
+  };
+}
+
+// A-6b: brands 配列を ctx.brandsCurated 形式に簡略化(LLM トークン抑制・上位 N 件 + description truncate)。
+function summarizeBrands(rows: Array<{
+  name:           string;
+  name_ja:        string | null;
+  country:        string | null;
+  description:    string;
+  worldview_tags: string[];
+  era_tags:       string[];
+  maniac_level:   number;
+  price_range:    string;
+}>): StylistChatContext["brandsCurated"] {
+  if (rows.length === 0) return undefined;
+  return rows.slice(0, BRAND_LEARN_CURATED_LIMIT).map((r) => ({
+    name:          r.name,
+    nameJa:        r.name_ja,
+    country:       r.country,
+    description:   r.description.length <= BRAND_DESC_TRUNCATE_LEN ? r.description : r.description.slice(0, BRAND_DESC_TRUNCATE_LEN) + "…",
+    worldviewTags: Array.isArray(r.worldview_tags) ? r.worldview_tags : [],
+    eraTags:       Array.isArray(r.era_tags)       ? r.era_tags       : [],
+    maniacLevel:   typeof r.maniac_level === "number" ? r.maniac_level : 1,
+    priceRange:    typeof r.price_range  === "string" ? r.price_range  : "mid",
+  }));
+}
+
 // A-6: users.style_preference jsonb を日本語表示用に正規化(未登録なら undefined)。
 // 型は types/index.ts:277 StylePreference 13 フィールドから stylist-chat に必要な 8 フィールド抽出。
 function extractStylePreference(raw: unknown): StylistChatContext["stylePreference"] {
@@ -432,17 +502,20 @@ function extractContext(row: {
 // ・★ KOS 接続失敗時は全フィールド空で undefined 相当 → buildStylistChatUserMessage 側で
 //    ブロック自体を出さない(段階 B reply 退行ゼロ)
 // ・getFashionRules は worldview_tags 配列を返すため使わない(構造的排除・A-10 設計案 9bfb0cc §3.4)
-const KOS_DECISION_RULES_LIMIT  = 10;
+const KOS_DECISION_RULES_LIMIT   = 10;
 const KOS_FAILURE_PATTERNS_LIMIT = 5;
+const KOS_INFLUENCES_LIMIT       = 15;
 
 async function fetchKnowledgeOSContext(text: string): Promise<StylistChatContext["knowledgeOS"]> {
   try {
-    const [rulesRaw, failuresRaw] = await Promise.all([
+    // A-6b: getInfluences を 3 関数並列に昇格(全 5 intent 共通注入・brand-learn で特に活用)
+    const [rulesRaw, failuresRaw, influencesRaw] = await Promise.all([
       getDecisionRules({ importance_min: 4, limit: KOS_DECISION_RULES_LIMIT }),
       getFailurePatterns({ context: "fashion-coordinate", related_features: undefined }),
+      getInfluences({ limit: KOS_INFLUENCES_LIMIT }),
     ]);
 
-    // ★ 入口 sanitize: KOS 戻り値の rule / pattern / lesson 文字列にも 31 語フィルタを適用
+    // ★ 入口 sanitize: KOS 戻り値の rule / pattern / lesson / influence 文字列にも 31 語フィルタを適用
     const decisionRules = rulesRaw.slice(0, KOS_DECISION_RULES_LIMIT)
       .map((r) => ({
         rule:       stripCanonicalSlugs(r.rule ?? "").cleaned,
@@ -457,12 +530,22 @@ async function fetchKnowledgeOSContext(text: string): Promise<StylistChatContext
       }))
       .filter((f) => f.title.trim().length > 0);
 
+    // A-6b: 影響源(subject_name / subject_summary / fusion_essence の 3 フィールド・入口 sanitize 適用)
+    const influences = influencesRaw.slice(0, KOS_INFLUENCES_LIMIT)
+      .map((i) => ({
+        subjectName: stripCanonicalSlugs(i.subject_name ?? "").cleaned,
+        summary:     stripCanonicalSlugs(i.subject_summary ?? "").cleaned,
+        fusion:      stripCanonicalSlugs(i.fusion_essence ?? "").cleaned,
+      }))
+      .filter((i) => i.subjectName.trim().length > 0);
+
     // dictionaries: 発話 text に出てくる語彙のみ抽出(全 47 エントリ全載せはトークン浪費 + ノイズ)
     const matched = matchDictionaryKeys(text);
 
     return {
       decisionRules,
       failurePatterns,
+      influences,
       dictionaries: {
         materials:   getMaterialContext(matched.materials),
         colors:      getColorContext(matched.colors),
@@ -477,6 +560,7 @@ async function fetchKnowledgeOSContext(text: string): Promise<StylistChatContext
     return {
       decisionRules:   [],
       failurePatterns: [],
+      influences:      [],
       dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
     };
   }

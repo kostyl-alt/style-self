@@ -72,7 +72,7 @@ import {
 const CONFIDENCE_THRESHOLD       = 0.7;  // app/(app)/ai/page.tsx:54
 const MAX_MESSAGES               = 30;   // app/(app)/ai/page.tsx:57
 const STORAGE_KEY                = "style-self:ai:messages:v1"; // app/(app)/ai/page.tsx:63
-const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet", "coordinate", "style-consult"]); // app/(app)/ai/page.tsx:79 (A-6 拡張・4 intent)
+const STYLIST_CHAT_INTENTS       = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]); // app/(app)/ai/page.tsx:79 (A-6b 拡張・5 intent)
 const STYLIST_CHAT_HISTORY_MAX   = 3;    // app/(app)/ai/page.tsx:90
 const SWITCH_THRESHOLD           = 0.85; // app/(app)/ai/page.tsx:92
 
@@ -465,14 +465,14 @@ async function caseD() {
 }
 
 async function caseF() {
-  // ★ MVP-1c で coordinate が STYLIST_CHAT_INTENTS に入ったため、対象外 intent を
-  //   brand-learn に置き換え(i-3 と同じ理由・長期にわたって target 化されない見込み)。
-  console.log("\n[f] MVP-1c スコープ外 intent → 従来 intent-result カード");
+  // ★ A-6b で brand-learn も target 入りしたため、対象外 intent を match-users に置換
+  //   (mode=api・MVP-1c 残 intent の中で stylist-chat target 化候補が低いため長期に out-of-scope 想定)
+  console.log("\n[f] A-6b スコープ外 intent → 従来 intent-result カード");
   const fetchMock = createFetchMock({
-    "/api/overlay/intent": () => ({ ok: true, intent: "brand-learn", confidence: 0.9, mode: "navigate" }),
+    "/api/overlay/intent": () => ({ ok: true, intent: "match-users", confidence: 0.9, mode: "api" }),
     // 段階B は呼ばれない想定
   });
-  const out = await simulateHandleSubmit({ text: "ブランドを学びたい", initialMessages: [], fetchMock });
+  const out = await simulateHandleSubmit({ text: "近い世界観の人を探したい", initialMessages: [], fetchMock });
   assertEqual(out.isStylistTarget, false, "isStylistTarget=false");
   assertEqual(out.segmentBCalled,  false, "段階B 呼ばれない");
   const last = out.finalMessages[out.finalMessages.length - 1];
@@ -604,8 +604,7 @@ async function caseI2() {
 }
 
 async function caseI3() {
-  // ★ MVP-1c で coordinate が STYLIST_CHAT_INTENTS に入ったため、対象外 intent を
-  //   brand-learn に置き換え(長期にわたって target 化されない見込みの intent)。
+  // ★ A-6b で brand-learn も target 入りしたため、対象外 intent を match-users に置換
   //   検証セマンティクスは同じ:対象外 intent 高信頼でも切替検出されず継続維持される。
   console.log("\n[i-3] ★ L3 対象外 intent 継続維持(高信頼でも intent-result カードに戻らない)");
   const initial: Message[] = [
@@ -613,10 +612,10 @@ async function caseI3() {
     { id: "a1", role: "assistant", content: { kind: "reply", text: "了解",   sessionIntent: "diagnose" }, createdAt: 2 },
   ];
   const fetchMock = createFetchMock({
-    "/api/overlay/intent": () => ({ ok: true, intent: "brand-learn", confidence: 0.92, mode: "navigate" }), // 対象外+高信頼
+    "/api/overlay/intent": () => ({ ok: true, intent: "match-users", confidence: 0.92, mode: "api" }), // 対象外+高信頼
     "/api/ai/stylist-chat": () => ({ ok: true, reply: "続けますね、診断は何が気になっていますか?", actions: [] }),
   });
-  const out = await simulateHandleSubmit({ text: "ブランドの話を学びたい", initialMessages: initial, fetchMock });
+  const out = await simulateHandleSubmit({ text: "近い世界観の人を探したい", initialMessages: initial, fetchMock });
   assertEqual(out.isSwitchToOtherTarget, false,      "対象外 intent → 切替なし(STYLIST_CHAT_INTENTS.has で自動 false)");
   assertEqual(out.effectiveContinuing,   true,       "★ 継続維持");
   assertEqual(out.intentToSend,          "diagnose", "intentToSend=diagnose 不変");
@@ -768,6 +767,7 @@ async function caseK2(): Promise<void> {
     knowledgeOS: {
       decisionRules:   [{ rule: "光沢を抑えた素材で重心を下げる", importance: 5 }],
       failurePatterns: [{ title: "白すぎる靴で世界観を壊す", summary: "明るすぎる白を選ばない" }],
+      influences:      [],
       dictionaries: {
         materials:   getMaterialContext(matched.materials),
         colors:      getColorContext(matched.colors),
@@ -814,6 +814,7 @@ async function caseK3(): Promise<void> {
     knowledgeOS: {
       decisionRules:   [{ rule: sanitizedRule }],
       failurePatterns: [{ title: sanitizedFailure }],
+      influences:      [],
       dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
     },
   };
@@ -854,6 +855,7 @@ async function caseK5(): Promise<void> {
     knowledgeOS: {
       decisionRules:   [{ rule: "テストルール" }],
       failurePatterns: [],
+      influences:      [],
       dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
     },
   };
@@ -877,7 +879,7 @@ async function caseK5(): Promise<void> {
 async function caseS1(): Promise<void> {
   console.log("\n[s-1] ★ A-6 STYLIST_CHAT_INTENTS が 'style-consult' を含む(4 intent 拡張・両側同期)");
   assertTrue(STYLIST_CHAT_INTENTS.has("style-consult"), "STYLIST_CHAT_INTENTS.has('style-consult')");
-  assertEqual(STYLIST_CHAT_INTENTS.size, 4,             "Set size = 4(diagnose/closet/coordinate/style-consult)");
+  assertEqual(STYLIST_CHAT_INTENTS.size, 5,             "Set size = 5(A-6b で brand-learn 追加・diagnose/closet/coordinate/style-consult/brand-learn)");
 }
 
 async function caseS2(): Promise<void> {
@@ -955,6 +957,7 @@ async function caseS5(): Promise<void> {
     knowledgeOS: {
       decisionRules:   [{ rule: "縦比率を上げると低身長カバー" }],
       failurePatterns: [],
+      influences:      [],
       dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
     },
   };
@@ -1030,6 +1033,198 @@ async function caseL4(): Promise<void> {
 }
 
 // ====================================================================
+// A-6b: brand-learn intent 投入(MVP-1c 残5 intent 第2弾)検証
+// ====================================================================
+// 検証対象:
+//   - STYLIST_CHAT_INTENTS が "brand-learn" を含む(両側同期・5 intent)
+//   - buildMessage intent="brand-learn" で worldview + curated brands ブロック注入
+//   - KOS influences フィールドが user message に注入(getInfluences 共通注入)
+//   - 入口 sanitize: influences 経路でも 31 語非露出
+//   - L4-A 5 intent 五角(代表 4 方向)
+
+const SAMPLE_BRANDS: NonNullable<StylistChatContext["brandsCurated"]> = [
+  {
+    name: "Yohji Yamamoto", nameJa: "ヨウジヤマモト", country: "JP",
+    description: "黒を哲学として纏う。解体と再構築を通じて、服の本質を問い続けるアバンギャルドの巨人。",
+    worldviewTags: ["黒", "解体", "哲学"], eraTags: ["1980年代"], maniacLevel: 5, priceRange: "luxury",
+  },
+  {
+    name: "Auralee", nameJa: "オーラリー", country: "JP",
+    description: "素材への敬意を服に変換する。シンプルなシルエットで素材の美しさを最大化。",
+    worldviewTags: ["素材", "余白", "静けさ"], eraTags: ["現代"], maniacLevel: 4, priceRange: "high",
+  },
+];
+
+async function caseB1(): Promise<void> {
+  console.log("\n[b-1] ★ A-6b STYLIST_CHAT_INTENTS が 'brand-learn' を含む(5 intent 拡張・両側同期)");
+  assertTrue(STYLIST_CHAT_INTENTS.has("brand-learn"), "STYLIST_CHAT_INTENTS.has('brand-learn')");
+  assertEqual(STYLIST_CHAT_INTENTS.size, 5,           "Set size = 5(diagnose/closet/coordinate/style-consult/brand-learn)");
+}
+
+async function caseB2(): Promise<void> {
+  console.log("\n[b-2] ★ A-6b buildMessage intent='brand-learn' で 統合ヘッダ + 段階A intent ラベル + ブランド学習対象表示");
+  const ctx: StylistChatContext = {
+    worldviewName: "黒の住人", worldviewKeywords: ["静か", "余白"],
+    coreIdentity: "解体と再構築", idealSelf: null,
+    brandsCurated: SAMPLE_BRANDS,
+  };
+  const msg = buildStylistChatUserMessage({
+    text: "Yohji Yamamoto について教えて",
+    intent: "brand-learn", history: [], ctx,
+  });
+  assertContains(msg, "【文脈(本人のみ・ブランド学習",  "ブランド学習統合ヘッダ");
+  assertContains(msg, "・段階A 判定 intent: brand-learn", "段階A 判定 intent 表示");
+  assertContains(msg, "ブランド学習",                     "対象 5 種類ラベルにブランド学習");
+  assertContains(msg, "推薦ブランド候補(curated",        "curated brands セクションヘッダ");
+}
+
+async function caseB3(): Promise<void> {
+  console.log("\n[b-3] ★ A-6b brandsCurated フィールドが user message に表示される(name + nameJa + country + tags + era + description)");
+  const ctx: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    brandsCurated: SAMPLE_BRANDS,
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "brand-learn", history: [], ctx });
+  assertContains(msg, "Yohji Yamamoto(ヨウジヤマモト)",           "name + nameJa 表示");
+  assertContains(msg, "JP/maniac:5/luxury",                         "country + maniac + price 表示");
+  assertContains(msg, "[黒・解体・哲学]",                            "worldview_tags 表示");
+  assertContains(msg, "時代:1980年代",                              "era_tags 表示");
+  assertContains(msg, "黒を哲学として纏う",                          "description 本文");
+  assertContains(msg, "Auralee(オーラリー)",                         "2件目 name 表示");
+}
+
+async function caseB4(): Promise<void> {
+  console.log("\n[b-4] ★ A-6b + A-10 KOS 拡張: influences セクション + 入口 sanitize(31 語 × influences 経路非露出)");
+  const ctx: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    knowledgeOS: {
+      decisionRules:   [],
+      failurePatterns: [],
+      influences: [
+        { subjectName: "Yohji Yamamoto", summary: "黒を哲学として纏う巨人", fusion: "解体と過剰丈" },
+        { subjectName: "Rick Owens",     summary: "ダーク・グラム", fusion: "ストリート × オートクチュール" },
+      ],
+      dictionaries: { materials: "", colors: "", silhouettes: "", ratios: "" },
+    },
+  };
+  const msg = buildStylistChatUserMessage({ text: "test", intent: "brand-learn", history: [], ctx });
+  assertContains(msg, "影響源(Knowledge OS)",         "influences セクションヘッダ");
+  assertContains(msg, "Yohji Yamamoto:",                "influence 1 subjectName + summary 区切り");
+  assertContains(msg, "黒を哲学として纏う巨人",         "influence 1 summary");
+  assertContains(msg, "融合: 解体と過剰丈",             "influence 1 fusion");
+  assertContains(msg, "Rick Owens:",                    "influence 2 subjectName");
+
+  // 入口 sanitize 検証: subjectName/summary/fusion 経路で 31 語が混入しても sanitize で除去
+  const sanitized = PRODUCT_WORLDVIEW_TAGS.map((t) => stripCanonicalSlugs(t).cleaned).filter((s) => s.length > 0);
+  const ctxSanitize: StylistChatContext = {
+    worldviewName: null, worldviewKeywords: [], coreIdentity: null, idealSelf: null,
+    knowledgeOS: {
+      decisionRules:   [],
+      failurePatterns: [],
+      influences: [{
+        subjectName: sanitized[0] ?? "test",
+        summary:     sanitized[1] ?? "test",
+        fusion:      sanitized[2] ?? "test",
+      }],
+      dictionaries: { materials: "", colors: "", silhouettes: "", ratios: "" },
+    },
+  };
+  const msgSanitize = buildStylistChatUserMessage({ text: "test", intent: "brand-learn", history: [], ctx: ctxSanitize });
+  for (const tag of PRODUCT_WORLDVIEW_TAGS) {
+    const re = new RegExp(`\\b${escapeRegExp(tag)}\\b`, "i");
+    assertFalse(re.test(msgSanitize), `influences 経路 user message: "${tag}" 不在`);
+  }
+}
+
+async function caseB5(): Promise<void> {
+  console.log("\n[b-5] ★ A-6b 既存 4 intent 非影響(diagnose / closet / coordinate / style-consult の user message に brand 系セクションが混入しない)");
+  const ctx: StylistChatContext = {
+    worldviewName: "黒の住人", worldviewKeywords: ["静か"], coreIdentity: null, idealSelf: null,
+    brandsCurated: SAMPLE_BRANDS,
+    closetSummary: { totalItems: 5, colorBuckets: [{ name: "ブラック系", count: 3 }], categoryBuckets: [{ name: "トップス", count: 3 }] },
+    bodyProfile: { height: 160, bodyType: "slim", skeletonType: "wave", concerns: [], proportionNote: null },
+    stylePreference: {
+      likedColors: ["黒"], dislikedColors: [], likedMaterials: [], dislikedMaterials: [],
+      likedSilhouettes: [], dislikedSilhouettes: [], targetImpressions: [], avoidImpressions: [],
+    },
+  };
+  // ★ 注意: MVP1C_LABEL 内に「ブランド学習」文字列が含まれる(全 intent 共通の対象 5 種類ラベル)。
+  //         そのため「ブランド学習」一般の includes 検査ではなく、brand-learn 専用の
+  //         セクション見出し(「推薦ブランド候補(curated」)とブランド本体 (Yohji 名)
+  //         が他 4 intent で混入しないことを検証する。
+  for (const intent of ["diagnose", "closet", "coordinate", "style-consult"]) {
+    const msg = buildStylistChatUserMessage({ text: "test", intent, history: [], ctx });
+    assertFalse(msg.includes("推薦ブランド候補(curated"),      `intent=${intent}: curated brands ブロック不在`);
+    assertFalse(msg.includes("Yohji Yamamoto(ヨウジヤマモト)"), `intent=${intent}: brand name 不在`);
+    assertFalse(msg.includes("【文脈(本人のみ・ブランド学習"),   `intent=${intent}: ブランド学習文脈ヘッダ不在`);
+  }
+}
+
+async function caseL5(): Promise<void> {
+  console.log("\n[l-5] ★ A-6b L4-A 5 intent 五角切替: diagnose → brand-learn(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "診断したい" },                                              createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "始めましょう", sessionIntent: "diagnose" },                createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "brand-learn", confidence: 0.9, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ブランドを学びましょう", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "Yohji について教えて", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "diagnose",    "切替前 sessionIntent=diagnose");
+  assertEqual(out.isSwitchToOtherTarget, true,          "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "brand-learn", "intentToSend=brand-learn");
+}
+
+async function caseL6(): Promise<void> {
+  console.log("\n[l-6] ★ A-6b L4-A 5 intent 五角切替: coordinate → brand-learn(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "コーデ提案" },                                              createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "黒で組みます", sessionIntent: "coordinate" },              createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "brand-learn", confidence: 0.88, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ブランドを学びましょう", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "自分に合うブランドを知りたい", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "coordinate",  "切替前 sessionIntent=coordinate");
+  assertEqual(out.isSwitchToOtherTarget, true,          "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "brand-learn", "intentToSend=brand-learn");
+}
+
+async function caseL7(): Promise<void> {
+  console.log("\n[l-7] ★ A-6b L4-A 5 intent 五角切替: style-consult → brand-learn(target 内・confidence ≥ 0.85)");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "相談したい" },                                              createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "何を相談しますか?", sessionIntent: "style-consult" },     createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "brand-learn", confidence: 0.9, mode: "api" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "ブランドを学びましょう", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "ヨウジヤマモトについて", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "style-consult", "切替前 sessionIntent=style-consult");
+  assertEqual(out.isSwitchToOtherTarget, true,            "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "brand-learn",   "intentToSend=brand-learn");
+}
+
+async function caseL8(): Promise<void> {
+  console.log("\n[l-8] ★ A-6b L4-A 5 intent 五角逆方向切替: brand-learn → diagnose");
+  const initial: Message[] = [
+    { id: "u1", role: "user",      content: { kind: "text",  text: "ブランドを学びたい" },                                       createdAt: 1 },
+    { id: "a1", role: "assistant", content: { kind: "reply", text: "Yohji を紹介します", sessionIntent: "brand-learn" },        createdAt: 2 },
+  ];
+  const fetchMock = createFetchMock({
+    "/api/overlay/intent":   () => ({ ok: true, intent: "diagnose", confidence: 0.9, mode: "navigate" }),
+    "/api/ai/stylist-chat":  () => ({ ok: true, reply: "診断を始めます", actions: [] }),
+  });
+  const out = await simulateHandleSubmit({ text: "やっぱり診断したい", initialMessages: initial, fetchMock });
+  assertEqual(out.sessionIntent,         "brand-learn", "切替前 sessionIntent=brand-learn");
+  assertEqual(out.isSwitchToOtherTarget, true,          "★ 切替検出 true");
+  assertEqual(out.intentToSend,          "diagnose",    "intentToSend=diagnose");
+}
+
+// ====================================================================
 // Main
 // ====================================================================
 async function main() {
@@ -1075,6 +1270,15 @@ async function main() {
   await caseL2();
   await caseL3();
   await caseL4();
+  await caseB1();
+  await caseB2();
+  await caseB3();
+  await caseB4();
+  await caseB5();
+  await caseL5();
+  await caseL6();
+  await caseL7();
+  await caseL8();
 
   console.log("\n==========================================");
   console.log(`Total: ${pass}/${pass + fail} passed`);
