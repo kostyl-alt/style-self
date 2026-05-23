@@ -35,6 +35,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import MenuDrawer from "@/components/chat/MenuDrawer";
+import WorldviewCard from "@/components/chat/WorldviewCard";
+import SuggestionChips from "@/components/chat/SuggestionChips";
+import InputAttachments from "@/components/chat/InputAttachments";
+import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 
 interface SuggestionItem {
   intent: string;
@@ -119,6 +123,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   // P1-C-3: 右上メニュー [≡] Drawer の開閉
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // A-5: クローゼットピッカーモーダルの開閉
+  const [isClosetOpen, setIsClosetOpen] = useState(false);
 
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
@@ -319,10 +325,14 @@ export default function ChatPage() {
         </button>
       </header>
 
+      {/* A-5 P1-D: 上部世界観カード(診断済表示・未診断 CTA・loading skeleton) */}
+      <WorldviewCard />
+
       {/* 履歴エリア(スクロール) */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
         {messages.length === 0 ? (
-          <EmptyHistoryHint />
+          // A-5 P1-D: 提案チップ 5(5 intent 各 1 つ・textarea 挿入動作)
+          <SuggestionChips onSelect={(t) => setText(t)} />
         ) : (
           <>
             {messages.map((m) => (
@@ -335,6 +345,8 @@ export default function ChatPage() {
 
       {/* 下部固定入力(D1-2b' と同等・連続発話可能) */}
       <form onSubmit={handleSubmit} className="border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
+        {/* A-5 P1-D: 入力欄近接 4 ボタン(写真 / URL / クローゼット / MB) */}
+        <InputAttachments onClosetOpen={() => setIsClosetOpen(true)} />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -366,6 +378,13 @@ export default function ChatPage() {
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         onNewChat={handleNewChat}
+      />
+
+      {/* A-5 P1-D: クローゼットピッカーモーダル(GET /api/wardrobe + 選択 → textarea 挿入) */}
+      <ClosetPickerModal
+        isOpen={isClosetOpen}
+        onClose={() => setIsClosetOpen(false)}
+        onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
       />
     </div>
   );
@@ -421,21 +440,8 @@ function buildStylistHistory(messages: Message[]): { role: "user" | "assistant";
 }
 
 // ---- 履歴空のヒント ----
-
-function EmptyHistoryHint() {
-  return (
-    <div className="py-6 text-center space-y-2">
-      <p className="text-xs text-gray-500 leading-relaxed">
-        自然言語で書いてください。
-      </p>
-      <ul className="text-xs text-gray-400 leading-relaxed">
-        <li>「世界観の近い人を探したい」</li>
-        <li>「黒い服のコーデが見たい」</li>
-        <li>「診断したい」</li>
-      </ul>
-    </div>
-  );
-}
+// A-5 P1-D で SuggestionChips(5 intent 各 1 つの提案チップ)に置き換え。
+// 旧 EmptyHistoryHint(3 例文の静的リスト)は削除。
 
 // ---- 吹き出し(D1-2b' 追加・既存 5 サブをシグネチャ無変更で再利用) ----
 
