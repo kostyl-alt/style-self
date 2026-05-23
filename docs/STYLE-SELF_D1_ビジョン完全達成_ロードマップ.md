@@ -67,28 +67,38 @@
 判断 8 補助機能集約点の実装。`components/chat/MenuDrawer.tsx`(137 行)新規・navigate 7 件
 + 新しいチャット(案 A シンプル・race fix v2 伏線回収)+ placeholder 2 件。
 
-### 3.4 A-4 P1-C-4 — チャットコマンド + 到達点検 + プライバシー漏洩点検
-全 intent が navigate-map 経由で正しく到達する確認 + worldview_tags 英語スラッグの非露出確認。
+### 3.4 A-4 P1-C-4 — チャットコマンド + 到達点検 + プライバシー漏洩点検 → ✅ **完了** `66dd5bb`
+設計調査 `66dd5bb` で 全画面到達経路マトリクス(18 dir / 22 page.tsx × 4 経路)を整理し、
+全 intent が navigate-map 経由で正しく到達することと worldview_tags 英語スラッグの非露出を
+構造的に証明。三重防御 (1)(2)(3) を 3 reply 経路全てで維持確認。コード 0 変更で完遂。
 
-### 3.5 A-5 P1-D — 上部世界観カード + 提案チップ 5 + 入力欄近接 4 ボタン
-チャット画面に世界観カード(`worldviewName` / `worldview_keywords` 表示)+ 提案チップを追加。
-analyze-v2 schema 前提(判断 10 整合)。
+### 3.5 A-5 P1-D — 上部世界観カード + 提案チップ 5 + 入力欄近接 4 ボタン → ✅ **完了** `c126f76` + `fcbe065`
+設計調査 `c126f76` + 実装 `fcbe065`(+663/-16 行)で UI 完成形達成。
+`WorldviewCard`(worldviewName + keywords 5 pill + 詳しく見るリンク + 未診断 CTA)+
+`SuggestionChips`(5 intent 各 1 つの提案チップ・textarea 挿入)+ `InputAttachments`(📎 写真 /
+🔗 URL / 👕 服 / 🎨 MB の 4 ボタン)+ `ClosetPickerModal`(★ 完全実装・GET /api/wardrobe 流用)
+の 4 新規コンポーネント + `/api/worldview-card` 新規 API(列絞り SELECT)。
+★ MVP 優先項目 6「商品画像・商品 URL・MB をチャットに渡す」直対応達成。
 
-### 3.6 A-6 MVP-1c — 残 6 intent 会話化 → 🟡 **部分完了**(coordinate 完遂・残 5 intent 未着手)
+### 3.6 A-6 MVP-1c — 残 5 intent 会話化 → 🟡 **部分完了**(coordinate / style-consult / brand-learn 完遂・残 3 intent 拡張領域)
 - **coordinate**: ✅ 完遂 `182c25b` + `2ef689e`(段階 A プロンプト修正で完成形達成)
-- 残 5 intent(style-consult / virtual-coordinate / product-match / match-users / brand-learn):
-  本体 4.7 マップ通り段階 B に追加・`STYLIST_CHAT_INTENTS` 順次拡張・リグレッションテスト
-  (`3e39f99`)を各 intent 追加時に拡張。各 intent で段階 A プロンプト精緻化(原則 8)も併走。
+- **style-consult**(A-6・残 5 第 1 弾): ✅ 完遂 `4cabf4a` + `626b57d`(4 intent 拡張・fetchStyleConsultContext + few-shot 3 件・119 → 327 PASS)
+- **brand-learn**(A-6b・残 5 第 2 弾): ✅ 完遂 `65bad33` + `3589dcc`(5 intent 拡張・fetchBrandLearnContext + KOS getInfluences 統合・327 → 399 PASS)
+- **残 3 intent**(virtual-coordinate / product-match / match-users): ★ **Phase 1 強化期間 = 拡張領域**(MVP 優先 7/8 達成済のため緊急性低・Sprint B-G の中で段階的着手)
+  本体 4.7 マップ + A-6 / A-6b で確立した 4 作法を完全踏襲(段階 A 修正 + MVP-1c fetcher + A-4 三重防御 + A-10 KOS 共通注入)で +130-200 行 / 60-80 分 規模想定。
 
-### 3.7 A-7 P1-E — 対話完結 8 結果カード + 漏洩点検
+### 3.7 A-7 P1-E — 対話完結 8 結果カード + 漏洩点検 → ⬜ **拡張領域**(Phase 2 領域隣接)
 intent ごとの結果カード(NavigateConfirm 等)を会話完結型に。三重防御(列絞り / system 明示 /
-出力フィルタ)維持確認。
+出力フィルタ)維持確認。★ Phase 1 強化期間として Sprint B-G の中で段階的着手。
 
-### 3.8 A-8 P1-F — virtual → product 連鎖 + 次アクション 3
-判断 5-③ MVP 含む。virtual-coordinate 結果から product-match への自然遷移。
+### 3.8 A-8 P1-F — virtual → product 連鎖 + 次アクション 3 → ⬜ **拡張領域**(Phase 2 領域隣接)
+判断 5-③ MVP 含む。virtual-coordinate 結果から product-match への自然遷移。★ Phase 2 / 3 への
+布石として Sprint B-G の中で段階的着手。
 
-### 3.9 A-9 P1-G — 仕上げ + 退行点検 + 知見 docs 追記
-リグレッションテスト全件 PASS + オーナー実機検証 + 知見 docs(CLAUDE.md or 別 doc)更新。
+### 3.9 A-9 P1-G — 仕上げ + 退行点検 + 知見 docs 追記 → ✅ **完了** `0d38e99` + 本セッション最終 commit
+設計調査 `0d38e99` で 4 作法体系化 + 三重防御の進化(5 層多段化)+ MVP 優先 7/8 達成整理 +
+退行点検 10 項目チェックリスト。本 commit で Sprint A 進捗反映 + CHANGES.md 追記 +
+★ **ChatGPT の服版 Phase 1 完成宣言**。コード 0 変更で完遂(399 PASS 維持)。
 
 ### 3.10 ★ A-10 Knowledge OS 連携(★ 整合性点検 `ddb86f7` ギャップ C・緊急性最高)
 - 内容: `lib/knowledge-os/client.ts`(MCP 接続済)を stylist-chat 段階 B から呼出 +
@@ -189,49 +199,57 @@ stylist-chat route で上限判定 +20-30 行。
 
 ---
 
-## 11. 直近の次の一手(★ 最優先・現状 `2ef689e`)
+## 11. 直近の次の一手(★ 現状 `0d38e99` 以降・★ Phase 1 完成宣言 達成)
 
-**現状サマリ**: Sprint A の A-1 / A-2 / A-3 完遂 + MVP-1c coordinate 完成形達成。Phase 1 中身の
-半分が origin/main に保全済。残工程を優先順序付きで以下に整理。
+**現状サマリ**: Sprint A 8/14 完遂(MVP 優先工程 100%)・★ **ChatGPT の服版 Phase 1 完成宣言**
+達成(本 A-9 で正式宣言)。残工程は ★ **Phase 1 強化期間 = 拡張領域** として Sprint B-G の
+中で段階的着手。次工程は Sprint B-1 Phase 2 前ゲート評価へ。
 
-### 11.1 Sprint A 残工程(優先順序・★ 整合性点検 `ddb86f7` 案 Y 反映)
+### 11.1 Sprint A 完遂工程(2026-05-22 → 2026-05-24・全 8 件 ✅)
 
-**★ 優先 1 + 2 並走(★ 案 Y・経路独立)**:
-- **A-4 P1-C-4 — チャットコマンド + 到達点検 + プライバシー漏洩点検**(20-30 分・小)
-  - 既存資産(`navigate-map.ts` 9 entries)動作確認 + A-2 / A-3 後の到達経路実証
-  - worldview_tags 英語スラッグ非露出の全 reply 検証
-- **★ A-10 Knowledge OS 連携**(60-90 分・段階 B reply 品質向上・★ 緊急性最高)
-  - `lib/knowledge-os/client.ts` を stylist-chat 段階 B から呼出 + `lib/dictionaries/` 統合
-  - ビジョン本文「黒の重心・光沢」型の知識ベース返答達成(MVP 優先 7 番目)
-  - ★ **A-4 と別 commit で並走実装**(経路独立・risk 低・効果高)
+| 工程 | 内容 | コミット |
+|---|---|---|
+| A-1 | doc7 統合(①知る再定義 最小統合)| `ac834bb` |
+| A-2 | BottomNav / OverlayFab 廃止(案 A 物理実装) | `59fa4d6` |
+| A-3 | MenuDrawer + ChatPage [≡] | `11cf3de` |
+| **A-4** | 到達点検 + プライバシー漏洩点検(三重防御 構造証明)| **`66dd5bb`** |
+| **A-5** | P1-D UI 完成(世界観カード + 提案チップ 5 + 4 ボタン + クローゼット完全実装)| **`c126f76` + `fcbe065`** |
+| **A-6** | MVP-1c 残 5 第 1 弾 = style-consult(4 intent 拡張) | **`4cabf4a` + `626b57d`** |
+| **A-6b** | MVP-1c 残 5 第 2 弾 = brand-learn(5 intent 拡張・getInfluences 統合)| **`65bad33` + `3589dcc`** |
+| **A-10** | Knowledge OS 連携(案 A フル統合・5 層多段防御)| **`9bfb0cc` + `566e3b2`** |
+| **A-9** | 仕上げ + 退行点検 + 知見 docs 追記 + ★ **Phase 1 完成宣言** | **`0d38e99` + 本セッション最終 commit** |
 
-**★ 優先 3: A-6 MVP-1c 残 5 intent**(各 30-45 分・1 セッション 1 intent 単位)
-- style-consult / virtual-coordinate / product-match / match-users / brand-learn
-- 各 intent で段階 A プロンプト精緻化(`2ef689e` の作法踏襲・原則 8)も併走
-- リグレッションテスト(`3e39f99`)に各 intent ケース追加(現 119 → 拡張)
+### 11.2 ★ Phase 1 完成宣言(本 A-9 で正式宣言)
 
-**★ 優先 4: A-5 P1-D — 上部世界観カード + 提案チップ 5 + 入力欄近接 4 ボタン**(1 セッション・中)
-- 案 A 4.3 図示の見た目完成
-- 「黒い美術館の住人」カード + 提案チップ + 📎写真 / 🔗 商品 URL / 👕 クローゼット / 🎨 MB 4 ボタン
-- UI 新設計 + データ連携(`analyze-v2` schema 前提・判断 10 整合)
+**根拠**: MVP 優先 8 項目中 7 項目達成 = **MVP 優先範囲 100% 達成**(残 1 = 項目 8「リアル試着用 身体情報設計」は Sprint E / Phase 2 後ゲート対象で MVP スコープ外)。
 
-**★ 優先 5: A-7 P1-E — 対話完結 8 結果カード**(1-1.5 セッション・中)
-- reply に商品/コーデカード統合
-- 三重防御(列絞り / system 明示 / 出力フィルタ)維持
+**完成形の中身**(★ origin/main で保全):
+- 5 intent 五角(diagnose / closet / coordinate / style-consult / brand-learn)
+- L4-A 切替検出(5 intent 五角・直接方向 20)
+- 三重防御 → 5 層多段防御(構造遮断 + 入口 sanitize + system 禁止 + 出口フィルタ + UI 表示制御)
+- Knowledge OS 連携(getDecisionRules + getFailurePatterns + getInfluences + dictionaries 4 種)全 5 intent 共通注入
+- コア体験 UI(WorldviewCard + SuggestionChips + InputAttachments + ClosetPickerModal)
+- リグレッションテスト 399 PASS(119 → 399・3.35 倍カバレッジ)
+- race fix v2 / 履歴永続化 / MenuDrawer / handleNewChat / 既存 v1 API 全保持
 
-**★ 優先 6: A-8 P1-F — virtual → product 連鎖**(1 セッション・中)
-- 試着想定の商品リコメンド連鎖(判断 5-③ MVP 含む)
-- ★ Phase 2 / 3 への布石
+### 11.3 残工程 = Phase 1 強化期間(★ 拡張領域・段階的着手)
 
-**★ 優先 7: A-9 P1-G — 仕上げ + 退行点検 + 知見 docs 追記**(0.5 セッション)
-- リグレッションテスト全件 PASS + オーナー実機検証
-- ★ Phase 1 完成宣言
+| 工程 | 内容 | 緊急性 | 着手 Sprint |
+|---|---|---|---|
+| **A-6c** virtual-coordinate(残 5 第 3 弾)| concept/scene 翻訳設計 | 低 | Sprint B-G で段階的 |
+| **A-6d** product-match(残 5 第 4 弾)| 自分の世界観に合う商品 | 低 | 同上 |
+| **A-6e** match-users(残 5 第 5 弾)| 世界観の近い人 | 低 | 同上 |
+| **A-7** 対話完結 8 結果カード | reply に商品/コーデカード統合 | 中(Phase 2 領域隣接) | Sprint B-C |
+| **A-8** virtual → product 連鎖 | 試着想定の商品リコメンド連鎖 | 中(Phase 2 / 3 への布石) | Sprint B-C |
 
-### 11.2 順序の根拠
-- 優先 1+2 並走(案 Y)= A-4 / A-10 経路独立・本セッション集中力を効率活用
-- A-10 は段階 B reply 品質に直結・整合性点検 `ddb86f7` ギャップ C 緊急性最高
-- 優先 3(A-6 残 5)は intent 単位で小さく刻める(M5 教訓・原則 3)
-- 優先 4(A-5)以降は中規模 UI 改修・段階的に投入
+→ 各工程は ★ A-6 / A-6b で確立した 4 作法(段階 A 修正 + MVP-1c fetcher + A-4 三重防御 + A-10 KOS 共通注入)を完全踏襲で実装可能(規模 +130-200 行 / 60-80 分 想定)。
+
+### 11.4 次工程(★ Phase 1 完成宣言後の論理順)
+
+1. **★ Sprint B-1 Phase 2 前ゲート評価**(Phase 1 体験品質・コスト実績・残課題評価 → Phase 2 着手判断)
+2. **Sprint B-2 ビジョンマップ統合**(doc3-6 統合 + 横断 TODO 13.7 取り込み)
+3. **Sprint B-3 コスト管理運用化**(案 P1 月 N 回上限実装)
+4. **拡張領域順次**(A-6c-e / A-7 / A-8 を必要性で順次着手)
 
 ---
 
