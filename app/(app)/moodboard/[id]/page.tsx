@@ -24,11 +24,16 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Edit3, Trash2, Plus, X, Image as ImageIcon,
-  Lock, Globe, MessageCircle, Check, Sparkles,
+  Lock, Globe, MessageCircle, Check, Sparkles, Link2, Wand2,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadMoodboardImage } from "@/lib/storage";
-import type { MoodboardWithItems, MoodboardItemRow } from "@/types/moodboard";
+import type {
+  MoodboardWithItems,
+  MoodboardItemRow,
+  AnalyzeItemResponse,
+  FromUrlItemResponse,
+} from "@/types/moodboard";
 import {
   ESSENTIAL_CATEGORIES,
   ESSENTIAL_LABELS,
@@ -70,6 +75,12 @@ export default function MoodboardDetailPage() {
 
   // ★ v2 改訂: 画像追加モーダル(file select → カテゴリ select → upload)用 state
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // ★ v3 革新: 自動分析(default ON)+ URL から追加 + 分析中表示
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [urlAddOpen, setUrlAddOpen] = useState(false);
+  const [urlFetching, setUrlFetching] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   // ★ v2 改訂: 必須要素 8 のカバー状況(useMemo で description + items から自動推定)
   const coverage = useMemo(() => {
@@ -128,25 +139,44 @@ export default function MoodboardDetailPage() {
   ): Promise<void> {
     if (!mb || !userId || uploading) return;
     setUploading(true);
+    if (autoAnalyze) setAnalyzing(true);
     try {
       // 1) クライアント側 EXIF 除去 + Storage upload(M3 同型・lib/storage.ts ec12f7b)
       const imageUrl = await uploadMoodboardImage(userId, mb.id, file);
-      // 2) caption にカテゴリプレフィックスを付与
-      const caption = withCategoryPrefix(category, captionBody);
-      // 3) DB に items row 追加
-      const res = await fetch(`/api/moodboards/${mb.id}/items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image_url: imageUrl,
-          caption,
-          order_index: mb.items.length,
-        }),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        alert(err.error ?? "画像追加に失敗しました");
-        return;
+
+      if (autoAnalyze) {
+        // ★ v3: 自動分析経路 = POST /items/analyze(Vision でカテゴリ + caption 自動付与)
+        const res = await fetch(`/api/moodboards/${mb.id}/items/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_url: imageUrl }),
+        });
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string };
+          alert(err.error ?? "画像追加に失敗しました");
+          return;
+        }
+        const data = (await res.json()) as AnalyzeItemResponse;
+        if (data.analysis === null) {
+          alert("自動分析できませんでした。手動で編集できます。");
+        }
+      } else {
+        // ★ v2 既存: 手動経路 = POST /items(カテゴリ select + caption 入力)
+        const caption = withCategoryPrefix(category, captionBody);
+        const res = await fetch(`/api/moodboards/${mb.id}/items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_url: imageUrl,
+            caption,
+            order_index: mb.items.length,
+          }),
+        });
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string };
+          alert(err.error ?? "画像追加に失敗しました");
+          return;
+        }
       }
       setPendingFile(null);
       await fetchMoodboard();
@@ -154,6 +184,37 @@ export default function MoodboardDetailPage() {
       alert(err instanceof Error ? err.message : "画像追加に失敗しました");
     } finally {
       setUploading(false);
+      setAnalyzing(false);
+    }
+  }
+
+  // ★ v3 新規: URL から追加(/items/from-url 呼出)
+  async function handleAddFromUrl(url: string): Promise<void> {
+    if (!mb || urlFetching) return;
+    const trimmed = url.trim();
+    if (trimmed === "") return;
+    setUrlFetching(true);
+    try {
+      const res = await fetch(`/api/moodboards/${mb.id}/items/from-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        alert(err.error ?? "URL からの追加に失敗しました");
+        return;
+      }
+      const data = (await res.json()) as FromUrlItemResponse;
+      if (data.analysis === null) {
+        alert("画像は追加されましたが、自動分析できませんでした。手動で編集できます。");
+      }
+      setUrlAddOpen(false);
+      await fetchMoodboard();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "URL からの追加に失敗しました");
+    } finally {
+      setUrlFetching(false);
     }
   }
 
@@ -329,11 +390,27 @@ export default function MoodboardDetailPage() {
 
         {/* ムードボード要素(items) */}
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-xs tracking-widest text-gray-400 uppercase">Moodboard</p>
-            <label className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-gray-800 text-white rounded-xl hover:bg-gray-700 cursor-pointer transition-colors ${uploading ? "opacity-50 cursor-wait" : ""}`}>
+            {/* ★ v3: 自動分析(beta)チェックボックス */}
+            <label className="inline-flex items-center gap-1 text-[11px] text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoAnalyze}
+                onChange={(e) => setAutoAnalyze(e.target.checked)}
+                disabled={uploading || urlFetching}
+                className="accent-gray-800"
+              />
+              <Wand2 size={11} strokeWidth={2} />
+              自動分析(beta)
+            </label>
+          </div>
+
+          {/* ★ v3: 画像追加 + URL から追加 ボタン列 */}
+          <div className="flex gap-2">
+            <label className={`flex-1 inline-flex items-center justify-center gap-1 text-xs px-3 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 cursor-pointer transition-colors ${uploading ? "opacity-50 cursor-wait" : ""}`}>
               <Plus size={12} />
-              {uploading ? "アップロード中..." : "画像追加"}
+              {analyzing ? "分析中..." : uploading ? "アップロード中..." : "画像追加"}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -342,6 +419,15 @@ export default function MoodboardDetailPage() {
                 onChange={handleFileSelect}
               />
             </label>
+            <button
+              type="button"
+              onClick={() => setUrlAddOpen(true)}
+              disabled={uploading || urlFetching}
+              className="flex-1 inline-flex items-center justify-center gap-1 text-xs px-3 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Link2 size={12} />
+              URL から追加
+            </button>
           </div>
 
           {/* 空 MB CTA */}
@@ -406,7 +492,7 @@ export default function MoodboardDetailPage() {
         </section>
       </div>
 
-      {/* ---- ★ v2 改訂: 画像追加モーダル(file 選択後・upload 前にカテゴリ + caption を確定) ---- */}
+      {/* ---- ★ v2 改訂 + v3 拡張: 画像追加モーダル(autoAnalyze で UI 切替) ---- */}
       {pendingFile !== null && (
         <ImageAddModal
           file={pendingFile}
@@ -415,6 +501,17 @@ export default function MoodboardDetailPage() {
             await handleAddImageConfirm(pendingFile, category, captionBody);
           }}
           uploading={uploading}
+          analyzing={analyzing}
+          autoAnalyze={autoAnalyze}
+        />
+      )}
+
+      {/* ---- ★ v3 新規: URL から追加 モーダル ---- */}
+      {urlAddOpen && (
+        <UrlAddModal
+          urlFetching={urlFetching}
+          onClose={() => setUrlAddOpen(false)}
+          onConfirm={handleAddFromUrl}
         />
       )}
 
@@ -520,10 +617,12 @@ function ItemCard({
 // ★ v2 改訂: ImageAddModal — file 選択後・upload 前にカテゴリ + caption を確定
 // ====================================================================
 function ImageAddModal({
-  file, uploading, onClose, onConfirm,
+  file, uploading, analyzing, autoAnalyze, onClose, onConfirm,
 }: {
   file: File;
   uploading: boolean;
+  analyzing: boolean;
+  autoAnalyze: boolean;
   onClose: () => void;
   onConfirm: (category: EssentialCategory | "", captionBody: string) => void | Promise<void>;
 }) {
@@ -537,37 +636,109 @@ function ImageAddModal({
     ? "観察メモ(例: 濡れ髪のラフな束ね)"
     : `${ESSENTIAL_LABELS[category]} のメモ(例: 濡れ髪のラフな束ね)`;
 
+  // ★ v3: 自動分析 ON 時は category select + textarea を隠し・「画像を AI が分析します」notice 表示
+  // ★ 自動分析 OFF 時は v2 既存フロー(category select + textarea)
   return (
-    <ModalShell onClose={onClose} title="Add Image">
+    <ModalShell onClose={onClose} title={autoAnalyze ? "Add Image(自動分析)" : "Add Image"}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={previewUrl} alt="" className="w-full max-h-40 object-cover rounded-xl" />
-      <div className="space-y-2">
-        <label className="text-[10px] tracking-widest text-gray-400 uppercase">Category(任意)</label>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value as EssentialCategory | "")}
-          disabled={uploading}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-gray-400 bg-white"
-        >
-          <option value="">— 選択しない —</option>
-          {ESSENTIAL_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{ESSENTIAL_LABELS[c]}</option>
-          ))}
-        </select>
-      </div>
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value.slice(0, 500))}
-        placeholder={placeholder}
-        rows={3}
-        disabled={uploading}
-        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
-      />
+
+      {autoAnalyze ? (
+        // ★ v3: 自動分析モード
+        <div className="space-y-2">
+          <div className="border border-gray-100 bg-gray-50 rounded-xl p-3 space-y-1">
+            <p className="text-[11px] text-gray-700 inline-flex items-center gap-1">
+              <Wand2 size={11} strokeWidth={2} />
+              画像を AI が分析します(カテゴリ + メモ + 主要色)
+            </p>
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              {analyzing ? "分析中... (2-5 秒お待ちください)" : "「追加」を押すと分析が始まります。"}
+            </p>
+          </div>
+        </div>
+      ) : (
+        // ★ v2 既存: 手動モード(category select + textarea)
+        <>
+          <div className="space-y-2">
+            <label className="text-[10px] tracking-widest text-gray-400 uppercase">Category(任意)</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as EssentialCategory | "")}
+              disabled={uploading}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-gray-400 bg-white"
+            >
+              <option value="">— 選択しない —</option>
+              {ESSENTIAL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{ESSENTIAL_LABELS[c]}</option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value.slice(0, 500))}
+            placeholder={placeholder}
+            rows={3}
+            disabled={uploading}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
+          />
+        </>
+      )}
+
       <ModalFooter
         onCancel={onClose}
-        onConfirm={() => void onConfirm(category, body)}
-        confirmLabel={uploading ? "アップロード中..." : "追加 →"}
+        onConfirm={() => void onConfirm(autoAnalyze ? "" : category, autoAnalyze ? "" : body)}
+        confirmLabel={analyzing ? "分析中..." : uploading ? "アップロード中..." : "追加 →"}
         disabled={uploading}
+      />
+    </ModalShell>
+  );
+}
+
+// ====================================================================
+// ★ v3 新規: UrlAddModal — Pinterest / Instagram / Vogue 等の URL から追加
+// ====================================================================
+function UrlAddModal({
+  urlFetching, onClose, onConfirm,
+}: {
+  urlFetching: boolean;
+  onClose: () => void;
+  onConfirm: (url: string) => void | Promise<void>;
+}) {
+  const [url, setUrl] = useState("");
+
+  return (
+    <ModalShell onClose={onClose} title="URL から追加">
+      <input
+        type="url"
+        autoFocus
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Pinterest / Instagram / Vogue の URL を貼り付け"
+        disabled={urlFetching}
+        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && url.trim() !== "") void onConfirm(url);
+        }}
+      />
+      <div className="border border-gray-100 bg-gray-50 rounded-xl p-3 space-y-1">
+        <p className="text-[11px] text-gray-700 inline-flex items-center gap-1">
+          <Link2 size={11} strokeWidth={2} />
+          対応プラットフォーム
+        </p>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          Pinterest / Instagram / Vogue / 直接画像 URL(.jpg / .png / .webp)
+        </p>
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          {urlFetching
+            ? "取得中... (5-10 秒お待ちください)"
+            : "URL から画像を取り込み、AI が自動分析します。"}
+        </p>
+      </div>
+      <ModalFooter
+        onCancel={onClose}
+        onConfirm={() => void onConfirm(url)}
+        confirmLabel={urlFetching ? "取得中..." : "取得 →"}
+        disabled={urlFetching || url.trim() === ""}
       />
     </ModalShell>
   );
