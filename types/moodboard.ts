@@ -57,3 +57,30 @@ export interface UpdateMoodboardItemInput {
   caption?:     string;
   order_index?: number;
 }
+
+// ---- v3: 画像自動分析 + 外部 URL 連携(設計 cd1b01a §2 §3)----
+
+import type { EssentialCategory } from "@/lib/utils/moodboard-essentials";
+
+export interface VisionAnalysisResult {
+  categories:      EssentialCategory[];  // 必須要素 8 から 1-3 個
+  caption:         string;               // 50 字以内・日本語
+  dominant_colors: string[];             // hex 2-3 個
+}
+
+export interface AnalyzeImageInput {
+  image_url: string;  // moodboard-images bucket の public URL
+}
+
+export interface UrlAddInput {
+  url: string;  // Pinterest / Instagram / Vogue の URL or 直接画像 URL
+}
+
+export interface AnalyzeItemResponse {
+  item:     MoodboardItemRow;
+  analysis: VisionAnalysisResult | null;  // Vision 失敗時は null(fallback)
+}
+
+export interface FromUrlItemResponse extends AnalyzeItemResponse {
+  source_url: string;
+}
