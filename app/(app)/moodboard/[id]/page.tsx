@@ -19,16 +19,25 @@
 // ★ ビジョン拡張 案 A 採用(設計案 476db41 §5・スキーマ変更なし・既存実装無傷)
 // ★ プロのファッション制作プロセス対応:コンセプト → MB → 撮影
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Edit3, Trash2, Plus, X, Image as ImageIcon,
-  Lock, Globe, MessageCircle,
+  Lock, Globe, MessageCircle, Check, Sparkles,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadMoodboardImage } from "@/lib/storage";
 import type { MoodboardWithItems, MoodboardItemRow } from "@/types/moodboard";
+import {
+  ESSENTIAL_CATEGORIES,
+  ESSENTIAL_LABELS,
+  detectEssentials,
+  extractCategory,
+  stripCategoryPrefix,
+  withCategoryPrefix,
+  type EssentialCategory,
+} from "@/lib/utils/moodboard-essentials";
 
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
@@ -58,6 +67,15 @@ export default function MoodboardDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editingItem, setEditingItem] = useState<MoodboardItemRow | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // ★ v2 改訂: 画像追加モーダル(file select → カテゴリ select → upload)用 state
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // ★ v2 改訂: 必須要素 8 のカバー状況(useMemo で description + items から自動推定)
+  const coverage = useMemo(() => {
+    if (!mb) return new Set<EssentialCategory>();
+    return detectEssentials(mb.description, mb.items);
+  }, [mb]);
 
   // ---- データ取得 ----
   async function fetchMoodboard(): Promise<void> {
@@ -93,26 +111,44 @@ export default function MoodboardDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mbId]);
 
-  // ---- 画像追加 ----
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+  // ---- 画像追加(★ v2 改訂: file select → モーダル → confirm → upload)----
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !mb || !userId || uploading) return;
+    if (!file) return;
+    // ★ 即時 upload ではなく pendingFile に格納してモーダル開く
+    //   ImageAddModal でカテゴリ select + caption を受け取って confirm 時に upload + POST
+    setPendingFile(file);
+  }
+
+  async function handleAddImageConfirm(
+    file: File,
+    category: EssentialCategory | "",
+    captionBody: string,
+  ): Promise<void> {
+    if (!mb || !userId || uploading) return;
     setUploading(true);
     try {
       // 1) クライアント側 EXIF 除去 + Storage upload(M3 同型・lib/storage.ts ec12f7b)
       const imageUrl = await uploadMoodboardImage(userId, mb.id, file);
-      // 2) DB に items row 追加
+      // 2) caption にカテゴリプレフィックスを付与
+      const caption = withCategoryPrefix(category, captionBody);
+      // 3) DB に items row 追加
       const res = await fetch(`/api/moodboards/${mb.id}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: imageUrl, order_index: mb.items.length }),
+        body: JSON.stringify({
+          image_url: imageUrl,
+          caption,
+          order_index: mb.items.length,
+        }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         alert(err.error ?? "画像追加に失敗しました");
         return;
       }
+      setPendingFile(null);
       await fetchMoodboard();
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像追加に失敗しました");
@@ -252,6 +288,45 @@ export default function MoodboardDetailPage() {
           )}
         </section>
 
+        {/* ★ v2 改訂: 必須要素 8 進捗 + チェックリスト */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs tracking-widest text-gray-400 uppercase">Essentials</p>
+            <span className="text-[11px] text-gray-500">{coverage.size}/8 カバー</span>
+          </div>
+          {/* 進捗バー */}
+          <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all ${coverage.size === 8 ? "bg-gray-800" : "bg-gray-400"}`}
+              style={{ width: `${(coverage.size / 8) * 100}%` }}
+            />
+          </div>
+          {/* チェックリスト(2 列グリッド) */}
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {ESSENTIAL_CATEGORIES.map((c) => {
+              const isCovered = coverage.has(c);
+              return (
+                <li
+                  key={c}
+                  className={`flex items-center gap-1.5 text-[12px] ${isCovered ? "text-gray-800" : "text-gray-400"}`}
+                >
+                  {isCovered ? (
+                    <Check size={11} strokeWidth={2.5} className="text-gray-700" />
+                  ) : (
+                    <span className="inline-block w-[11px] text-center">・</span>
+                  )}
+                  {ESSENTIAL_LABELS[c]}
+                </li>
+              );
+            })}
+          </ul>
+          {coverage.size < 8 && (
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              ヒント: あと {8 - coverage.size} 要素埋めると撮影準備完了
+            </p>
+          )}
+        </section>
+
         {/* ムードボード要素(items) */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
@@ -303,6 +378,23 @@ export default function MoodboardDetailPage() {
 
         {/* アクション */}
         <section className="pt-2 space-y-2">
+          {/* ★ v2 改訂: 撮影前 CTA(8/8 達成時) */}
+          {coverage.size === 8 && (
+            <div className="border border-gray-800 bg-gray-50 rounded-2xl p-4 text-center space-y-2">
+              <p className="text-sm text-gray-800 inline-flex items-center justify-center gap-1.5">
+                <Sparkles size={14} strokeWidth={2} />
+                必須要素 8/8 カバー完了!
+              </p>
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center justify-center gap-2 text-sm px-4 py-2 bg-gray-800 text-white rounded-xl opacity-60 cursor-not-allowed"
+              >
+                このムードボードで撮影する
+              </button>
+              <p className="text-[11px] text-gray-400">(Sprint C-3 で配線予定)</p>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => alert("チャットに渡す機能は Sprint C-3 で実装予定です")}
@@ -313,6 +405,18 @@ export default function MoodboardDetailPage() {
           </button>
         </section>
       </div>
+
+      {/* ---- ★ v2 改訂: 画像追加モーダル(file 選択後・upload 前にカテゴリ + caption を確定) ---- */}
+      {pendingFile !== null && (
+        <ImageAddModal
+          file={pendingFile}
+          onClose={() => setPendingFile(null)}
+          onConfirm={async (category, captionBody) => {
+            await handleAddImageConfirm(pendingFile, category, captionBody);
+          }}
+          uploading={uploading}
+        />
+      )}
 
       {/* ---- コンセプト編集モーダル ---- */}
       {editingConcept && (
@@ -379,15 +483,25 @@ function ItemCard({
   onClick: () => void;
   onDelete: () => void;
 }) {
+  // ★ v2 改訂: caption からカテゴリプレフィックスを抽出してバッジ表示
+  const category = extractCategory(item.caption);
+  const captionBody = stripCategoryPrefix(item.caption);
+
   return (
     <div className="relative group rounded-2xl overflow-hidden border border-gray-100">
       <button type="button" onClick={onClick} className="block w-full">
-        <div className="aspect-square bg-gray-50">
+        <div className="aspect-square bg-gray-50 relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.image_url} alt={item.caption || "moodboard item"} className="w-full h-full object-cover" />
+          <img src={item.image_url} alt={captionBody || "moodboard item"} className="w-full h-full object-cover" />
+          {/* ★ v2 改訂: カテゴリバッジ(左上) */}
+          {category !== null && (
+            <span className="absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-white/90 text-gray-700">
+              {ESSENTIAL_LABELS[category]}
+            </span>
+          )}
         </div>
-        {item.caption !== "" && (
-          <p className="text-[11px] text-gray-600 truncate px-2 py-1.5 text-left">{item.caption}</p>
+        {captionBody !== "" && (
+          <p className="text-[11px] text-gray-600 truncate px-2 py-1.5 text-left">{captionBody}</p>
         )}
       </button>
       <button
@@ -399,6 +513,63 @@ function ItemCard({
         <X size={12} />
       </button>
     </div>
+  );
+}
+
+// ====================================================================
+// ★ v2 改訂: ImageAddModal — file 選択後・upload 前にカテゴリ + caption を確定
+// ====================================================================
+function ImageAddModal({
+  file, uploading, onClose, onConfirm,
+}: {
+  file: File;
+  uploading: boolean;
+  onClose: () => void;
+  onConfirm: (category: EssentialCategory | "", captionBody: string) => void | Promise<void>;
+}) {
+  const [category, setCategory] = useState<EssentialCategory | "">("");
+  const [body, setBody] = useState("");
+  // file プレビュー URL(component unmount 時に revoke)
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+
+  const placeholder = category === ""
+    ? "観察メモ(例: 濡れ髪のラフな束ね)"
+    : `${ESSENTIAL_LABELS[category]} のメモ(例: 濡れ髪のラフな束ね)`;
+
+  return (
+    <ModalShell onClose={onClose} title="Add Image">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={previewUrl} alt="" className="w-full max-h-40 object-cover rounded-xl" />
+      <div className="space-y-2">
+        <label className="text-[10px] tracking-widest text-gray-400 uppercase">Category(任意)</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as EssentialCategory | "")}
+          disabled={uploading}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-gray-400 bg-white"
+        >
+          <option value="">— 選択しない —</option>
+          {ESSENTIAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>{ESSENTIAL_LABELS[c]}</option>
+          ))}
+        </select>
+      </div>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value.slice(0, 500))}
+        placeholder={placeholder}
+        rows={3}
+        disabled={uploading}
+        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
+      />
+      <ModalFooter
+        onCancel={onClose}
+        onConfirm={() => void onConfirm(category, body)}
+        confirmLabel={uploading ? "アップロード中..." : "追加 →"}
+        disabled={uploading}
+      />
+    </ModalShell>
   );
 }
 
@@ -483,17 +654,20 @@ function CaptionEditModal({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [value, setValue] = useState(item.caption);
+  // ★ v2 改訂: 既存 caption から [category] と本体を分離して個別編集
+  const [category, setCategory] = useState<EssentialCategory | "">(extractCategory(item.caption) ?? "");
+  const [body, setBody] = useState(stripCategoryPrefix(item.caption));
   const [saving, setSaving] = useState(false);
 
   async function handleSave(): Promise<void> {
     if (saving) return;
     setSaving(true);
     try {
+      const combined = withCategoryPrefix(category, body).slice(0, CAPTION_MAX);
       const res = await fetch(`/api/moodboards/${mbId}/items/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption: value.slice(0, CAPTION_MAX) }),
+        body: JSON.stringify({ caption: combined }),
       });
       if (!res.ok) {
         alert("保存に失敗しました");
@@ -505,15 +679,34 @@ function CaptionEditModal({
     }
   }
 
+  const placeholder = category === ""
+    ? "観察メモ: 例『濡れ髪』『夕方の逆光』『砂色のリネン』"
+    : `${ESSENTIAL_LABELS[category]} のメモ(例: 濡れ髪のラフな束ね)`;
+
   return (
     <ModalShell onClose={onClose} title="Caption">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={item.image_url} alt="" className="w-full max-h-40 object-cover rounded-xl" />
+      {/* ★ v2 改訂: カテゴリ select(必須要素 8 の分類) */}
+      <div className="space-y-2">
+        <label className="text-[10px] tracking-widest text-gray-400 uppercase">Category(任意)</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as EssentialCategory | "")}
+          disabled={saving}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-gray-400 bg-white"
+        >
+          <option value="">— 選択しない —</option>
+          {ESSENTIAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>{ESSENTIAL_LABELS[c]}</option>
+          ))}
+        </select>
+      </div>
       <textarea
         autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value.slice(0, CAPTION_MAX))}
-        placeholder="観察メモ: 例『濡れ髪』『夕方の逆光』『砂色のリネン』"
+        value={body}
+        onChange={(e) => setBody(e.target.value.slice(0, CAPTION_MAX))}
+        placeholder={placeholder}
         rows={3}
         disabled={saving}
         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none"
