@@ -8,7 +8,8 @@
 //   ・📎 写真:        file dialog → notice「Sprint E で実装予定」(送信動作なし)
 //   ・🔗 商品 URL:    URL 入力モーダル → notice「Sprint C で実装予定」(送信動作なし)
 //   ・👕 クローゼット: ClosetPickerModal 開く(★ 完全実装・親側で制御)
-//   ・🎨 MB:          notice「Sprint C で実装予定」(moodboards テーブル不在)
+//   ・🎨 MB:          ★ Sprint C-2 段階3-E で本実装(MoodboardPickerModal 親側制御)
+//                       onMbOpen 未指定なら notice fallback(backward compatible)
 //
 // notice はインラインメッセージ(自動消去 3 秒)で表示する。
 
@@ -16,6 +17,7 @@ import { useRef, useState } from "react";
 
 interface InputAttachmentsProps {
   onClosetOpen:    () => void;
+  onMbOpen?:       () => void;             // ★ Sprint C-2 段階3-E: MB 本実装(MoodboardPickerModal 親側制御)
   onUrlSubmit?:    (url: string) => void;  // 将来用・現状は notice のみ
   onPhotoSelect?:  (file: File) => void;   // 将来用・現状は notice のみ
 }
@@ -24,6 +26,7 @@ type Notice = { id: number; text: string };
 
 export default function InputAttachments({
   onClosetOpen,
+  onMbOpen,
   // onUrlSubmit, onPhotoSelect は今回未使用(将来 Phase 3 / Sprint C で実装)
 }: InputAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +72,12 @@ export default function InputAttachments({
   }
 
   function handleMbClick(): void {
+    // ★ Sprint C-2 段階3-E: 親側で MoodboardPickerModal を制御していれば onMbOpen 呼出
+    //   onMbOpen 未指定なら notice fallback(backward compatible)
+    if (onMbOpen) {
+      onMbOpen();
+      return;
+    }
     showNotice("📌 ムードボードは Sprint C で実装予定です(現在テーブル未作成)");
   }
 

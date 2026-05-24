@@ -39,6 +39,7 @@ import WorldviewCard from "@/components/chat/WorldviewCard";
 import SuggestionChips from "@/components/chat/SuggestionChips";
 import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
+import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
 
 interface SuggestionItem {
   intent: string;
@@ -125,6 +126,8 @@ export default function ChatPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // A-5: クローゼットピッカーモーダルの開閉
   const [isClosetOpen, setIsClosetOpen] = useState(false);
+  // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
+  const [isMbOpen, setIsMbOpen] = useState(false);
 
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
@@ -346,7 +349,10 @@ export default function ChatPage() {
       {/* 下部固定入力(D1-2b' と同等・連続発話可能) */}
       <form onSubmit={handleSubmit} className="border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
         {/* A-5 P1-D: 入力欄近接 4 ボタン(写真 / URL / クローゼット / MB) */}
-        <InputAttachments onClosetOpen={() => setIsClosetOpen(true)} />
+        <InputAttachments
+          onClosetOpen={() => setIsClosetOpen(true)}
+          onMbOpen={() => setIsMbOpen(true)}
+        />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -384,6 +390,14 @@ export default function ChatPage() {
       <ClosetPickerModal
         isOpen={isClosetOpen}
         onClose={() => setIsClosetOpen(false)}
+        onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
+      />
+
+      {/* ★ Sprint C-2 段階3-D: ムードボードピッカーモーダル(GET /api/moodboards + 選択 → textarea 挿入)
+            Sprint C-3 で MB content の prompt 注入配線(現状は MB 名のみテキスト挿入) */}
+      <MoodboardPickerModal
+        isOpen={isMbOpen}
+        onClose={() => setIsMbOpen(false)}
         onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
       />
     </div>
