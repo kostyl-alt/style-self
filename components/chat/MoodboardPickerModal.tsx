@@ -5,26 +5,27 @@
 // Sprint C-2 段階3-D 実装(設計案 60b8d87 §6.4)
 //
 // 振る舞い:
-//   ・open 時に GET /api/moodboards で自分の MB 一覧取得
+//   ・open 時に GET /api/moodboards で自分の MB 一覧取得(概要)
 //   ・2 列グリッドで MB カード表示(cover_image_url + name + 公開バッジ)
-//   ・1 MB 選択 → 親側 onPick(text) 経由で textarea に
-//     「『○○』のムードボードに合うコーデを提案して」型挿入
+//   ・1 MB 選択 → ★ GET /api/moodboards/[id] で詳細(items 含む)取得 → onPick(mb) 呼出
 //   ・Empty state: 「ムードボードがありません」+ CTA → /moodboard
 //   ・背景クリック / ESC / × ボタンで閉じる
 //
 // 既存パターン踏襲: components/chat/ClosetPickerModal.tsx(c126f76)同型作法
 //
-// ★ MVP: 選択 = テキスト挿入のみ(Sprint C-3 で MB content の prompt 注入配線)
+// ★ Sprint C-3(7e9921d): onPick シグネチャ強化(text → MoodboardWithItems)
+//   親側で buildMoodboardPrompt(mb) を呼び出して prompt 構築する。
+//   詳細取得失敗時は items=[] で onPick(必須要素 0 件で prompt 生成・コンセプト中心)
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Image as ImageIcon, Globe, Lock } from "lucide-react";
-import type { MoodboardRow } from "@/types/moodboard";
+import type { MoodboardRow, MoodboardWithItems } from "@/types/moodboard";
 
 interface MoodboardPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPick: (insertText: string) => void;
+  onPick: (mb: MoodboardWithItems) => void;
 }
 
 type LoadState =
@@ -76,12 +77,24 @@ export default function MoodboardPickerModal({ isOpen, onClose, onPick }: Moodbo
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  function handlePick(mb: MoodboardRow): void {
-    // ★ MVP: テキスト挿入のみ(Sprint C-3 で MB content の prompt 注入配線)
-    //   ★ name のみ使用(description は将来 prompt 注入時にサーバ側で読む)
-    const text = `「${mb.name}」のムードボードに合うコーデを提案して`;
-    onPick(text);
-    onClose();
+  async function handlePick(mb: MoodboardRow): Promise<void> {
+    // ★ Sprint C-3: 選択時に詳細取得 → onPick(MoodboardWithItems)
+    //   詳細取得失敗時は items=[] で onPick(必須要素 0 件で prompt 生成)
+    try {
+      const res = await fetch(`/api/moodboards/${mb.id}`);
+      if (!res.ok) {
+        onPick({ ...mb, items: [] });
+        onClose();
+        return;
+      }
+      const data = (await res.json()) as { moodboard: MoodboardWithItems };
+      onPick(data.moodboard);
+      onClose();
+    } catch {
+      // fallback: items=[] で onPick(コンセプトのみで prompt 構築)
+      onPick({ ...mb, items: [] });
+      onClose();
+    }
   }
 
   if (!isOpen) return null;
@@ -146,7 +159,7 @@ export default function MoodboardPickerModal({ isOpen, onClose, onPick }: Moodbo
                   <button
                     key={mb.id}
                     type="button"
-                    onClick={() => handlePick(mb)}
+                    onClick={() => void handlePick(mb)}
                     className="text-left rounded-2xl border border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-colors overflow-hidden"
                   >
                     <div className="relative aspect-square bg-gray-50">

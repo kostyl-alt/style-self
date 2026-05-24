@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadMoodboardImage } from "@/lib/storage";
+import { buildMoodboardPrompt } from "@/lib/prompts/moodboard-prompt";
 import type {
   MoodboardWithItems,
   MoodboardItemRow,
@@ -216,6 +217,17 @@ export default function MoodboardDetailPage() {
     } finally {
       setUrlFetching(false);
     }
+  }
+
+  // ---- ★ Sprint C-3: 撮影前 CTA / 「チャットに渡す」共通の遷移 helper ----
+  //   sessionStorage 経由で ChatPage に MB prompt を渡す(URL param 長さ制限回避)
+  function handleShoot(): void {
+    if (!mb) return;
+    const prompt = buildMoodboardPrompt(mb);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("mb_prompt", prompt);
+    }
+    router.push("/ai");
   }
 
   // ---- 削除 ----
@@ -464,7 +476,7 @@ export default function MoodboardDetailPage() {
 
         {/* アクション */}
         <section className="pt-2 space-y-2">
-          {/* ★ v2 改訂: 撮影前 CTA(8/8 達成時) */}
+          {/* ★ v2 改訂 + Sprint C-3 本配線: 撮影前 CTA(8/8 達成時) */}
           {coverage.size === 8 && (
             <div className="border border-gray-800 bg-gray-50 rounded-2xl p-4 text-center space-y-2">
               <p className="text-sm text-gray-800 inline-flex items-center justify-center gap-1.5">
@@ -473,21 +485,20 @@ export default function MoodboardDetailPage() {
               </p>
               <button
                 type="button"
-                disabled
-                className="inline-flex items-center justify-center gap-2 text-sm px-4 py-2 bg-gray-800 text-white rounded-xl opacity-60 cursor-not-allowed"
+                onClick={handleShoot}
+                className="inline-flex items-center justify-center gap-2 text-sm px-4 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors"
               >
                 このムードボードで撮影する
               </button>
-              <p className="text-[11px] text-gray-400">(Sprint C-3 で配線予定)</p>
             </div>
           )}
           <button
             type="button"
-            onClick={() => alert("チャットに渡す機能は Sprint C-3 で実装予定です")}
+            onClick={handleShoot}
             className="w-full inline-flex items-center justify-center gap-2 text-sm px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors"
           >
             <MessageCircle size={14} />
-            チャットに渡す(Sprint C-3 で実装予定)
+            チャットに渡す
           </button>
         </section>
       </div>

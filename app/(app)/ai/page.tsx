@@ -40,6 +40,8 @@ import SuggestionChips from "@/components/chat/SuggestionChips";
 import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
+import { buildMoodboardPrompt } from "@/lib/prompts/moodboard-prompt";
+import type { MoodboardWithItems } from "@/types/moodboard";
 
 interface SuggestionItem {
   intent: string;
@@ -165,6 +167,17 @@ export default function ChatPage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  // ★ Sprint C-3: 撮影前 CTA(/moodboard/[id])からの遷移 = sessionStorage 経由 で MB prompt 受け取り
+  //   URL param 長さ制限(2048 文字)回避・同一タブ内のみ・受け取り後即削除で再挿入防止
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mbPrompt = sessionStorage.getItem("mb_prompt");
+    if (mbPrompt !== null && mbPrompt !== "") {
+      setText((cur) => (cur ? `${cur}\n\n${mbPrompt}` : mbPrompt));
+      sessionStorage.removeItem("mb_prompt");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -393,12 +406,15 @@ export default function ChatPage() {
         onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
       />
 
-      {/* ★ Sprint C-2 段階3-D: ムードボードピッカーモーダル(GET /api/moodboards + 選択 → textarea 挿入)
-            Sprint C-3 で MB content の prompt 注入配線(現状は MB 名のみテキスト挿入) */}
+      {/* ★ Sprint C-2 段階3-D + Sprint C-3: ムードボードピッカーモーダル(MB content prompt 注入)
+            選択時に GET /api/moodboards/[id] で詳細取得 → buildMoodboardPrompt → textarea 挿入 */}
       <MoodboardPickerModal
         isOpen={isMbOpen}
         onClose={() => setIsMbOpen(false)}
-        onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
+        onPick={(mb: MoodboardWithItems) => {
+          const prompt = buildMoodboardPrompt(mb);
+          setText((cur) => (cur ? `${cur}\n\n${prompt}` : prompt));
+        }}
       />
     </div>
   );
