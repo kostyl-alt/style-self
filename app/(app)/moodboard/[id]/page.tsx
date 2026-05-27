@@ -74,14 +74,17 @@ export default function MoodboardDetailPage() {
   const [editingItem, setEditingItem] = useState<MoodboardItemRow | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // ★ v2 改訂: 画像追加モーダル(file select → カテゴリ select → upload)用 state
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  // ★ v2 改訂 + v4 複数選択: 画像追加モーダル(file[] select → カテゴリ select or 自動分析 → upload)用 state
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   // ★ v3 革新: 自動分析(default ON)+ URL から追加 + 分析中表示
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [urlAddOpen, setUrlAddOpen] = useState(false);
   const [urlFetching, setUrlFetching] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  // ★ v4 複数選択: 進捗表示「N/M」
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(0);
 
   // ★ v2 改訂: 必須要素 8 のカバー状況(useMemo で description + items から自動推定)
   const coverage = useMemo(() => {
@@ -123,69 +126,104 @@ export default function MoodboardDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mbId]);
 
-  // ---- 画像追加(★ v2 改訂: file select → モーダル → confirm → upload)----
+  // ---- 画像追加(★ v2 改訂 + v4 複数選択: file[] select → モーダル → confirm → 順次 upload)----
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): void {
-    const file = e.target.files?.[0];
+    const fileList = e.target.files;
     e.target.value = "";
-    if (!file) return;
-    // ★ 即時 upload ではなく pendingFile に格納してモーダル開く
-    //   ImageAddModal でカテゴリ select + caption を受け取って confirm 時に upload + POST
-    setPendingFile(file);
+    if (fileList === null || fileList.length === 0) return;
+    // ★ v4: 複数 file 対応(<input multiple>)= Array 化して pendingFiles に格納
+    setPendingFiles(Array.from(fileList));
   }
 
   async function handleAddImageConfirm(
-    file: File,
+    files: File[],
     category: EssentialCategory | "",
     captionBody: string,
   ): Promise<void> {
-    if (!mb || !userId || uploading) return;
+    if (!mb || !userId || uploading || files.length === 0) return;
+
+    // ★ v4: 手動モード(autoAnalyze OFF)+ 複数選択 = 警告(MVP は手動複数を非対応)
+    if (!autoAnalyze && files.length > 1) {
+      alert("複数画像の手動分類は対応していません。自動分析(beta)を ON にしてください。");
+      return;
+    }
+
     setUploading(true);
     if (autoAnalyze) setAnalyzing(true);
-    try {
-      // 1) クライアント側 EXIF 除去 + Storage upload(M3 同型・lib/storage.ts ec12f7b)
-      const imageUrl = await uploadMoodboardImage(userId, mb.id, file);
+    setProgressTotal(files.length);
+    setProgressCurrent(0);
 
-      if (autoAnalyze) {
-        // ★ v3: 自動分析経路 = POST /items/analyze(Vision でカテゴリ + caption 自動付与)
-        const res = await fetch(`/api/moodboards/${mb.id}/items/analyze`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_url: imageUrl }),
-        });
-        if (!res.ok) {
-          const err = (await res.json().catch(() => ({}))) as { error?: string };
-          alert(err.error ?? "画像追加に失敗しました");
-          return;
-        }
-        const data = (await res.json()) as AnalyzeItemResponse;
-        if (data.analysis === null) {
-          alert("自動分析できませんでした。手動で編集できます。");
-        }
-      } else {
-        // ★ v2 既存: 手動経路 = POST /items(カテゴリ select + caption 入力)
-        const caption = withCategoryPrefix(category, captionBody);
-        const res = await fetch(`/api/moodboards/${mb.id}/items`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_url: imageUrl,
-            caption,
-            order_index: mb.items.length,
-          }),
-        });
-        if (!res.ok) {
-          const err = (await res.json().catch(() => ({}))) as { error?: string };
-          alert(err.error ?? "画像追加に失敗しました");
-          return;
+    let succeeded = 0;
+    let failed = 0;
+    let lastVisionFailed = false;
+
+    try {
+      // ★ v4: 順次 upload + analyze(★ サーバー負荷分散 + UI 進捗表示)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgressCurrent(i + 1);
+        try {
+          // 1) クライアント側 EXIF 除去 + Storage upload(M3 同型・lib/storage.ts ec12f7b)
+          const imageUrl = await uploadMoodboardImage(userId, mb.id, file);
+
+          if (autoAnalyze) {
+            // ★ v3: 自動分析経路 = POST /items/analyze(1 リクエスト 1 画像・既存 API そのまま)
+            const res = await fetch(`/api/moodboards/${mb.id}/items/analyze`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image_url: imageUrl }),
+            });
+            if (!res.ok) {
+              failed++;
+              continue;
+            }
+            const data = (await res.json()) as AnalyzeItemResponse;
+            if (data.analysis === null) lastVisionFailed = true;
+          } else {
+            // ★ v2 既存: 手動経路 = POST /items(★ 単数のみ・autoAnalyze OFF + 1 file 時のみ到達)
+            const caption = withCategoryPrefix(category, captionBody);
+            const res = await fetch(`/api/moodboards/${mb.id}/items`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                image_url: imageUrl,
+                caption,
+                order_index: mb.items.length + succeeded,
+              }),
+            });
+            if (!res.ok) {
+              failed++;
+              continue;
+            }
+          }
+          succeeded++;
+        } catch {
+          failed++;
         }
       }
-      setPendingFile(null);
+
+      // ★ v4: 部分失敗・Vision 失敗の通知(複数 = 集約 / 単数 = 既存メッセージ)
+      if (files.length > 1) {
+        if (failed > 0 && succeeded > 0) {
+          alert(`${files.length}枚中 ${succeeded}枚成功・${failed}枚失敗しました`);
+        } else if (failed > 0 && succeeded === 0) {
+          alert("画像追加に全て失敗しました");
+        }
+      } else if (lastVisionFailed) {
+        alert("自動分析できませんでした。手動で編集できます。");
+      } else if (failed > 0) {
+        alert("画像追加に失敗しました");
+      }
+
+      setPendingFiles([]);
       await fetchMoodboard();
     } catch (err) {
       alert(err instanceof Error ? err.message : "画像追加に失敗しました");
     } finally {
       setUploading(false);
       setAnalyzing(false);
+      setProgressCurrent(0);
+      setProgressTotal(0);
     }
   }
 
@@ -422,9 +460,18 @@ export default function MoodboardDetailPage() {
           <div className="flex gap-2">
             <label className={`flex-1 inline-flex items-center justify-center gap-1 text-xs px-3 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 cursor-pointer transition-colors ${uploading ? "opacity-50 cursor-wait" : ""}`}>
               <Plus size={12} />
-              {analyzing ? "分析中..." : uploading ? "アップロード中..." : "画像追加"}
+              {analyzing
+                ? progressTotal > 1
+                  ? `分析中... (${progressCurrent}/${progressTotal})`
+                  : "分析中..."
+                : uploading
+                  ? progressTotal > 1
+                    ? `アップロード中... (${progressCurrent}/${progressTotal})`
+                    : "アップロード中..."
+                  : "画像追加"}
               <input
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
                 hidden
                 disabled={uploading}
@@ -503,17 +550,19 @@ export default function MoodboardDetailPage() {
         </section>
       </div>
 
-      {/* ---- ★ v2 改訂 + v3 拡張: 画像追加モーダル(autoAnalyze で UI 切替) ---- */}
-      {pendingFile !== null && (
+      {/* ---- ★ v2 改訂 + v3 拡張 + v4 複数選択: 画像追加モーダル ---- */}
+      {pendingFiles.length > 0 && (
         <ImageAddModal
-          file={pendingFile}
-          onClose={() => setPendingFile(null)}
+          files={pendingFiles}
+          onClose={() => setPendingFiles([])}
           onConfirm={async (category, captionBody) => {
-            await handleAddImageConfirm(pendingFile, category, captionBody);
+            await handleAddImageConfirm(pendingFiles, category, captionBody);
           }}
           uploading={uploading}
           analyzing={analyzing}
           autoAnalyze={autoAnalyze}
+          progressCurrent={progressCurrent}
+          progressTotal={progressTotal}
         />
       )}
 
@@ -628,31 +677,56 @@ function ItemCard({
 // ★ v2 改訂: ImageAddModal — file 選択後・upload 前にカテゴリ + caption を確定
 // ====================================================================
 function ImageAddModal({
-  file, uploading, analyzing, autoAnalyze, onClose, onConfirm,
+  files, uploading, analyzing, autoAnalyze, progressCurrent, progressTotal, onClose, onConfirm,
 }: {
-  file: File;
+  files: File[];
   uploading: boolean;
   analyzing: boolean;
   autoAnalyze: boolean;
+  progressCurrent: number;
+  progressTotal: number;
   onClose: () => void;
   onConfirm: (category: EssentialCategory | "", captionBody: string) => void | Promise<void>;
 }) {
   const [category, setCategory] = useState<EssentialCategory | "">("");
   const [body, setBody] = useState("");
-  // file プレビュー URL(component unmount 時に revoke)
-  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
-  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+  // ★ v4: 複数 file プレビュー URL(component unmount 時に全 revoke)
+  const previewUrls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => previewUrls.forEach((u) => URL.revokeObjectURL(u)), [previewUrls]);
 
   const placeholder = category === ""
     ? "観察メモ(例: 濡れ髪のラフな束ね)"
     : `${ESSENTIAL_LABELS[category]} のメモ(例: 濡れ髪のラフな束ね)`;
 
+  const isMulti = files.length > 1;
+  const progressLabel = progressTotal > 1 ? ` (${progressCurrent}/${progressTotal})` : "";
+
   // ★ v3: 自動分析 ON 時は category select + textarea を隠し・「画像を AI が分析します」notice 表示
-  // ★ 自動分析 OFF 時は v2 既存フロー(category select + textarea)
+  // ★ v3: 自動分析 OFF 時は v2 既存フロー(category select + textarea)
+  // ★ v4: 複数 file 対応(プレビューグリッド + 枚数表示 + 進捗 N/M)
   return (
     <ModalShell onClose={onClose} title={autoAnalyze ? "Add Image(自動分析)" : "Add Image"}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={previewUrl} alt="" className="w-full max-h-40 object-cover rounded-xl" />
+      {isMulti ? (
+        <>
+          <p className="text-[11px] text-gray-600">{files.length}枚選択中</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {previewUrls.map((url, i) => (
+              <div key={i} className="aspect-square rounded-lg overflow-hidden border border-gray-100 relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-full h-full object-cover" />
+                {analyzing && progressCurrent === i + 1 && (
+                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-[10px] text-gray-700">
+                    分析中
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={previewUrls[0]} alt="" className="w-full max-h-40 object-cover rounded-xl" />
+      )}
 
       {autoAnalyze ? (
         // ★ v3: 自動分析モード
@@ -660,12 +734,23 @@ function ImageAddModal({
           <div className="border border-gray-100 bg-gray-50 rounded-xl p-3 space-y-1">
             <p className="text-[11px] text-gray-700 inline-flex items-center gap-1">
               <Wand2 size={11} strokeWidth={2} />
-              画像を AI が分析します(カテゴリ + メモ + 主要色)
+              {isMulti
+                ? `${files.length}枚の画像を AI が順次分析します(カテゴリ + メモ + 主要色)`
+                : "画像を AI が分析します(カテゴリ + メモ + 主要色)"}
             </p>
             <p className="text-[11px] text-gray-400 leading-relaxed">
-              {analyzing ? "分析中... (2-5 秒お待ちください)" : "「追加」を押すと分析が始まります。"}
+              {analyzing
+                ? `分析中...${progressLabel}(2-5 秒/枚)`
+                : "「追加」を押すと分析が始まります。"}
             </p>
           </div>
+        </div>
+      ) : isMulti ? (
+        // ★ v4: 手動モード + 複数選択 = 警告(MVP は非対応・自動分析 ON 推奨)
+        <div className="border border-amber-200 bg-amber-50 rounded-xl p-3">
+          <p className="text-[11px] text-amber-800 leading-relaxed">
+            ★ 複数画像の手動分類は対応していません。自動分析(beta)を ON にしてください。
+          </p>
         </div>
       ) : (
         // ★ v2 既存: 手動モード(category select + textarea)
@@ -698,8 +783,16 @@ function ImageAddModal({
       <ModalFooter
         onCancel={onClose}
         onConfirm={() => void onConfirm(autoAnalyze ? "" : category, autoAnalyze ? "" : body)}
-        confirmLabel={analyzing ? "分析中..." : uploading ? "アップロード中..." : "追加 →"}
-        disabled={uploading}
+        confirmLabel={
+          analyzing
+            ? `分析中...${progressLabel}`
+            : uploading
+              ? `アップロード中...${progressLabel}`
+              : isMulti
+                ? `${files.length}枚 追加 →`
+                : "追加 →"
+        }
+        disabled={uploading || (isMulti && !autoAnalyze)}
       />
     </ModalShell>
   );
