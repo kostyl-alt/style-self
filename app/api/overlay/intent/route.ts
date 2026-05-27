@@ -97,7 +97,11 @@ export async function POST(request: NextRequest) {
       systemPrompt: OVERLAY_INTENT_PROMPT,
       userMessage:  text,
       model:        HAIKU_MODEL,
-      maxTokens:    384,
+      // ★ Sprint C-3 hotfix(f1867e6 案 C 後の追加修正): MB prompt(~1300 字)を段階 A に
+      //   送ると Haiku 4.5 出力が長くなり 384 tokens で truncation → JSON parse 失敗。
+      //   768 tokens に拡大(出力余裕 + コスト微増 = MVP には誤差)。
+      //   既存 5 intent 短文判定への影響なし(LLM は必要分しか生成しない)。
+      maxTokens:    768,
     });
 
     // 辞書外を返した場合は unknown / none に丸める(プロンプト指示があっても防御)
