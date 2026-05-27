@@ -31,7 +31,13 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
   const lines: string[] = [];
 
   // ---- ヘッダ ----
-  lines.push("[ムードボード]");
+  // ★ Sprint C-3 hotfix(8a5b161 §5.2 案 C 採用): 段階 A intent 判定が「[ムードボード]」を
+  //   moodboard placeholder(overlay-intent.ts L42・mode="none")と判定するのを回避するため、
+  //   冒頭でコーデ提案依頼を明示 + ヘッダラベルを「[ムードボードの世界観]」に変更。
+  //   サーバー側(overlay-intent.ts / NoneNotice / 5 intent reply 経路)★ 完全不変。
+  lines.push("コーデ提案依頼: 以下のムードボードに合うコーディネートを提案してください。");
+  lines.push("");
+  lines.push("[ムードボードの世界観]");
   lines.push(`テーマ: ${mb.name}`);
   if (mb.description.trim() !== "") {
     lines.push(`コンセプト: ${mb.description}`);
