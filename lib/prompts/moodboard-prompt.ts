@@ -31,11 +31,15 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
   const lines: string[] = [];
 
   // ---- ヘッダ ----
-  // ★ Sprint C-3 hotfix(8a5b161 §5.2 案 C 採用): 段階 A intent 判定が「[ムードボード]」を
-  //   moodboard placeholder(overlay-intent.ts L42・mode="none")と判定するのを回避するため、
-  //   冒頭でコーデ提案依頼を明示 + ヘッダラベルを「[ムードボードの世界観]」に変更。
+  // ★ Sprint C-3 hotfix v2(0cf6759 後の追加修正): 段階 A LLM 判定誘導の精緻化
+  //   - 旧 案 C(f1867e6): 「コーデ提案依頼: ...」→ moodboard placeholder 回避は OK だが
+  //                       「コンセプト」「テーマ」キーワードで virtual-coordinate(試着)判定された
+  //   - 新 案 D: アウター/トップス/ボトムス等の具体的アイテム名を冒頭で明示
+  //              + 「試着シミュレーションや概念翻訳ではなく日常コーデ提案」明示
+  //              → 段階 A 判定ルール 4(アイテム指定 + 日常コーデ = coordinate)を強く誘導
   //   サーバー側(overlay-intent.ts / NoneNotice / 5 intent reply 経路)★ 完全不変。
-  lines.push("コーデ提案依頼: 以下のムードボードに合うコーディネートを提案してください。");
+  lines.push("以下の世界観・参考画像から、アウター・トップス・ボトムス・シューズ・小物の具体的な組み合わせを文章で提案してください。");
+  lines.push("(試着シミュレーションや概念翻訳ではなく、日常的なコーディネート提案です。)");
   lines.push("");
   lines.push("[ムードボードの世界観]");
   lines.push(`テーマ: ${mb.name}`);
@@ -77,9 +81,11 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
   }
 
   // ---- LLM 補完指示 ----
+  // ★ Sprint C-3 hotfix v2(本 commit): 旧版「このムードボードに合うコーディネートを提案して
+  //   ください」(冒頭と重複)と「コンセプトから推定」(virtual-coordinate 判定誘発キーワード)を
+  //   廃止し、不明要素補完指示のみ残す(コンセプト → 世界観 に言い換え)。
   lines.push("");
-  lines.push("このムードボードに合うコーディネートを提案してください。");
-  lines.push("不明な要素はコンセプトから推定して補完してください。");
+  lines.push("不明な要素は上記の世界観から推定して補完してください。");
 
   return lines.join("\n");
 }
