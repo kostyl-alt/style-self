@@ -129,10 +129,18 @@ export default function MoodboardDetailPage() {
   // ---- 画像追加(★ v2 改訂 + v4 複数選択: file[] select → モーダル → confirm → 順次 upload)----
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): void {
     const fileList = e.target.files;
+    // ★ v4 hotfix(5ea9e48 → 本 commit): FileList は input.value="" で無効化されるため、
+    //   ★ Array.from で File 独立コピーを ★ value リセット **前** に取得する。
+    //   旧版 v3 では file = e.target.files?.[0](File オブジェクト)を先に捕捉していたため
+    //   value リセット後も File 参照が生き残った。v4 で FileList のまま reset → length 0 化
+    //   → 早期 return → モーダル開かず というバグになっていた。
+    if (fileList === null || fileList.length === 0) {
+      e.target.value = "";
+      return;
+    }
+    const files = Array.from(fileList);
     e.target.value = "";
-    if (fileList === null || fileList.length === 0) return;
-    // ★ v4: 複数 file 対応(<input multiple>)= Array 化して pendingFiles に格納
-    setPendingFiles(Array.from(fileList));
+    setPendingFiles(files);
   }
 
   async function handleAddImageConfirm(
