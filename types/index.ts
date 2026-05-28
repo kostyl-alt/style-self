@@ -306,6 +306,12 @@ export interface BodyProfile {
   skeletonType: "straight" | "wave" | "natural";
   concerns: BodyConcern[];
   proportionNote?: string;
+  // R-1: 採寸値拡張(任意・後方互換・jsonb なので DDL 不要)。
+  // 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §2.3.2
+  shoulderWidthCm?: number;
+  waistCm?:         number;
+  inseamCm?:        number;
+  neckLength?:      "short" | "normal" | "long";
 }
 
 export interface CulturalAffinities {

@@ -257,6 +257,11 @@ function BodyTab() {
   const [bpSkeletonType,      setBpSkeletonType]      = useState<BodyProfile["skeletonType"] | "">("");
   const [bpConcerns,          setBpConcerns]          = useState<BodyConcern[]>([]);
   const [bpProportionNote,    setBpProportionNote]    = useState("");
+  // R-1: 採寸値拡張(任意・cm 値)。設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §2.3.2
+  const [bpShoulderWidthCm,   setBpShoulderWidthCm]   = useState("");
+  const [bpWaistCm,           setBpWaistCm]           = useState("");
+  const [bpInseamCm,          setBpInseamCm]          = useState("");
+  const [bpNeckLength,        setBpNeckLength]        = useState<"short" | "normal" | "long" | "">("");
 
   useEffect(() => {
     fetch("/api/profile")
@@ -282,6 +287,11 @@ function BodyTab() {
           setBpSkeletonType(data.bodyProfile.skeletonType ?? "");
           setBpConcerns(data.bodyProfile.concerns ?? []);
           setBpProportionNote(data.bodyProfile.proportionNote ?? "");
+          // R-1: 採寸値拡張(jsonb 既存値があれば反映・未登録なら空)
+          setBpShoulderWidthCm(data.bodyProfile.shoulderWidthCm != null ? String(data.bodyProfile.shoulderWidthCm) : "");
+          setBpWaistCm(data.bodyProfile.waistCm != null ? String(data.bodyProfile.waistCm) : "");
+          setBpInseamCm(data.bodyProfile.inseamCm != null ? String(data.bodyProfile.inseamCm) : "");
+          setBpNeckLength(data.bodyProfile.neckLength ?? "");
         }
       })
       .catch(() => setError("プロフィールの読み込みに失敗しました"))
@@ -311,6 +321,11 @@ function BodyTab() {
         skeletonType:    bpSkeletonType,
         concerns:        bpConcerns,
         proportionNote:  bpProportionNote || undefined,
+        // R-1: 採寸値拡張(任意・空文字なら undefined・jsonb に optional で保存)
+        shoulderWidthCm: bpShoulderWidthCm ? parseInt(bpShoulderWidthCm, 10) : undefined,
+        waistCm:         bpWaistCm         ? parseInt(bpWaistCm,         10) : undefined,
+        inseamCm:        bpInseamCm        ? parseInt(bpInseamCm,        10) : undefined,
+        neckLength:      bpNeckLength || undefined,
       } : null;
       const res = await fetch("/api/profile", {
         method: "PATCH",
@@ -517,6 +532,50 @@ function BodyTab() {
               placeholder="例：脚が特に短め、腕が長いなど"
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
             />
+          </Section>
+          {/* R-1: 詳細採寸(任意・世界観フィッティング軸の精度向上に利用) */}
+          <Section title="詳細採寸" hint="任意・世界観フィッティング軸">
+            <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+              採寸値を入れるほど、体型に合わせた提案精度が上がります。空欄でも構いません。
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">肩幅（cm）</label>
+                <input type="number" inputMode="numeric" value={bpShoulderWidthCm}
+                  onChange={(e) => setBpShoulderWidthCm(e.target.value)}
+                  placeholder="例: 38"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">ウエスト（cm）</label>
+                <input type="number" inputMode="numeric" value={bpWaistCm}
+                  onChange={(e) => setBpWaistCm(e.target.value)}
+                  placeholder="例: 68"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">股下（cm）</label>
+                <input type="number" inputMode="numeric" value={bpInseamCm}
+                  onChange={(e) => setBpInseamCm(e.target.value)}
+                  placeholder="例: 72"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">首の長さ</label>
+                <div className="flex gap-1.5">
+                  {([
+                    { value: "short",  label: "短め" },
+                    { value: "normal", label: "標準" },
+                    { value: "long",   label: "長め" },
+                  ] as { value: "short" | "normal" | "long"; label: string }[]).map((t) => (
+                    <PillButton key={t.value} selected={bpNeckLength === t.value}
+                      onClick={() => setBpNeckLength(bpNeckLength === t.value ? "" : t.value)}>
+                      {t.label}
+                    </PillButton>
+                  ))}
+                </div>
+              </div>
+            </div>
           </Section>
         </div>
       </div>
