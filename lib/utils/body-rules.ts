@@ -1,4 +1,4 @@
-import type { BodyProfile, BodyConcern } from "@/types/index";
+import type { BodyProfile, BodyConcern, BodyShapeDescription } from "@/types/index";
 
 interface BodyAdjustments {
   recommendedSilhouettes: string[];
@@ -93,4 +93,92 @@ export function getBodyAdjustments(profile: BodyProfile): BodyAdjustments {
     weightCenterAdvice,
     heightAdvice,
   };
+}
+
+// R-2: 体型特徴の中立的・前向き言語化。
+// 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §3.2
+// ★ ルールベース(Vision/Claude 不使用・コスト 0・決定論的)
+// ★ E-0b 中核思想「体型を否定せず・その体型で世界観が成立する構造」を反映
+//   → 「短所」ではなく「特徴」として言語化(例: ×「胴長で脚短い」○「重心高めの構成」)
+const CONCERN_REFRAME: Record<BodyConcern, string> = {
+  looks_young:     "若見えしやすい雰囲気",
+  short_legs:      "重心高めの構成",
+  broad_shoulders: "肩幅しっかりめ",
+  wide_hips:       "下半身の安定感",
+  short_torso:     "上半身のコンパクトさ",
+  top_heavy:       "上半身に存在感",
+  bottom_heavy:    "下半身に存在感",
+};
+
+export function describeBodyShape(profile: BodyProfile): BodyShapeDescription {
+  const features:  string[] = [];
+  const sentences: string[] = [];
+  const push = (tag: string) => { if (!features.includes(tag)) features.push(tag); };
+
+  // height 帯(R-1 値必須)
+  if (profile.height > 0) {
+    if (profile.height <= 155) {
+      push("身長低め");
+      sentences.push("身長は低めで、縦のラインを活かす着こなしが映えるタイプです。");
+    } else if (profile.height >= 166) {
+      push("身長高め");
+      sentences.push("身長は高めで、丈感のバリエーションを楽しめるプロポーションです。");
+    } else {
+      push("標準身長");
+    }
+  }
+
+  // 肩幅(R-1 cm 値 / 身長比で判定)
+  if (profile.shoulderWidthCm && profile.height > 0) {
+    const ratio = profile.shoulderWidthCm / profile.height;
+    if (ratio >= 0.245) {
+      push("肩幅しっかりめ");
+      sentences.push("肩幅はしっかりめで、上半身に芯を持たせる構造が似合います。");
+    } else if (ratio <= 0.22) {
+      push("肩幅華奢め");
+      sentences.push("肩幅は華奢めで、繊細なネックラインや小物が映えます。");
+    }
+  }
+
+  // 股下 / 身長比で脚バランス(R-1 inseam)
+  if (profile.inseamCm && profile.height > 0) {
+    const ratio = profile.inseamCm / profile.height;
+    if (ratio >= 0.47) {
+      push("脚のラインが長め");
+      sentences.push("脚のラインが長めで、ロング丈やストレートシルエットを綺麗に着こなせます。");
+    } else if (ratio <= 0.43) {
+      push("重心高めの構成");
+      sentences.push("重心がやや高めの構成で、ハイウエストや短丈トップスとの相性が良いタイプです。");
+    }
+  }
+
+  // 首の長さ(R-1 neckLength)
+  if (profile.neckLength === "long") {
+    push("首が長め");
+    sentences.push("首が長めで、ハイネックや存在感のあるネックラインが似合います。");
+  } else if (profile.neckLength === "short") {
+    push("首がコンパクト");
+    sentences.push("首はコンパクトで、Vネックや開きのあるカットラインがすっきり映えます。");
+  }
+
+  // 骨格・体型(既存 BodyProfile フィールド)
+  if (profile.skeletonType === "straight") push("ストレート骨格");
+  if (profile.skeletonType === "wave")     push("ウェーブ骨格");
+  if (profile.skeletonType === "natural")  push("ナチュラル骨格");
+  if (profile.bodyType     === "slim")     push("スリム体型");
+  if (profile.bodyType     === "muscular") push("筋肉質体型");
+  if (profile.bodyType     === "curvy")    push("カーヴィ体型");
+
+  // concerns の re-frame(★ 否定的にならない言い換え)
+  for (const c of profile.concerns) {
+    const tag = CONCERN_REFRAME[c];
+    if (tag) push(tag);
+  }
+
+  // 全文が空なら、最低限の中立メッセージ
+  if (sentences.length === 0) {
+    sentences.push("基本のプロポーションで、多様なシルエットを試せるタイプです。");
+  }
+
+  return { natural: sentences.join(" "), features };
 }

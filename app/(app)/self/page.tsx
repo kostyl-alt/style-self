@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -14,6 +14,7 @@ import type {
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
   StyleDiagnosisResult, StylePreference, BodyProfile, BodyConcern,
 } from "@/types/index";
+import { describeBodyShape } from "@/lib/utils/body-rules";
 
 // ---- 型 ----
 
@@ -302,6 +303,30 @@ function BodyTab() {
     setter(parts.includes(part) ? parts.filter((p) => p !== part) : [...parts, part]);
   }
 
+  // R-2: 体型特徴の中立的・前向き言語化(ライブ計算)。
+  // 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §3
+  // 骨格 + 体型(BodyProfile 成立条件)が揃った時点で表示。
+  const bodyShape = useMemo(() => {
+    if (!bpBodyType || !bpSkeletonType) return null;
+    const profile: BodyProfile = {
+      height:          height ? parseInt(height, 10) : 0,
+      weight:          weight ? parseInt(weight, 10) : undefined,
+      bodyType:        bpBodyType,
+      skeletonType:    bpSkeletonType,
+      concerns:        bpConcerns,
+      proportionNote:  bpProportionNote || undefined,
+      shoulderWidthCm: bpShoulderWidthCm ? parseInt(bpShoulderWidthCm, 10) : undefined,
+      waistCm:         bpWaistCm         ? parseInt(bpWaistCm,         10) : undefined,
+      inseamCm:        bpInseamCm        ? parseInt(bpInseamCm,        10) : undefined,
+      neckLength:      bpNeckLength || undefined,
+    };
+    return describeBodyShape(profile);
+  }, [
+    bpBodyType, bpSkeletonType, bpConcerns, bpProportionNote,
+    bpShoulderWidthCm, bpWaistCm, bpInseamCm, bpNeckLength,
+    height, weight,
+  ]);
+
   async function handleSave() {
     setSaving(true); setSaved(false); setError(null);
     try {
@@ -577,6 +602,21 @@ function BodyTab() {
               </div>
             </div>
           </Section>
+          {/* R-2: 体型特徴の中立的・前向き言語化(ライブ計算)。骨格+体型が揃った時点で表示。 */}
+          {bodyShape && (
+            <Section title="あなたの体型特徴" hint="採寸値を入れるほど詳細になります">
+              <p className="text-sm leading-relaxed text-gray-700 mb-3">{bodyShape.natural}</p>
+              {bodyShape.features.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {bodyShape.features.map((f) => (
+                    <span key={f} className="text-xs bg-gray-100 text-gray-600 rounded-full px-2.5 py-1">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )}
         </div>
       </div>
 

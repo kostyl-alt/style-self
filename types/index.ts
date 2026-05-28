@@ -314,6 +314,14 @@ export interface BodyProfile {
   neckLength?:      "short" | "normal" | "long";
 }
 
+// R-2: 体型特徴の言語化結果(describeBodyShape の戻り値)。
+// 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §3.2.2
+// ★ ルールベース(Vision/Claude 不使用・コスト 0)・★「体型を否定しない」中立的言語化(E-0b 中核思想)
+export interface BodyShapeDescription {
+  natural:  string;
+  features: string[];
+}
+
 export interface CulturalAffinities {
   music:     string[];
   films:     string[];
