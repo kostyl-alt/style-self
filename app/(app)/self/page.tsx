@@ -14,7 +14,7 @@ import type {
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
   StyleDiagnosisResult, StylePreference, BodyProfile, BodyConcern,
 } from "@/types/index";
-import { describeBodyShape } from "@/lib/utils/body-rules";
+import { describeBodyShape, recommendSilhouette } from "@/lib/utils/body-rules";
 
 // ---- 型 ----
 
@@ -303,11 +303,11 @@ function BodyTab() {
     setter(parts.includes(part) ? parts.filter((p) => p !== part) : [...parts, part]);
   }
 
-  // R-2: 体型特徴の中立的・前向き言語化(ライブ計算)。
-  // 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §3
+  // R-2 + R-3: 体型特徴の言語化 + シルエット推奨(ライブ計算)。
+  // 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §3-4
   // 骨格 + 体型(BodyProfile 成立条件)が揃った時点で表示。
-  const bodyShape = useMemo(() => {
-    if (!bpBodyType || !bpSkeletonType) return null;
+  const { bodyShape, silhouette } = useMemo(() => {
+    if (!bpBodyType || !bpSkeletonType) return { bodyShape: null, silhouette: null };
     const profile: BodyProfile = {
       height:          height ? parseInt(height, 10) : 0,
       weight:          weight ? parseInt(weight, 10) : undefined,
@@ -320,7 +320,8 @@ function BodyTab() {
       inseamCm:        bpInseamCm        ? parseInt(bpInseamCm,        10) : undefined,
       neckLength:      bpNeckLength || undefined,
     };
-    return describeBodyShape(profile);
+    const shape = describeBodyShape(profile);
+    return { bodyShape: shape, silhouette: recommendSilhouette(profile, shape) };
   }, [
     bpBodyType, bpSkeletonType, bpConcerns, bpProportionNote,
     bpShoulderWidthCm, bpWaistCm, bpInseamCm, bpNeckLength,
@@ -613,6 +614,62 @@ function BodyTab() {
                       {f}
                     </span>
                   ))}
+                </div>
+              )}
+            </Section>
+          )}
+          {/* R-3: 体型別シルエット推奨(ライブ計算)。R-2 と同条件で表示。 */}
+          {silhouette && (
+            <Section title="似合うシルエット" hint="あなたの体型で世界観が成立する構造">
+              {silhouette.reasoning && (
+                <p className="text-sm leading-relaxed text-gray-700 mb-4">{silhouette.reasoning}</p>
+              )}
+              {silhouette.recommendedLengths.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500 mb-1.5">推奨 丈・シルエット</p>
+                  <ul className="space-y-1">
+                    {silhouette.recommendedLengths.map((v) => (
+                      <li key={v} className="text-sm text-gray-700 pl-3 relative before:content-['・'] before:absolute before:left-0">
+                        {v}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {silhouette.recommendedShoes.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500 mb-1.5">推奨 靴</p>
+                  <ul className="space-y-1">
+                    {silhouette.recommendedShoes.map((v) => (
+                      <li key={v} className="text-sm text-gray-700 pl-3 relative before:content-['・'] before:absolute before:left-0">
+                        {v}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {silhouette.recommendedAccessories.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500 mb-1.5">推奨 小物</p>
+                  <ul className="space-y-1">
+                    {silhouette.recommendedAccessories.map((v) => (
+                      <li key={v} className="text-sm text-gray-700 pl-3 relative before:content-['・'] before:absolute before:left-0">
+                        {v}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {silhouette.alternativeChoices.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1.5">別の選択肢として</p>
+                  <ul className="space-y-1">
+                    {silhouette.alternativeChoices.map((v) => (
+                      <li key={v} className="text-sm text-gray-600 pl-3 relative before:content-['→'] before:absolute before:left-0 before:text-gray-400">
+                        {v}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </Section>

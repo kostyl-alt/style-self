@@ -1,4 +1,6 @@
-import type { BodyProfile, BodyConcern, BodyShapeDescription } from "@/types/index";
+import type {
+  BodyProfile, BodyConcern, BodyShapeDescription, SilhouetteRecommendation,
+} from "@/types/index";
 
 interface BodyAdjustments {
   recommendedSilhouettes: string[];
@@ -181,4 +183,131 @@ export function describeBodyShape(profile: BodyProfile): BodyShapeDescription {
   }
 
   return { natural: sentences.join(" "), features };
+}
+
+// R-3: 体型別シルエット推奨。
+// 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §4
+// ★ ルールベース(Vision/Claude 不使用・決定論的・コスト 0)。
+// ★ 「低身長ロングコート 3 法則」(lib/prompts/stylist-chat.ts 良い例 5)のルール化を含む。
+// ★ E-0b 中核思想:「避ける」を「別の選択肢として」前向きに表現(否定形ゼロ)。
+//
+// concerns ごとの「別の選択肢」言い換え(★ 否定形を使わない・前向き提案として表記)。
+const CONCERN_ALTERNATIVES: Record<BodyConcern, string[]> = {
+  looks_young:     ["落ち着いた色面 → ベビーフェイス印象から大人の余白へ"],
+  short_legs:      ["ロー位置トップス → ハイウエストで縦比率を強調"],
+  broad_shoulders: ["ノースリーブ・ボートネック → V ネックで視線を下へ流す"],
+  wide_hips:       ["タイトスカート → A ラインで腰回りを自然に流す"],
+  short_torso:     ["ハイウエスト極端 → ロング丈トップスで縦を確保"],
+  top_heavy:       ["タイトボトム → A ライン or フレアで重心を下げる"],
+  bottom_heavy:    ["細身トップス × ワイドボトム → Y ライン or ドロップショルダーで上に重心"],
+};
+
+export function recommendSilhouette(
+  profile: BodyProfile,
+  shape:   BodyShapeDescription,
+): SilhouetteRecommendation {
+  const lengths:      string[] = [];
+  const shoes:        string[] = [];
+  const accessories:  string[] = [];
+  const alternatives: string[] = [];
+  const reasons:      string[] = [];
+  const push = (arr: string[], v: string) => { if (!arr.includes(v)) arr.push(v); };
+
+  // ---- height 帯 ----
+  // ★ 「低身長ロングコート 3 法則」(lib/prompts/stylist-chat.ts 良い例 5)をルール化:
+  //   ①上半身を短く ②ボトム長め+前だけタックイン ③靴は厚底か濃色で縦に伸ばす
+  if (profile.height > 0 && profile.height <= 155) {
+    push(lengths, "短丈トップス(上半身を短く見せる)");
+    push(lengths, "ロング丈アウター(縦比率の演出で着られる)");
+    push(lengths, "ボトムスは丈長め + 前だけタックイン");
+    push(shoes,   "厚底・濃色シューズ(縦に伸ばす)");
+    push(accessories, "縦長ネックレス");
+    push(accessories, "縦ラインのスカーフ");
+    reasons.push("縦比率を強調すると、低身長でも世界観成立するシルエットになります。");
+  } else if (profile.height >= 166) {
+    push(lengths, "ロング丈アウター・マキシ丈");
+    push(lengths, "ミディ丈ボトム");
+    push(shoes,   "ヒール・フラットどちらも");
+    push(accessories, "大ぶりアクセサリー");
+    reasons.push("丈感のバリエーションを活かせるプロポーションです。");
+  } else if (profile.height > 0) {
+    push(lengths, "ジャスト丈〜ミディ丈");
+    reasons.push("丈感の制約が少なく、多様なシルエットが合わせやすいプロポーションです。");
+  }
+
+  // ---- 股下 / 身長比 ----
+  if (profile.inseamCm && profile.height > 0) {
+    const ratio = profile.inseamCm / profile.height;
+    if (ratio <= 0.43) {
+      push(lengths, "ハイウエストボトム(脚の付け根を高く見せる)");
+      push(accessories, "縦のラインを意識する小物(縦長ペンダント等)");
+      reasons.push("重心高めの構成を活かし、縦のラインで脚長効果を引き出すと映えます。");
+    } else if (ratio >= 0.47) {
+      push(lengths, "ストレートシルエットのロングボトム");
+      reasons.push("脚のラインが長めなので、ストレートシルエットを綺麗に着こなせます。");
+    }
+  }
+
+  // ---- 骨格 ----
+  if (profile.skeletonType === "straight") {
+    push(lengths, "ジャストサイズ〜やや大きめ");
+    push(accessories, "シンプルなテクスチャーの小物");
+    reasons.push("ストレート骨格はシンプルな素材感で芯を保つと映えます。");
+  } else if (profile.skeletonType === "wave") {
+    push(lengths, "ウエストマークのあるシルエット");
+    push(shoes,   "華奢めシューズ");
+    reasons.push("ウェーブ骨格は曲線を活かすフィット感が似合います。");
+  } else if (profile.skeletonType === "natural") {
+    push(lengths, "ゆったり丈・落ち感のあるシルエット");
+    push(shoes,   "ボリュームのあるシューズ");
+    push(accessories, "素材感のあるアクセサリー");
+    reasons.push("ナチュラル骨格は素材感のあるテクスチャーが似合います。");
+  }
+
+  // ---- 首の長さ(R-1 neckLength)----
+  if (profile.neckLength === "long") {
+    push(accessories, "ハイネック・存在感のあるネックライン");
+    reasons.push("首が長めなので、首元に存在感を持たせると映えます。");
+  } else if (profile.neckLength === "short") {
+    push(accessories, "V ネック・開きのあるカットライン");
+    reasons.push("首はコンパクトなので、ネック開きで縦の抜けを作るとすっきり映えます。");
+  }
+
+  // ---- 肩幅(R-1 shoulderWidthCm)----
+  if (profile.shoulderWidthCm && profile.height > 0) {
+    const r = profile.shoulderWidthCm / profile.height;
+    if (r >= 0.245) {
+      push(accessories, "視線を下に誘導する縦長アクセサリー");
+      alternatives.push("ボリュームのある肩パッド → 視線を下に誘導する縦長アクセサリー");
+    } else if (r <= 0.22) {
+      push(accessories, "繊細なネックラインや小物");
+    }
+  }
+
+  // ---- concerns の「別の選択肢」(★ 否定形でなく前向き提案)----
+  for (const c of profile.concerns) {
+    const alts = CONCERN_ALTERNATIVES[c];
+    if (alts) {
+      for (const a of alts) { if (!alternatives.includes(a)) alternatives.push(a); }
+    }
+  }
+
+  // ---- 何も推奨されない場合のフォールバック ----
+  if (lengths.length === 0 && shoes.length === 0 && accessories.length === 0) {
+    push(lengths, "ジャスト丈・標準シルエット");
+    reasons.push("基本のプロポーションで、多様なシルエットを試せるタイプです。");
+  }
+
+  // ★ shape.features に応じた追補(R-2 連携・ 重複は push() で吸収)
+  if (shape.features.includes("重心高めの構成")) {
+    push(lengths, "ハイウエストで縦比率を演出");
+  }
+
+  return {
+    recommendedLengths:     lengths,
+    recommendedShoes:       shoes,
+    recommendedAccessories: accessories,
+    alternativeChoices:     alternatives,
+    reasoning:              reasons.join(" "),
+  };
 }

@@ -322,6 +322,19 @@ export interface BodyShapeDescription {
   features: string[];
 }
 
+// R-3: 体型別シルエット推奨(recommendSilhouette の戻り値)。
+// 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §4
+// ★ ルールベース(Vision/Claude 不使用・コスト 0)
+// ★ E-0b 中核思想:「避ける」ではなく「別の選択肢」として前向き表現
+// 「低身長ロングコート 3 法則」(lib/prompts/stylist-chat.ts 良い例 5)のルール化を含む。
+export interface SilhouetteRecommendation {
+  recommendedLengths:     string[];
+  recommendedShoes:       string[];
+  recommendedAccessories: string[];
+  alternativeChoices:     string[];
+  reasoning:              string;
+}
+
 export interface CulturalAffinities {
   music:     string[];
   films:     string[];
