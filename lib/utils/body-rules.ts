@@ -102,7 +102,9 @@ export function getBodyAdjustments(profile: BodyProfile): BodyAdjustments {
 // ★ ルールベース(Vision/Claude 不使用・コスト 0・決定論的)
 // ★ E-0b 中核思想「体型を否定せず・その体型で世界観が成立する構造」を反映
 //   → 「短所」ではなく「特徴」として言語化(例: ×「胴長で脚短い」○「重心高めの構成」)
-const CONCERN_REFRAME: Record<BodyConcern, string> = {
+// ★ ★ B-2(X1): サーバー側 stylist-chat の concerns leak 根絶のため export 化。
+// stylist-chat.ts:L223/L272 で `・悩み: short_legs` →「・体型の特徴: 重心高めの構成」と reframe する。
+export const CONCERN_REFRAME: Record<BodyConcern, string> = {
   looks_young:     "若見えしやすい雰囲気",
   short_legs:      "重心高めの構成",
   broad_shoulders: "肩幅しっかりめ",

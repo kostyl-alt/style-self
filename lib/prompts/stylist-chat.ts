@@ -22,6 +22,10 @@
 //          ですか?」
 //   → few-shot として system prompt 末尾に埋め込み、MVP-1 はこの水準を狙う。
 
+// ★ B-2(X1): concerns 英語スラッグの leak 根絶のため body-rules.ts の reframe マップを流用。
+// short_legs → 「重心高めの構成」/ top_heavy →「上半身に存在感」等(★ R-2 否定形ゼロ)。
+import { CONCERN_REFRAME } from "@/lib/utils/body-rules";
+
 export const STYLIST_CHAT_SYSTEM_PROMPT = `あなたは STYLE-SELF というファッションアプリ内の「AI スタイリスト」です。ユーザーと自然な日本語で短い対話を行い、世界観診断の振り返りを手助けします。
 
 【人格・返答構成】
@@ -220,7 +224,11 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
       if (b.height !== null)     lines.push(`・身長: ${b.height}cm`);
       if (b.bodyType)            lines.push(`・体型: ${b.bodyType}`);
       if (b.skeletonType)        lines.push(`・骨格: ${b.skeletonType}`);
-      if (b.concerns.length > 0) lines.push(`・悩み: ${b.concerns.slice(0, 4).join("・")}`);
+      if (b.concerns.length > 0) {
+        // ★ B-2(X1): 英語スラッグ + 「悩み:」ヘッダの 2 重 leak を CONCERN_REFRAME で否定形ゼロ化。
+        const reframed = b.concerns.slice(0, 4).map((c) => CONCERN_REFRAME[c as keyof typeof CONCERN_REFRAME] ?? c);
+        lines.push(`・体型の特徴: ${reframed.join("・")}`);
+      }
       if (b.proportionNote)      lines.push(`・補足: ${truncate(b.proportionNote, 60)}`);
     } else {
       lines.push("・体型: 未登録");
@@ -269,7 +277,11 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
       if (b.height !== null)     lines.push(`・身長: ${b.height}cm`);
       if (b.bodyType)            lines.push(`・体型: ${b.bodyType}`);
       if (b.skeletonType)        lines.push(`・骨格: ${b.skeletonType}`);
-      if (b.concerns.length > 0) lines.push(`・体型の悩み: ${b.concerns.slice(0, 4).join("・")}`);
+      if (b.concerns.length > 0) {
+        // ★ B-2(X1): style-consult 経路も同じ leak 経路。同じ reframe を適用。
+        const reframed = b.concerns.slice(0, 4).map((c) => CONCERN_REFRAME[c as keyof typeof CONCERN_REFRAME] ?? c);
+        lines.push(`・体型の特徴: ${reframed.join("・")}`);
+      }
       if (b.proportionNote)      lines.push(`・補足: ${truncate(b.proportionNote, 60)}`);
     } else {
       lines.push("・体型: 未登録");

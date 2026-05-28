@@ -50,6 +50,8 @@ import {
   getRatioContext,
 } from "@/lib/dictionaries/inject";
 import { MATERIAL_DICT, COLOR_DICT, LINE_DICT, RATIO_DICT } from "@/lib/dictionaries";
+// ★ B-2(X2): MB 経路の判別に使用。MB prompt は冒頭が MB_PROMPT_SIGNATURE で始まる。
+import { MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboard-prompt";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +139,13 @@ export async function POST(request: NextRequest) {
       fetchKnowledgeOSContext(text),
     ]);
     const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
+
+    // ★ B-2(X2): MB 経路は buildMoodboardPrompt が R-2/R-3 reframed 体型軸を内包しているため、
+    //   サーバー側 body 注入を skip(2 重 leak 根絶・案 F 同思想で MB は client 完結)。
+    //   proportionNote(自由入力)も同時に skip され「腕が短い」の素通しを根絶。
+    if (intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE)) {
+      ctx.bodyProfile = undefined;
+    }
 
     // 4) Claude(Haiku 4.5)呼出
     const systemPrompt = STYLIST_CHAT_SYSTEM_PROMPT;
