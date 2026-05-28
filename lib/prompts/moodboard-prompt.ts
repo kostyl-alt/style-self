@@ -129,13 +129,18 @@ export function buildMoodboardPrompt(
   lines.push("比率・素材・色・カット・シルエット・ライン・重量・構造・調和・機能・テーマ");
 
   // ---- ★ 統合 Sprint: 提案理由の 3 分類(bodyProfile がある時のみ・E-0b 中核思想)----
+  // ★ ★ ★ hotfix: 命令形(「示してください」「提案してください」)が段階 A intent userMessage に
+  //   混入すると Haiku 4.5 が system prompt の JSON 返却ルールより優先解釈 → 自然言語回答
+  //   → callClaudeJSON 1 つ目 throw("does not contain valid JSON")で 500 エラー化していた。
+  //   → ★ 命令動詞を排除し ★ 中立的なデータ提示形に書き換え(★ サーバー側 0 変更で根治)。
   if (bodyProfile) {
     lines.push("");
-    lines.push("提案理由は次の 3 分類で示してください:");
-    lines.push("・MB 由来(世界観・空気感から導かれる要素)");
-    lines.push("・体型補正由来(あなたの体型で世界観が成立する構造)");
-    lines.push("・世界観由来(診断結果や核となる世界観に対応する要素)");
-    lines.push("体型は否定せず、その体型で世界観が成立する構造として提案してください。");
+    lines.push("[応答に望ましい要素]");
+    lines.push("・MB 由来 / 体型補正由来 / 世界観由来 の 3 分類で理由が示されると望ましい");
+    lines.push("  - MB 由来: 世界観・空気感から導かれる要素");
+    lines.push("  - 体型補正由来: あなたの体型で世界観が成立する構造");
+    lines.push("  - 世界観由来: 診断結果や核となる世界観に対応する要素");
+    lines.push("・体型は否定的に言及せず、世界観が成立する構造として表現");
   }
 
   // ---- LLM 補完指示 ----
