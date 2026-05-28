@@ -80,10 +80,17 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
     });
   }
 
+  // ---- ★ Sprint C-3 案 4 Step 2(c3f3ea4): MB 由来コーデ提案の応答形式希望(11 項目 + アクセサリー)----
+  // 通常 coordinate(「コーデ提案して」等)は ★ 不変・MB 由来のみクライアント側で詳細指示
+  lines.push("");
+  lines.push("【応答形式の希望】");
+  lines.push("提案アイテムには以下を含めてください:");
+  lines.push("アウター・トップス・ボトムス・シューズ・アクセサリー(時計・カラコン・ピアス・ネックレス等)・ヘア・メイク");
+  lines.push("");
+  lines.push("以下の 11 項目の観点で説明してください:");
+  lines.push("比率・素材・色・カット・シルエット・ライン・重量・構造・調和・機能・テーマ");
+
   // ---- LLM 補完指示 ----
-  // ★ Sprint C-3 hotfix v2(本 commit): 旧版「このムードボードに合うコーディネートを提案して
-  //   ください」(冒頭と重複)と「コンセプトから推定」(virtual-coordinate 判定誘発キーワード)を
-  //   廃止し、不明要素補完指示のみ残す(コンセプト → 世界観 に言い換え)。
   lines.push("");
   lines.push("不明な要素は上記の世界観から推定して補完してください。");
 

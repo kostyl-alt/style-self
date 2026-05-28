@@ -63,7 +63,10 @@ const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate"
 const MAX_HISTORY = 3;
 
 // reply 抑制(設計書 7.4・Haiku max_tokens)
-const MAX_REPLY_TOKENS = 400;
+// ★ Sprint C-3 hotfix(c3f3ea4 案 4 Step 1): MB → coordinate 連鎖で 11 項目 + アクセサリー
+//   詳細応答に対応するため 400 → 2048 へ拡大。短文 intent(diagnose/closet/style-consult/
+//   brand-learn)は LLM が必要分しか生成しないため退行なし(実出力分のみ課金)。
+const MAX_REPLY_TOKENS = 2048;
 
 interface StylistChatRequest {
   text?:    unknown;
