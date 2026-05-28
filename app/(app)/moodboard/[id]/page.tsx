@@ -35,6 +35,7 @@ import type {
   AnalyzeItemResponse,
   FromUrlItemResponse,
 } from "@/types/moodboard";
+import type { BodyProfile } from "@/types/index";
 import {
   ESSENTIAL_CATEGORIES,
   ESSENTIAL_LABELS,
@@ -119,6 +120,18 @@ export default function MoodboardDetailPage() {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     void supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  // ★ 統合 Sprint: 世界観フィッティング軸の体型プロフィール(MB → coordinate に注入)。
+  // 未登録なら null → buildMoodboardPrompt は ★ 既存出力と完全互換。
+  const [bodyProfile, setBodyProfile] = useState<BodyProfile | null>(null);
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { bodyProfile: BodyProfile | null } | null) => {
+        if (data?.bodyProfile) setBodyProfile(data.bodyProfile);
+      })
+      .catch(() => { /* 未認証/エラー時は体型なし扱い */ });
   }, []);
 
   useEffect(() => {
@@ -269,7 +282,8 @@ export default function MoodboardDetailPage() {
   //   sessionStorage 経由で ChatPage に MB prompt を渡す(URL param 長さ制限回避)
   function handleShoot(): void {
     if (!mb) return;
-    const prompt = buildMoodboardPrompt(mb);
+    // ★ 統合 Sprint: 体型登録済なら世界観フィッティング軸を注入(未登録なら従来出力)
+    const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("mb_prompt", prompt);
     }

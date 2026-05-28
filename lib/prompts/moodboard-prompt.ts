@@ -18,6 +18,7 @@
 //   これによりユーザーが必須要素 8 全て埋めずとも自然なコーデ提案が得られる。
 
 import type { MoodboardWithItems } from "@/types/moodboard";
+import type { BodyProfile } from "@/types/index";
 import {
   ESSENTIAL_CATEGORIES,
   ESSENTIAL_LABELS,
@@ -25,8 +26,16 @@ import {
   extractCategory,
   stripCategoryPrefix,
 } from "@/lib/utils/moodboard-essentials";
+import { describeBodyShape, recommendSilhouette } from "@/lib/utils/body-rules";
 
-export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
+// ★ 統合 Sprint: 世界観フィッティング(体型 × 世界観 × MB)。
+// 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §5
+// ★ クライアント側方式(stylist-chat route 0 変更・C-3 と同じ方式)。
+// ★ bodyProfile は optional → 体型未登録ユーザーは ★ 既存 MB coordinate と完全に同じ出力。
+export function buildMoodboardPrompt(
+  mb: MoodboardWithItems,
+  bodyProfile?: BodyProfile,
+): string {
   const covered = detectEssentials(mb.description, mb.items);
   const lines: string[] = [];
 
@@ -80,6 +89,35 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
     });
   }
 
+  // ---- ★ 統合 Sprint: 体型軸(★ bodyProfile があれば追加・なければ ★ 既存 MB 出力と完全互換)----
+  // ★ E-0b 中核思想:「ロングコートが世界観に合っても体型的に合わないなら代替案・体型を否定せず・
+  //                   その体型で世界観成立する構造」を反映。
+  if (bodyProfile) {
+    const shape       = describeBodyShape(bodyProfile);
+    const silhouette  = recommendSilhouette(bodyProfile, shape);
+    lines.push("");
+    lines.push("[あなたの体型(世界観フィッティング軸)]");
+    lines.push(shape.natural);
+    if (shape.features.length > 0) {
+      lines.push(`特徴タグ: ${shape.features.join(" / ")}`);
+    }
+    if (silhouette.recommendedLengths.length > 0) {
+      lines.push(`似合う丈・シルエット: ${silhouette.recommendedLengths.join(" / ")}`);
+    }
+    if (silhouette.recommendedShoes.length > 0) {
+      lines.push(`似合う靴: ${silhouette.recommendedShoes.join(" / ")}`);
+    }
+    if (silhouette.recommendedAccessories.length > 0) {
+      lines.push(`似合う小物: ${silhouette.recommendedAccessories.join(" / ")}`);
+    }
+    if (silhouette.alternativeChoices.length > 0) {
+      lines.push(`別の選択肢として: ${silhouette.alternativeChoices.join(" / ")}`);
+    }
+    if (silhouette.reasoning) {
+      lines.push(`理由: ${silhouette.reasoning}`);
+    }
+  }
+
   // ---- ★ Sprint C-3 案 4 Step 2(c3f3ea4): MB 由来コーデ提案の応答形式希望(11 項目 + アクセサリー)----
   // 通常 coordinate(「コーデ提案して」等)は ★ 不変・MB 由来のみクライアント側で詳細指示
   lines.push("");
@@ -89,6 +127,16 @@ export function buildMoodboardPrompt(mb: MoodboardWithItems): string {
   lines.push("");
   lines.push("以下の 11 項目の観点で説明してください:");
   lines.push("比率・素材・色・カット・シルエット・ライン・重量・構造・調和・機能・テーマ");
+
+  // ---- ★ 統合 Sprint: 提案理由の 3 分類(bodyProfile がある時のみ・E-0b 中核思想)----
+  if (bodyProfile) {
+    lines.push("");
+    lines.push("提案理由は次の 3 分類で示してください:");
+    lines.push("・MB 由来(世界観・空気感から導かれる要素)");
+    lines.push("・体型補正由来(あなたの体型で世界観が成立する構造)");
+    lines.push("・世界観由来(診断結果や核となる世界観に対応する要素)");
+    lines.push("体型は否定せず、その体型で世界観が成立する構造として提案してください。");
+  }
 
   // ---- LLM 補完指示 ----
   lines.push("");

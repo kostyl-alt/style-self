@@ -42,6 +42,7 @@ import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
 import { buildMoodboardPrompt } from "@/lib/prompts/moodboard-prompt";
 import type { MoodboardWithItems } from "@/types/moodboard";
+import type { BodyProfile } from "@/types/index";
 
 interface SuggestionItem {
   intent: string;
@@ -130,6 +131,18 @@ export default function ChatPage() {
   const [isClosetOpen, setIsClosetOpen] = useState(false);
   // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
   const [isMbOpen, setIsMbOpen] = useState(false);
+
+  // ★ 統合 Sprint: 世界観フィッティング軸の体型プロフィール(MB → coordinate に注入)。
+  // 未登録ユーザーは null のまま → buildMoodboardPrompt は ★ 既存出力と完全互換。
+  const [bodyProfile, setBodyProfile] = useState<BodyProfile | null>(null);
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { bodyProfile: BodyProfile | null } | null) => {
+        if (data?.bodyProfile) setBodyProfile(data.bodyProfile);
+      })
+      .catch(() => { /* 未認証/エラー時は体型なし扱い(既存挙動) */ });
+  }, []);
 
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
@@ -412,7 +425,8 @@ export default function ChatPage() {
         isOpen={isMbOpen}
         onClose={() => setIsMbOpen(false)}
         onPick={(mb: MoodboardWithItems) => {
-          const prompt = buildMoodboardPrompt(mb);
+          // ★ 統合 Sprint: 体型登録済なら世界観フィッティング軸を注入(未登録なら従来出力)
+          const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
           setText((cur) => (cur ? `${cur}\n\n${prompt}` : prompt));
         }}
       />
