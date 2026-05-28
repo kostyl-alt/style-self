@@ -28,6 +28,15 @@ import {
 } from "@/lib/utils/moodboard-essentials";
 import { describeBodyShape, recommendSilhouette } from "@/lib/utils/body-rules";
 
+// ★ ★ ★ 案 F(統合 Sprint hotfix v2): MB prompt 検出用の固定 signature。
+// 設計: 体型データ密度により段階 A(Haiku)が JSON 出力を override する根本問題を
+//   構造的に回避するため、★ MB prompt 経由は段階 A を ★ skip し intent="coordinate" を
+//   client side で直接確定する。本 signature は buildMoodboardPrompt の ★ 1 行目と
+//   ★ 完全一致させる(誤検出ゼロ:固定の長い日本語定型文・他経路から偶然一致しない)。
+// ★ ChatPage handleSubmit が text.startsWith(MB_PROMPT_SIGNATURE) で分岐。
+export const MB_PROMPT_SIGNATURE =
+  "以下の世界観・参考画像から、アウター・トップス・ボトムス・シューズ・小物の具体的な組み合わせを文章で提案してください。";
+
 // ★ 統合 Sprint: 世界観フィッティング(体型 × 世界観 × MB)。
 // 設計: docs/STYLE-SELF_D1_リアル試着_MVP_スコープ_R-1〜R-3_設計調査.md §5
 // ★ クライアント側方式(stylist-chat route 0 変更・C-3 と同じ方式)。
@@ -47,7 +56,7 @@ export function buildMoodboardPrompt(
   //              + 「試着シミュレーションや概念翻訳ではなく日常コーデ提案」明示
   //              → 段階 A 判定ルール 4(アイテム指定 + 日常コーデ = coordinate)を強く誘導
   //   サーバー側(overlay-intent.ts / NoneNotice / 5 intent reply 経路)★ 完全不変。
-  lines.push("以下の世界観・参考画像から、アウター・トップス・ボトムス・シューズ・小物の具体的な組み合わせを文章で提案してください。");
+  lines.push(MB_PROMPT_SIGNATURE);
   lines.push("(試着シミュレーションや概念翻訳ではなく、日常的なコーディネート提案です。)");
   lines.push("");
   lines.push("[ムードボードの世界観]");

@@ -40,7 +40,7 @@ import SuggestionChips from "@/components/chat/SuggestionChips";
 import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
-import { buildMoodboardPrompt } from "@/lib/prompts/moodboard-prompt";
+import { buildMoodboardPrompt, MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboard-prompt";
 import type { MoodboardWithItems } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 
@@ -218,19 +218,38 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      // ★ D1-1 /api/overlay/intent の呼び方は完全に同じ(body/headers 不変)
-      const res = await fetch("/api/overlay/intent", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ text: trimmed }),
-      });
-      const data = await res.json() as IntentResponse & { error?: string };
+      // ★ ★ ★ 案 F(統合 Sprint hotfix v2): MB prompt 経由は段階 A(Haiku/overlay-intent)を skip。
+      //   buildMoodboardPrompt が出力する固定 signature を冒頭一致で検出し、
+      //   intent="coordinate" を client side で直接確定する(★ Haiku を呼ばない =
+      //   JSON parse 失敗が ★ 構造的に起きない)。
+      //   他経路(MVP-1c 直接コーデ依頼 / 5 intent / 通常会話)は ★ 既存通り段階 A 経由(完全不変)。
+      const isMbCoordinate = trimmed.startsWith(MB_PROMPT_SIGNATURE);
 
-      if (!res.ok) {
-        replaceMessage(setMessages, loadingId, {
-          kind: "error", message: data.error ?? `HTTP ${res.status}`,
+      let data: IntentResponse & { error?: string };
+      if (isMbCoordinate) {
+        data = {
+          ok:          true,
+          intent:      "coordinate",
+          mode:        "api",
+          params:      {},
+          confidence:  1,
+          suggestions: [],
+        };
+      } else {
+        // ★ D1-1 /api/overlay/intent の呼び方は完全に同じ(body/headers 不変)
+        const res = await fetch("/api/overlay/intent", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ text: trimmed }),
         });
-        return;
+        data = await res.json() as IntentResponse & { error?: string };
+
+        if (!res.ok) {
+          replaceMessage(setMessages, loadingId, {
+            kind: "error", message: data.error ?? `HTTP ${res.status}`,
+          });
+          return;
+        }
       }
 
       // ★ P1-C-1.5a 会話連続性(L1 並列案 / L3 sessionIntent / L4 切替検出なし):
