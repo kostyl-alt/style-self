@@ -96,6 +96,11 @@ export function buildMoodboardPrompt(
     captionedItems.forEach((it, i) => {
       lines.push(`${i + 1}. ${it.caption}`);
     });
+    // ★ B-1 改善 3: 参考画像ごとの反映を明記(各画像 → どのコーデ要素に変換したか短く)
+    lines.push("");
+    lines.push("[参考画像の反映]");
+    lines.push("・各参考画像が ★ どのコーデ要素に変換されたかを 1 行ずつ短く記述");
+    lines.push("・形式例:「画像 N(キャプション)→ 抽出された雰囲気 + 反映先アイテム」");
   }
 
   // ---- ★ 統合 Sprint: 体型軸(★ bodyProfile があれば追加・なければ ★ 既存 MB 出力と完全互換)----
@@ -137,11 +142,31 @@ export function buildMoodboardPrompt(
   lines.push("以下の 11 項目の観点で説明してください:");
   lines.push("比率・素材・色・カット・シルエット・ライン・重量・構造・調和・機能・テーマ");
 
+  // ---- ★ B-1 改善 2: 必須具体化(抽象語のみ禁止・実際に服を探せる粒度)----
+  lines.push("");
+  lines.push("[各アイテムの必須具体化(★ 抽象語のみは禁止)]");
+  lines.push("・アウター / トップス / ボトムス: 丈 / 素材 / 光沢 / 厚み / カット / シルエット / 縫製ディテール");
+  lines.push("・シューズ: 形(ローファー / スニーカー / ブーツ 等)/ ヒール高さ / 色 / 素材");
+  lines.push("・アクセサリー: 種類(リング / ネックレス / ピアス / 時計 / バッグ 等)/ 位置 / サイズ感");
+  lines.push("・ヘア: 長さ / 質感(ウェット / マット 等)/ 分け方");
+  lines.push("・メイク: 質感(マット / グロウ 等)/ 色味 / 強調ポイント");
+  lines.push("・「黒のロングコート」だけ等の抽象語のみは ★ 不可");
+  lines.push("・ユーザーが実際に服を探せる粒度で記述");
+
+  // ---- ★ B-1 改善 1: 応答制約(★ 厳守・常に適用)----
+  // 「腕が短い」「短い脚」等の否定的言及を防止。R-2/R-3 self 表示(否定形ゼロ)と一貫。
+  lines.push("");
+  lines.push("[応答制約(★ 厳守)]");
+  lines.push("・出力に含めない語彙:「短い」「狭い」「重い」「悩み」「弱点」「欠点」「逆算」「補正」");
+  lines.push("・代わりに使う表現:「縦比率を強調」「重心を高く見せる」「均衡を取る」「世界観が成立する構造」等");
+  lines.push("・体型の特徴は ★ 「成立条件」として記述(★ 「問題」として記述しない)");
+
   // ---- ★ 統合 Sprint: 提案理由の 3 分類(bodyProfile がある時のみ・E-0b 中核思想)----
-  // ★ ★ ★ hotfix: 命令形(「示してください」「提案してください」)が段階 A intent userMessage に
-  //   混入すると Haiku 4.5 が system prompt の JSON 返却ルールより優先解釈 → 自然言語回答
-  //   → callClaudeJSON 1 つ目 throw("does not contain valid JSON")で 500 エラー化していた。
-  //   → ★ 命令動詞を排除し ★ 中立的なデータ提示形に書き換え(★ サーバー側 0 変更で根治)。
+  // ★ ★ ★ 統合 hotfix v1(7216e24): 命令形(「示してください」「提案してください」)が段階 A intent
+  //   userMessage に混入すると Haiku 4.5 が system prompt より優先解釈 → JSON parse 失敗。
+  //   → 命令動詞を排除し中立的なデータ提示形へ。
+  // ★ ★ ★ 統合 hotfix v2(6ef5744 案 F): MB prompt 経由は段階 A skip(intent=coordinate 直接)
+  //   なので命令形混入による Haiku override は構造的に起こらないが、中立形は維持(自然な記述)。
   if (bodyProfile) {
     lines.push("");
     lines.push("[応答に望ましい要素]");
@@ -149,7 +174,6 @@ export function buildMoodboardPrompt(
     lines.push("  - MB 由来: 世界観・空気感から導かれる要素");
     lines.push("  - 体型補正由来: あなたの体型で世界観が成立する構造");
     lines.push("  - 世界観由来: 診断結果や核となる世界観に対応する要素");
-    lines.push("・体型は否定的に言及せず、世界観が成立する構造として表現");
   }
 
   // ---- LLM 補完指示 ----
