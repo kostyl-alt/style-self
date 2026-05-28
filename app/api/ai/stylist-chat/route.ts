@@ -69,6 +69,9 @@ const MAX_HISTORY = 3;
 //   詳細応答に対応するため 400 → 2048 へ拡大。短文 intent(diagnose/closet/style-consult/
 //   brand-learn)は LLM が必要分しか生成しないため退行なし(実出力分のみ課金)。
 const MAX_REPLY_TOKENS = 2048;
+// ★ B-4(案 Y): MB 経路は B-1 具体化 + 11 項目 + 3 分類で 2048 超過(オーナー実機で「テーマ」
+//   途中切れ発見)。MB 経路のみ条件分岐で 6144 へ拡大。他 5 intent(2048)は ★ 完全不変。
+const MB_REPLY_TOKENS = 6144;
 
 interface StylistChatRequest {
   text?:    unknown;
@@ -140,10 +143,12 @@ export async function POST(request: NextRequest) {
     ]);
     const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
 
-    // ★ B-2(X2): MB 経路は buildMoodboardPrompt が R-2/R-3 reframed 体型軸を内包しているため、
-    //   サーバー側 body 注入を skip(2 重 leak 根絶・案 F 同思想で MB は client 完結)。
-    //   proportionNote(自由入力)も同時に skip され「腕が短い」の素通しを根絶。
-    if (intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE)) {
+    // ★ B-2(X2)+ B-4: MB 経路の判別(buildMoodboardPrompt の固定 signature 検出)。
+    //   B-2 X2: bodyProfile 注入を skip(2 重 leak 根絶・案 F 同思想で MB は client 完結)。
+    //   B-4   : maxTokens を MB_REPLY_TOKENS(6144)へ引き上げ(B-1 具体化 + 11 項目 + 3 分類で 2048 超過)。
+    //   他 5 intent(MVP-1c 直接 coordinate / diagnose / closet / style-consult / brand-learn)は ★ 完全不変。
+    const isMbCoordinate = intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE);
+    if (isMbCoordinate) {
       ctx.bodyProfile = undefined;
     }
 
@@ -157,7 +162,7 @@ export async function POST(request: NextRequest) {
         systemPrompt,
         userMessage,
         model:     HAIKU_MODEL,
-        maxTokens: MAX_REPLY_TOKENS,
+        maxTokens: isMbCoordinate ? MB_REPLY_TOKENS : MAX_REPLY_TOKENS,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
