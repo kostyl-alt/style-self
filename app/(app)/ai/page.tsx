@@ -76,7 +76,7 @@ const STORAGE_KEY = "style-self:ai:messages:v1";
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3)
+  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId 付与で「ビジュアルで見る」ボタンに渡す)
   | { kind: "loading" }                                            // 「考えています…」
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
@@ -144,6 +144,11 @@ export default function ChatPage() {
       .catch(() => { /* 未認証/エラー時は体型なし扱い(既存挙動) */ });
   }, []);
 
+  // ★ C-2a: 直近で MB ピッカー/MB 詳細ページから渡された moodboard id を保持。
+  //   coordinate reply に moodboardId を付与し、Bubble 内「ビジュアルで見る」ボタンが
+  //   /api/tryon/generate に渡せるようにする。
+  const [lastMoodboardId, setLastMoodboardId] = useState<string | null>(null);
+
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -189,6 +194,12 @@ export default function ChatPage() {
     if (mbPrompt !== null && mbPrompt !== "") {
       setText((cur) => (cur ? `${cur}\n\n${mbPrompt}` : mbPrompt));
       sessionStorage.removeItem("mb_prompt");
+    }
+    // ★ C-2a: MB 詳細ページ「チャットに渡す」から mb.id を引き継ぐ(ビジュアル化ボタン用)
+    const mbId = sessionStorage.getItem("mb_id");
+    if (mbId !== null && mbId !== "") {
+      setLastMoodboardId(mbId);
+      sessionStorage.removeItem("mb_id");
     }
   }, []);
 
@@ -310,11 +321,13 @@ export default function ChatPage() {
             return;
           }
           // 成功: 自然文 reply に置換(末尾に補助 actions)+ sessionIntent を保持(L3)
+          // ★ C-2a: MB 経由 coordinate なら moodboardId を reply に付与(ビジュアルで見るボタン用)
           replaceMessage(setMessages, loadingId, {
             kind:          "reply",
             text:          replyData.reply,
             actions:       replyData.actions,
             sessionIntent: intentToSend,
+            moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
           });
         } catch (err) {
           // 通信エラーも intent-result フォールバック(退行ゼロ)
@@ -447,6 +460,8 @@ export default function ChatPage() {
           // ★ 統合 Sprint: 体型登録済なら世界観フィッティング軸を注入(未登録なら従来出力)
           const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
           setText((cur) => (cur ? `${cur}\n\n${prompt}` : prompt));
+          // ★ C-2a: 「ビジュアルで見る」ボタンが MB データを fetch できるよう id を保持
+          setLastMoodboardId(mb.id);
         }}
       />
     </div>
@@ -573,6 +588,10 @@ function AssistantContent({
         {content.actions && content.actions.length > 0 && (
           <AssistantActions actions={content.actions} onNavigate={onNavigate} />
         )}
+        {/* C-2a: coordinate intent の reply 直下に「ビジュアルで見る」ボタン(MB / 直接両対応) */}
+        {content.sessionIntent === "coordinate" && (
+          <VisualizeButton coordinateText={content.text} moodboardId={content.moodboardId} />
+        )}
       </div>
     );
   }
@@ -581,6 +600,114 @@ function AssistantContent({
   return (
     <div className="rounded-2xl rounded-bl-md overflow-hidden">
       <ResultView result={content.result} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+// C-2a: 「ビジュアルで見る」ボタン(coordinate reply 直下)。
+// POST /api/tryon/generate(MB + 体型 + コーデ → Claude Haiku で英語 prompt → FASHN product-to-model)。
+// 20-120 秒待機 → 画像 + generatedPrompt(verify 用)を inline 表示。
+// 並列表示 UI の本格化は C-2b、対話修正は C-3。
+interface GenerateApiResponse {
+  ok:                boolean;
+  predictionId?:     string;
+  imageUrl?:         string;
+  generatedPrompt?:  string;
+  elapsedMs?:        number;
+  error?:            string;
+}
+function VisualizeButton({ coordinateText, moodboardId }: {
+  coordinateText: string;
+  moodboardId?:   string;
+}) {
+  const [phase, setPhase]     = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult]   = useState<{ imageUrl: string; generatedPrompt: string; elapsedMs: number } | null>(null);
+  const [errMsg, setErrMsg]   = useState<string>("");
+
+  async function handleClick() {
+    setPhase("loading");
+    setResult(null);
+    setErrMsg("");
+    try {
+      const res = await fetch("/api/tryon/generate", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ coordinateText, moodboardId }),
+      });
+      const data = await res.json() as GenerateApiResponse;
+      if (!res.ok || !data.ok || !data.imageUrl || !data.generatedPrompt) {
+        setErrMsg(data.error ?? `HTTP ${res.status}`);
+        setPhase("error");
+        return;
+      }
+      setResult({
+        imageUrl:        data.imageUrl,
+        generatedPrompt: data.generatedPrompt,
+        elapsedMs:       data.elapsedMs ?? 0,
+      });
+      setPhase("done");
+    } catch (err) {
+      setErrMsg(err instanceof Error ? err.message : "通信エラー");
+      setPhase("error");
+    }
+  }
+
+  return (
+    <div className="space-y-2 px-1">
+      {phase === "idle" && (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="px-3 py-1.5 bg-gray-800 text-white rounded-full text-xs hover:bg-gray-700 transition-colors"
+        >
+          ビジュアルで見る
+        </button>
+      )}
+      {phase === "loading" && (
+        <button
+          type="button"
+          disabled
+          className="px-3 py-1.5 bg-gray-300 text-gray-600 rounded-full text-xs cursor-wait"
+        >
+          生成中…(20-120 秒)
+        </button>
+      )}
+      {phase === "done" && result && (
+        <div className="space-y-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={result.imageUrl}
+            alt="着用イメージ"
+            className="w-full max-w-md rounded-2xl border border-gray-200"
+          />
+          <p className="text-xs text-gray-400">
+            生成 {Math.round(result.elapsedMs / 1000)} 秒・FASHN CDN(72 時間保存)
+          </p>
+          <details className="text-xs text-gray-500">
+            <summary className="cursor-pointer">生成 prompt(verify 用)</summary>
+            <p className="mt-1 leading-relaxed whitespace-pre-wrap">{result.generatedPrompt}</p>
+          </details>
+          <button
+            type="button"
+            onClick={handleClick}
+            className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-50 transition-colors"
+          >
+            もう一度生成
+          </button>
+        </div>
+      )}
+      {phase === "error" && (
+        <div className="space-y-2">
+          <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2 leading-relaxed">{errMsg}</p>
+          <button
+            type="button"
+            onClick={handleClick}
+            className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-50 transition-colors"
+          >
+            再試行
+          </button>
+        </div>
+      )}
     </div>
   );
 }

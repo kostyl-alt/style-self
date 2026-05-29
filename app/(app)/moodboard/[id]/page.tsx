@@ -286,6 +286,8 @@ export default function MoodboardDetailPage() {
     const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("mb_prompt", prompt);
+      // ★ C-2a: 「ビジュアルで見る」ボタンが MB データを fetch できるよう mb.id も渡す
+      sessionStorage.setItem("mb_id", mb.id);
     }
     router.push("/ai");
   }
