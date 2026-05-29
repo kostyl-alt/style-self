@@ -19,17 +19,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const dynamic     = "force-dynamic";
-// FASHN 生成 5-17 秒 + ポーリング余裕(Vercel hobby max 60 秒)
-export const maxDuration = 60;
+// FASHN 公式 docs の処理時間: 20-120 秒(モデル + 混雑度に依存)。
+// ★ ローカル開発(npm run dev)では maxDuration 制約ゆるい・Vercel Pro は 300 秒まで OK。
+// ★ Vercel hobby(10/60 秒上限)では 60 秒で打ち切られる可能性あり。
+export const maxDuration = 120;
 
 const FASHN_BASE         = "https://api.fashn.ai/v1";
 const POLL_INTERVAL_MS   = 2000;
-const POLL_MAX_ATTEMPTS  = 20;   // = 40 秒タイムアウト
+const POLL_MAX_ATTEMPTS  = 60;   // = 120 秒タイムアウト(FASHN 公式 docs 推奨上限)
 
 // 既定のテスト用 product image(★ 平置きアイテムの公開 URL)。
 // オーナーが productImage を渡せばそれを優先。
 const DEFAULT_PRODUCT_IMAGE = "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=512";
 const DEFAULT_PROMPT        = "professional studio, neutral background";
+
+// ★ ★ プライバシー option(本番リリース時に切替推奨):
+//   - return_base64: false(デフォルト)→ FASHN CDN URL 返却・★ 72 時間保存
+//   - return_base64: true            → base64 文字列返却・★ FASHN サーバー無保存(60 分のみ)
+//   ★ 本テスト route は ★ CDN URL でレスポンス検証優先(動作確認最小化)。
+//   ★ ★ ★ C-2 以降(プロダクション流入)では ★ return_base64: true 推奨。
 
 interface TryOnTestBody {
   productImage?: string;
@@ -105,10 +113,18 @@ export async function POST(req: NextRequest): Promise<NextResponse<TryOnTestResp
         { status: runRes.status === 401 || runRes.status === 402 ? runRes.status : 500 },
       );
     }
-    const runJson = (await runRes.json()) as { id?: string };
+    // FASHN /v1/run 公式応答: { id, error } — id があれば成功・error はオブジェクトもしくは null
+    const runJson = (await runRes.json()) as {
+      id?:    string;
+      error?: string | { name?: string; message?: string } | null;
+    };
     if (!runJson.id) {
+      const runErrMsg =
+        typeof runJson.error === "string"
+          ? runJson.error
+          : runJson.error?.message ?? "FASHN /run response missing id";
       return NextResponse.json<TryOnTestError>(
-        { ok: false, error: "FASHN /run response missing id" },
+        { ok: false, error: runErrMsg },
         { status: 500 },
       );
     }
@@ -137,10 +153,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<TryOnTestResp
           { status: 500 },
         );
       }
+      // FASHN /v1/status 公式応答: { id, status, output, error }
+      //   status: "starting" | "in_queue" | "processing" | "completed" | "failed" | "canceled"
+      //   output: ["https://cdn.fashn.ai/.../output_0.png"](completed 時)
+      //   error : { name, message } object(failed 時)
       const statusJson = (await statusRes.json()) as {
         status?: string;
         output?: string[];
-        error?:  string | { message?: string };
+        error?:  string | { name?: string; message?: string } | null;
       };
 
       if (statusJson.status === "completed") {
