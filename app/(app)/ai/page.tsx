@@ -76,8 +76,8 @@ const STORAGE_KEY = "style-self:ai:messages:v1";
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId 付与で「ビジュアルで見る」ボタンに渡す)
-  | { kind: "loading" }                                            // 「考えています…」
+  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持)
+  | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
 // P1-C-1.5a / 1.5b-i / MVP-1c / A-6 / A-6b: 段階B 対象 intent(A-6b は 5 intent)
@@ -87,12 +87,27 @@ type MessageContent =
 const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]);
 
 // P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
+// ★ C-2c-1: MB 経由 coordinate のみ editorScore が付く(エディタ AI 評価結果)
+interface EditorScorePayload {
+  scores: {
+    novelty: number; rarity: number; mb_translation: number; daily_use: number;
+    photogenic: number; post_worthy: number; searchable: number; personal: number;
+    whitespace: number; signature_anomaly: number;
+  };
+  total: number;
+  checks: Record<string, "ok" | "ng">;
+  verdict: "pass" | "compromise" | "fail";
+  reasonShort: string;
+  improvementHints: string;
+  attempts: 1 | 2;
+}
 interface StylistChatResponse {
-  ok:       boolean;
-  reply?:   string;
-  actions?: SuggestionItem[];
-  reason?:  "auth_required" | "empty_input" | "intent_out_of_scope";
-  error?:   string;
+  ok:           boolean;
+  reply?:       string;
+  actions?:     SuggestionItem[];
+  reason?:      "auth_required" | "empty_input" | "intent_out_of_scope";
+  error?:       string;
+  editorScore?: EditorScorePayload;
 }
 
 // P1-C-1.5a: 段階B に渡す history(直近 N=3・本体 7.4 抑制策)
@@ -216,11 +231,14 @@ export default function ChatPage() {
       createdAt: Date.now(),
     };
     // 2) loading メッセージ append(後で置換)
+    // ★ C-2c-1: MB 経由は段階 A skip(案 F)+ エディタ AI(N=1 max)で 60-90 秒かかる可能性 →
+    //   ローディング表示に段階を併記(UX-B MVP・SSE は C-2c-2 で対応)。
     const loadingId = newMessageId();
+    const isMbCoordinatePreview = trimmed.startsWith(MB_PROMPT_SIGNATURE);
     const loadingMsg: Message = {
       id:        loadingId,
       role:      "assistant",
-      content:   { kind: "loading" },
+      content:   { kind: "loading", mbCoordinate: isMbCoordinatePreview },
       createdAt: Date.now(),
     };
 
@@ -234,7 +252,7 @@ export default function ChatPage() {
       //   intent="coordinate" を client side で直接確定する(★ Haiku を呼ばない =
       //   JSON parse 失敗が ★ 構造的に起きない)。
       //   他経路(MVP-1c 直接コーデ依頼 / 5 intent / 通常会話)は ★ 既存通り段階 A 経由(完全不変)。
-      const isMbCoordinate = trimmed.startsWith(MB_PROMPT_SIGNATURE);
+      const isMbCoordinate = isMbCoordinatePreview;
 
       let data: IntentResponse & { error?: string };
       if (isMbCoordinate) {
@@ -322,12 +340,14 @@ export default function ChatPage() {
           }
           // 成功: 自然文 reply に置換(末尾に補助 actions)+ sessionIntent を保持(L3)
           // ★ C-2a: MB 経由 coordinate なら moodboardId を reply に付与(ビジュアルで見るボタン用)
+          // ★ C-2c-1: MB 経由 coordinate なら editorScore も付与(凡庸脱却の判定スコアを表示)
           replaceMessage(setMessages, loadingId, {
             kind:          "reply",
             text:          replyData.reply,
             actions:       replyData.actions,
             sessionIntent: intentToSend,
             moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
+            editorScore:   replyData.editorScore,
           });
         } catch (err) {
           // 通信エラーも intent-result フォールバック(退行ゼロ)
@@ -560,6 +580,16 @@ function AssistantContent({
   onNavigate: (intent: string) => void;
 }) {
   if (content.kind === "loading") {
+    // ★ C-2c-1 UX-B(MVP・固定文言): MB 経由はパイプライン段階を併記
+    if (content.mbCoordinate) {
+      return (
+        <div className="text-xs text-gray-400 px-3 py-2 leading-relaxed">
+          考えています…
+          <br />
+          <span className="text-gray-300">コーデ提案 → 品質評価 → 必要なら再生成(最大 60-90 秒)</span>
+        </div>
+      );
+    }
     return (
       <div className="text-xs text-gray-400 px-3 py-2">考えています…</div>
     );
@@ -585,6 +615,8 @@ function AssistantContent({
         <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 whitespace-pre-wrap break-words leading-relaxed">
           {content.text}
         </div>
+        {/* C-2c-1: MB 経由 coordinate のエディタ AI 評価スコア表示(verify 用に折りたたみ) */}
+        {content.editorScore && <EditorScoreFold score={content.editorScore} />}
         {content.actions && content.actions.length > 0 && (
           <AssistantActions actions={content.actions} onNavigate={onNavigate} />
         )}
@@ -601,6 +633,61 @@ function AssistantContent({
     <div className="rounded-2xl rounded-bl-md overflow-hidden">
       <ResultView result={content.result} onNavigate={onNavigate} />
     </div>
+  );
+}
+
+// C-2c-1: エディタ AI 評価スコア折りたたみ表示(★ MB 経由 coordinate のみ)。
+// verdict は ★ 「pass / compromise / fail」を ★ ★ 透明性表示し、開発中 verify 用に
+// 10 軸スコア + 6 チェック + 改善指示も折りたたみで見られるようにする。
+function EditorScoreFold({ score }: { score: EditorScorePayload }) {
+  const verdictLabel =
+    score.verdict === "pass"       ? "★ 合格"
+    : score.verdict === "compromise" ? "△ 妥協"
+    :                                  "× 不合格(再生成済)";
+  const verdictColor =
+    score.verdict === "pass"       ? "text-emerald-600"
+    : score.verdict === "compromise" ? "text-amber-600"
+    :                                  "text-rose-600";
+  const scoreEntries: { key: keyof typeof score.scores; label: string }[] = [
+    { key: "novelty",           label: "新規性" },
+    { key: "rarity",            label: "既視感の少なさ" },
+    { key: "mb_translation",    label: "MB 翻訳精度" },
+    { key: "daily_use",         label: "日常化のうまさ" },
+    { key: "photogenic",        label: "写真映え" },
+    { key: "post_worthy",       label: "投稿したくなるか" },
+    { key: "searchable",        label: "検索できる具体性" },
+    { key: "personal",          label: "その人らしさ" },
+    { key: "whitespace",        label: "余白" },
+    { key: "signature_anomaly", label: "★ 1 点の強い違和感" },
+  ];
+  return (
+    <details className="text-xs text-gray-500 px-1">
+      <summary className="cursor-pointer">
+        品質評価: <span className={`font-medium ${verdictColor}`}>{verdictLabel}</span>
+        <span className="ml-2 text-gray-400">
+          合計 {score.total}/100・試行 {score.attempts} 回
+        </span>
+      </summary>
+      <div className="mt-2 space-y-2 pl-2">
+        {score.reasonShort !== "" && (
+          <p className="leading-relaxed">{score.reasonShort}</p>
+        )}
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+          {scoreEntries.map((e) => (
+            <div key={e.key} className="flex justify-between">
+              <span className="text-gray-500">{e.label}</span>
+              <span className="text-gray-700">{score.scores[e.key]}/10</span>
+            </div>
+          ))}
+        </div>
+        {score.verdict !== "pass" && score.improvementHints !== "" && (
+          <div className="border-t border-gray-100 pt-2">
+            <p className="text-gray-500 mb-1">改善方向(verify 用)</p>
+            <p className="leading-relaxed text-gray-700">{score.improvementHints}</p>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

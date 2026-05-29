@@ -52,6 +52,8 @@ import {
 import { MATERIAL_DICT, COLOR_DICT, LINE_DICT, RATIO_DICT } from "@/lib/dictionaries";
 // ★ B-2(X2): MB 経路の判別に使用。MB prompt は冒頭が MB_PROMPT_SIGNATURE で始まる。
 import { MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboard-prompt";
+// ★ C-2c-1: エディタ AI(E-0c 凡庸脱却・案 α・MB 経由 coordinate のみ適用)
+import { evaluateCoordinate, buildRegenInstruction, type EditorResult } from "@/lib/prompts/editor-prompt";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +65,10 @@ const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate"
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 const MAX_HISTORY = 3;
+
+// ★ C-2c-1: MB 経由 coordinate は ★ Haiku 生成 + Sonnet 評価 + 場合により再生成・再評価で
+//   最大 4 回 Claude 呼出になる(最悪 ~80 秒)。ローカル開発は無制限・Vercel hobby/Pro は 60/300 秒。
+export const maxDuration = 120;
 
 // reply 抑制(設計書 7.4・Haiku max_tokens)
 // ★ Sprint C-3 hotfix(c3f3ea4 案 4 Step 1): MB → coordinate 連鎖で 11 項目 + アクセサリー
@@ -89,6 +95,8 @@ interface StylistChatResponse {
   reply?:   string;
   actions?: StylistChatActionItem[];
   reason?:  "auth_required" | "empty_input" | "intent_out_of_scope";
+  // ★ C-2c-1: MB 経由 coordinate のみ付与(エディタ AI 評価結果 + 試行回数)
+  editorScore?: EditorResult & { attempts: 1 | 2 };
 }
 
 // ====================================================================
@@ -170,6 +178,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 500 });
     }
 
+    // ★ ★ C-2c-1: エディタ AI 評価 + N=1 max 再生成(★ MB 経由 coordinate のみ・MVP-1c 直接 coordinate は対象外)
+    //   設計: docs/STYLE-SELF_D1_Sprint_C-2b_エディタAI_設計調査.md(26d94c2)案 α MVP
+    //   ・Sonnet 4.6 で 10 軸 + 6 チェック評価
+    //   ・fail なら改善指示付きで再生成 1 回(最終結果は ★ 合否問わず採用)
+    //   ・compromise / pass はそのまま採用
+    //   ・コスト: 評価 ≈ ¥7-8 / 件・再生成時 +¥7.5(Haiku 再呼出)+ ¥7-8(再評価)= 最悪 ¥22-25 / 件
+    let editorScore: (EditorResult & { attempts: 1 | 2 }) | undefined;
+    if (isMbCoordinate) {
+      try {
+        const firstResult = await evaluateCoordinate({
+          coordinateText:  replyRaw,
+          originalRequest: text,
+        });
+        if (firstResult.verdict === "fail") {
+          // ★ N=1 max 再生成(改善指示を userMessage 末尾に注入)
+          const regenUserMessage = userMessage + buildRegenInstruction(firstResult);
+          try {
+            const regenRaw = await callClaude({
+              systemPrompt,
+              userMessage: regenUserMessage,
+              model:     HAIKU_MODEL,
+              maxTokens: MB_REPLY_TOKENS,
+            });
+            replyRaw = regenRaw;
+            const secondResult = await evaluateCoordinate({
+              coordinateText:  regenRaw,
+              originalRequest: text,
+            });
+            editorScore = { ...secondResult, attempts: 2 };
+          } catch {
+            // 再生成失敗 → 初回結果を採用(N=1 max・暴走防止)
+            console.warn("[stylist-chat] editor regen failed, keeping initial");
+            editorScore = { ...firstResult, attempts: 1 };
+          }
+        } else {
+          editorScore = { ...firstResult, attempts: 1 };
+        }
+      } catch {
+        // エディタ評価失敗 → 既存挙動にフォールバック(★ レイテンシ / コスト退行ゼロ)
+        console.warn("[stylist-chat] editor failed, falling back without score");
+      }
+    }
+
     // 5) 出力フィルタ(三重防御の 3 つ目・31 語辞書で検出削除)
     const { cleaned, removed } = stripCanonicalSlugs(replyRaw);
     if (removed) {
@@ -185,9 +236,10 @@ export async function POST(request: NextRequest) {
     const reply = cleaned.length > 0 ? cleaned : "うまく言葉にできませんでした。もう一度教えてください。";
 
     return NextResponse.json<StylistChatResponse>({
-      ok:      true,
+      ok:          true,
       reply,
-      actions: actions.length > 0 ? actions : undefined,
+      actions:     actions.length > 0 ? actions : undefined,
+      editorScore,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
