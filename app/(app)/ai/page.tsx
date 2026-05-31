@@ -32,8 +32,9 @@
 //   ・③ プライバシー専章 / コスト管理 / Phase 2 後ゲートに干渉しない
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
+import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import MenuDrawer from "@/components/chat/MenuDrawer";
 import WorldviewCard from "@/components/chat/WorldviewCard";
 import SuggestionChips from "@/components/chat/SuggestionChips";
@@ -137,6 +138,14 @@ function newMessageId(): string {
 // ====================================================================
 export default function ChatPage() {
   const router = useRouter();
+  // ★ H-3: 左ペイン スレッド選択状態は URL クエリ ?thread=id 由来(リロード耐性・共有可)。
+  //   中央チャットへの messages ロード接続は H-4(本 H-3 は選択状態 + URL 更新まで)。
+  const searchParams = useSearchParams();
+  const currentThreadId = searchParams.get("thread");
+  function handleSelectThread(id: string | null) {
+    router.push(id ? `/ai?thread=${id}` : "/ai");
+  }
+
   const [text, setText]         = useState("");
   const [loading, setLoading]   = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -386,9 +395,18 @@ export default function ChatPage() {
   }
 
   return (
-    // ★ P1-C-1: 常時表示メイン画面構造(min-h-screen + flex-col の 3 段)。
-    //          (app)/layout.tsx の pb-20(BottomNav 分の余白)は P1-C-1 では残置・
-    //          BottomNav / OverlayFab 廃止は P1-C-2 で実施(C-1 では二重化を許容)。
+    // ★ H-3: 2 ペイン化(左: スレッド履歴 / 中央: 既存チャットを ★ 中身ゼロ変更で内包)。
+    //   左ペインは /ai/page.tsx 内で完結((app)/layout.tsx は最小 pass-through)。
+    <div className="flex">
+      <ThreadsSidebar
+        currentThreadId={currentThreadId}
+        onSelectThread={handleSelectThread}
+      />
+      <div className="flex-1 min-w-0">
+    {/* ★ P1-C-1: 常時表示メイン画面構造(min-h-screen + flex-col の 3 段)。
+              (app)/layout.tsx の pb-20(BottomNav 分の余白)は P1-C-1 では残置・
+              BottomNav / OverlayFab 廃止は P1-C-2 で実施(C-1 では二重化を許容)。
+        ★ H-3: 以下の <div> 〜 </div> は既存 1051 行を ★ 中身ゼロ変更でそのまま内包 */}
     <div className="min-h-screen bg-white flex flex-col">
       {/* ヘッダ(P1-C-3: 右上 [≡] メニュー追加済・案 A 補助機能集約点)*/}
       <header className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between">
@@ -484,6 +502,8 @@ export default function ChatPage() {
           setLastMoodboardId(mb.id);
         }}
       />
+    </div>
+      </div>
     </div>
   );
 }
