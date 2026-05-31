@@ -208,11 +208,13 @@ style-self/
 │   │   ├── 018_product_multi_attrs.sql    # Sprint 41.1: colors/materialsを配列化、axes jsonb追加
 │   │   ├── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
 │   │   ├── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
-│   │   └── 021_avoid_items.sql            # Sprint 47: users.avoid_items text[]（Q16「着たくない服」をNG制約として保存）
+│   │   ├── 021_avoid_items.sql            # Sprint 47: users.avoid_items text[]（Q16「着たくない服」をNG制約として保存）
+│   │   └── 027_h1_chat_threads.sql        # Sprint H-1: 対話型AIスタイリスト永続文脈基盤（chat_threads / messages / feedback / judgment_rules・RLS本人FOR ALL+親thread経由EXISTS）※022-026は本ファイル未記載
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
 │   ├── database.ts                   # Supabase DBの型定義
+│   ├── chat-thread.ts                # Sprint H-1: Chat Thread 型（ChatThreadRow / MessageRow / FeedbackRow / JudgmentRuleRow + Input。database.ts非掲載・types/moodboard.ts同型・route側は as never 吸収）
 │   └── index.ts                      # アプリ全体の型定義
 ├── vercel.json                        # Vercel Cron設定（週次トレンド同期）
 ├── middleware.ts                      # 認証ミドルウェア
@@ -267,6 +269,10 @@ ADMIN_EMAILS=
 | `diagnosis_sessions` | 診断セッションの詳細記録（Sprint 42：answers / matched_pattern / scores / result） |
 | `worldview_profiles` | ユーザーごとの最新確定プロファイル（Sprint 42：user_id 主キー） |
 | `user_style_events` | 学習用の行動イベントログ（Sprint 42：クリック・保存・拒否など） |
+| `chat_threads` | 対話型AIスタイリストの会話スレッド（Sprint H-1：添付MB moodboard_id / last_message_at ソート用） |
+| `messages` | スレッド内メッセージ（Sprint H-1：role=user/assistant・attachments/metadata jsonb） |
+| `feedback` | メッセージへのフィードバック（Sprint H-1：like/dislike/more_x/change_item 等） |
+| `judgment_rules` | ユーザーごとの判断ルール（Sprint H-1：好み/NG/style_rule を次回生成に反映・priority 1-10） |
 
 ---
 
