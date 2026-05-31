@@ -35,6 +35,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
+import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
+import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
 import MenuDrawer from "@/components/chat/MenuDrawer";
 import WorldviewCard from "@/components/chat/WorldviewCard";
 import SuggestionChips from "@/components/chat/SuggestionChips";
@@ -145,6 +147,8 @@ export default function ChatPage() {
   function handleSelectThread(id: string | null) {
     router.push(id ? `/ai?thread=${id}` : "/ai");
   }
+  // ★ H-4a: thread の messages ロード/永続化サービス(messages の単一真実源は下記 messages state)
+  const threadMessages = useThreadMessages();
 
   const [text, setText]         = useState("");
   const [loading, setLoading]   = useState(false);
@@ -181,7 +185,9 @@ export default function ChatPage() {
 
   // P1-C-1.5b-i+: 履歴永続化 hydrate(初回 mount 時 localStorage から復元)
   // SSR セーフ: useEffect 内のみで localStorage 参照・初期 state は [] で SSR と一致。
+  // ★ H-4a: thread 選択中(?thread=id)は DB messages が真実源 → localStorage hydrate を skip。
   useEffect(() => {
+    if (currentThreadId) { setHydrated(true); return; }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -190,7 +196,26 @@ export default function ChatPage() {
       }
     } catch { /* corrupt JSON 等は無視(空配列のまま続行) */ }
     setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ★ H-4a: thread 選択(?thread=id)で DB から messages をロード(単一真実源 = messages state)。
+  //   currentThreadId が null の間は既存 localStorage 経路を維持(段階的移行)。
+  //   ★ H-4a fix: 切替時に即クリア(前 thread/localStorage の残留を消す)→ load 後に注入。
+  //     依存は ★ 安定な loadMessages(useCallback[])のみ。threadMessages オブジェクト全体を
+  //     deps に入れると毎レンダー新参照 → effect 連続再実行 + cleanup が in-flight load を
+  //     キャンセルし続け、空 thread で setMessages([]) が届かず中央が前の表示のまま残るバグになる。
+  const loadThreadMessages = threadMessages.loadMessages;
+  useEffect(() => {
+    if (!currentThreadId) return;
+    let cancelled = false;
+    setMessages([]);  // ★ 即クリア(load 完了前から中央を空にし、前 thread の残留を断つ)
+    void loadThreadMessages(currentThreadId).then((loaded) => {
+      // rowToMessage が原 Message を忠実復元(content は kind 判別共用体)→ 境界で cast。
+      if (!cancelled) setMessages(loaded as unknown as Message[]);
+    });
+    return () => { cancelled = true; };
+  }, [currentThreadId, loadThreadMessages]);
 
   // P1-C-1.5b-i+: 履歴永続化 persist(messages 変更で書き出し)
   // MAX_MESSAGES=30 で trimByMax により既に上限ありなので quota 安全。
@@ -198,17 +223,50 @@ export default function ChatPage() {
   //   "[]" で上書きする race を防止・真因切り分け済 2026-05-21)
   useEffect(() => {
     if (!hydrated) return;
+    // ★ H-4a: thread 選択中は DB が永続先 → localStorage には書かない(DB thread を上書きしない)
+    if (currentThreadId) return;
     // ★ 空配列で上書きしない(多層防御・将来クリア機能の地雷予防)
     if (messages.length === 0) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     } catch { /* quota 超過等は無視(永続化失敗してもセッション内は動く) */ }
-  }, [messages, hydrated]);
+  }, [messages, hydrated, currentThreadId]);
 
   // メッセージ追加で末端へ自動スクロール
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  // ★ H-4a: 初回マウント時に localStorage 履歴を DB thread へ自動移行(冪等・案A)。
+  //   ★ 移行後は遷移しない(ユーザーが意図的に開いたわけではない)→ 左ペインに「過去の会話」が出現するのみ。
+  //   既存 localStorage 本体は残すため、移行直後も currentThreadId=null の中央表示は従来どおり。
+  useEffect(() => {
+    void migrateLocalstorageIfNeeded({
+      createThread: async (title) => {
+        try {
+          const res = await fetch("/api/threads", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ title }),
+          });
+          const data = await res.json() as { thread?: { id: string } };
+          return data.thread ?? null;
+        } catch { return null; }
+      },
+      saveMessages: async (threadId, msgs) => {
+        // 既存 messages POST は単発 → 数件を順次 INSERT(時系列維持)。
+        for (const m of msgs) {
+          const msg = m as PersistableMessage;
+          const c = msg.content as { kind?: string; text?: string } | undefined;
+          const displayText = (c?.kind === "text" || c?.kind === "reply") && typeof c.text === "string"
+            ? c.text : "(過去のメッセージ)";
+          if (msg.role !== "user" && msg.role !== "assistant") continue;
+          await threadMessages.persistMessage(threadId, msg, displayText);
+        }
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ★ Sprint C-3: 撮影前 CTA(/moodboard/[id])からの遷移 = sessionStorage 経由 で MB prompt 受け取り
   //   URL param 長さ制限(2048 文字)回避・同一タブ内のみ・受け取り後即削除で再挿入防止
@@ -254,6 +312,11 @@ export default function ChatPage() {
     setMessages((prev) => trimByMax([...prev, userMsg, loadingMsg]));
     setText("");           // 入力欄クリア(連続発話可能に)
     setLoading(true);
+
+    // ★ H-4a: thread 選択中は user メッセージを DB 永続化(currentThreadId=null 時は既存挙動のまま)
+    if (currentThreadId) {
+      void threadMessages.persistMessage(currentThreadId, userMsg as unknown as PersistableMessage, trimmed);
+    }
 
     try {
       // ★ ★ ★ 案 F(統合 Sprint hotfix v2): MB prompt 経由は段階 A(Haiku/overlay-intent)を skip。
@@ -350,14 +413,23 @@ export default function ChatPage() {
           // 成功: 自然文 reply に置換(末尾に補助 actions)+ sessionIntent を保持(L3)
           // ★ C-2a: MB 経由 coordinate なら moodboardId を reply に付与(ビジュアルで見るボタン用)
           // ★ C-2c-1: MB 経由 coordinate なら editorScore も付与(凡庸脱却の判定スコアを表示)
-          replaceMessage(setMessages, loadingId, {
-            kind:          "reply",
+          const replyContent = {
+            kind:          "reply" as const,
             text:          replyData.reply,
             actions:       replyData.actions,
             sessionIntent: intentToSend,
             moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
             editorScore:   replyData.editorScore,
-          });
+          };
+          replaceMessage(setMessages, loadingId, replyContent);
+          // ★ H-4a: thread 選択中は assistant reply も DB 永続化(metadata に原 Message 保持)
+          if (currentThreadId) {
+            void threadMessages.persistMessage(
+              currentThreadId,
+              { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
+              replyData.reply,
+            );
+          }
         } catch (err) {
           // 通信エラーも intent-result フォールバック(退行ゼロ)
           console.warn("[stylist-chat] error, falling back:", err);
