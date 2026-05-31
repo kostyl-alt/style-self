@@ -99,7 +99,12 @@ style-self/
 │   │   ├── profile/route.ts                          # プロフィール GET/PATCH
 │   │   ├── trends/route.ts                           # トレンド一覧GET（Sprint 28）
 │   │   ├── wardrobe/route.ts                         # ワードローブCRUD + PATCH
-│   │   └── worldview/route.ts                        # 世界観 GET/PATCH
+│   │   ├── worldview/route.ts                        # 世界観 GET/PATCH
+│   │   └── threads/                                   # Sprint H-2: 対話型AIスタイリスト スレッド管理API CRUD（親thread経由EXISTS二重防御・user_id非受領）
+│   │       ├── route.ts                              # スレッド GET（一覧・last_message_at降順）/ POST（作成・moodboard_id任意）（H-2）
+│   │       ├── [id]/route.ts                         # スレッド GET（詳細+messages）/ PATCH（title/moodboard_id）/ DELETE（FK CASCADE）（H-2）
+│   │       ├── [id]/messages/route.ts                # メッセージ GET（一覧）/ POST（保存・AI生成はH-4）（H-2）
+│   │       └── [id]/feedback/route.ts                # フィードバック POST（保存・judgment_rules抽出はH-6）（H-2）
 │   ├── layout.tsx
 │   └── page.tsx                          # トップ（認証状態でリダイレクト）
 ├── components/
