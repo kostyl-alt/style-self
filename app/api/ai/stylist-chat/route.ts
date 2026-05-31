@@ -36,10 +36,15 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { callClaude, HAIKU_MODEL } from "@/lib/claude";
 import {
   STYLIST_CHAT_SYSTEM_PROMPT,
+  COORDINATE_JSON_OUTPUT_INSTRUCTION,
   buildStylistChatUserMessage,
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
+// ★ H-4b1-b-1: coordinate(MB 経由)の JSON 化接続(privacy 再帰 strip + parse フォールバック)
+import { stripCanonicalSlugsRecursive } from "@/lib/utils/strip-canonical-slugs";
+import { parseCoordinateReply } from "@/lib/utils/parse-coordinate-reply";
+import type { CoordinateReply } from "@/types/coordinate-reply";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
 import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
 import { getDecisionRules, getFailurePatterns, getInfluences } from "@/lib/knowledge-os/client";
@@ -93,6 +98,9 @@ interface StylistChatActionItem {
 interface StylistChatResponse {
   ok:       boolean;
   reply?:   string;
+  // ★ H-4b1-b-1: MB 経由 coordinate で LLM が構造化 JSON を返し parse 成功した場合のみ付与
+  //   (parse 失敗時は従来どおり reply にフォールバック = 退行ゼロ)
+  coordinate?: CoordinateReply;
   actions?: StylistChatActionItem[];
   reason?:  "auth_required" | "empty_input" | "intent_out_of_scope";
   // ★ C-2c-1: MB 経由 coordinate のみ付与(エディタ AI 評価結果 + 試行回数)
@@ -161,7 +169,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 4) Claude(Haiku 4.5)呼出
-    const systemPrompt = STYLIST_CHAT_SYSTEM_PROMPT;
+    // ★ H-4b1-b-1: coordinate(MB 経由)★ のみ ★ JSON 出力指示を append(他 4 intent は完全不変)
+    const systemPrompt = isMbCoordinate
+      ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${COORDINATE_JSON_OUTPUT_INSTRUCTION}`
+      : STYLIST_CHAT_SYSTEM_PROMPT;
     const userMessage  = buildStylistChatUserMessage({ text, intent, history, ctx });
 
     let replyRaw: string;
@@ -219,6 +230,25 @@ export async function POST(request: NextRequest) {
         // エディタ評価失敗 → 既存挙動にフォールバック(★ レイテンシ / コスト退行ゼロ)
         console.warn("[stylist-chat] editor failed, falling back without score");
       }
+    }
+
+    // ★ H-4b1-b-1: coordinate(MB 経由)は構造化 JSON 応答 → parse + 再帰 strip して新形式で返す。
+    //   parse 失敗時は ★ early-return せず下の既存 strip+reply 経路へフォールスルー(旧プロース・退行ゼロ)。
+    //   ★ editor / MB_PROMPT_SIGNATURE 判定 / KO は H-4c まで不変(本分岐は応答の組み立てのみ)。
+    if (isMbCoordinate) {
+      const parsed = parseCoordinateReply(replyRaw);
+      if (parsed.coordinate) {
+        // 三重防御 (3): JSON 全 string フィールドを再帰浄化(privacy 退行ゼロ)
+        const safeCoordinate = stripCanonicalSlugsRecursive<CoordinateReply>(parsed.coordinate);
+        const coordActions = buildActions(intent);
+        return NextResponse.json<StylistChatResponse>({
+          ok:          true,
+          coordinate:  safeCoordinate,
+          actions:     coordActions.length > 0 ? coordActions : undefined,
+          editorScore,
+        });
+      }
+      // parsed.fallbackText(= replyRaw)→ 既存経路で strip し reply として返す
     }
 
     // 5) 出力フィルタ(三重防御の 3 つ目・31 語辞書で検出削除)

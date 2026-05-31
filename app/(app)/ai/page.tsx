@@ -37,6 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
+import type { CoordinateReply } from "@/types/coordinate-reply";
 import MenuDrawer from "@/components/chat/MenuDrawer";
 import WorldviewCard from "@/components/chat/WorldviewCard";
 import SuggestionChips from "@/components/chat/SuggestionChips";
@@ -80,6 +81,7 @@ type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
   | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持)
+  | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2)
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
@@ -107,6 +109,7 @@ interface EditorScorePayload {
 interface StylistChatResponse {
   ok:           boolean;
   reply?:       string;
+  coordinate?:  CoordinateReply;   // ★ H-4b1-b-1: 構造化コーデ応答(parse 成功時のみ・失敗時は reply)
   actions?:     SuggestionItem[];
   reason?:      "auth_required" | "empty_input" | "intent_out_of_scope";
   error?:       string;
@@ -405,29 +408,41 @@ export default function ChatPage() {
             replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
             return;
           }
-          // 段階B が reason を返した場合も従来挙動にフォールバック
-          if (replyData.reason || !replyData.reply) {
+          // 段階B が reason を返した / reply も coordinate も無い場合は従来挙動にフォールバック
+          // ★ H-4b1-b-1: coordinate(構造化)応答は reply を持たないため coordinate の有無も条件に含める
+          if (replyData.reason || (!replyData.reply && !replyData.coordinate)) {
             replaceMessage(setMessages, loadingId, { kind: "intent-result", result: data });
             return;
           }
-          // 成功: 自然文 reply に置換(末尾に補助 actions)+ sessionIntent を保持(L3)
-          // ★ C-2a: MB 経由 coordinate なら moodboardId を reply に付与(ビジュアルで見るボタン用)
-          // ★ C-2c-1: MB 経由 coordinate なら editorScore も付与(凡庸脱却の判定スコアを表示)
-          const replyContent = {
-            kind:          "reply" as const,
-            text:          replyData.reply,
-            actions:       replyData.actions,
-            sessionIntent: intentToSend,
-            moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
-            editorScore:   replyData.editorScore,
-          };
+          // 成功: reply 置換 + sessionIntent 保持(L3)+ MB 経由は moodboardId / editorScore 付与
+          // ★ H-4b1-b-1: coordinate(構造化 JSON)応答は coordinate_v2、それ以外は従来 reply(text)
+          const replyContent = replyData.coordinate
+            ? {
+                kind:          "coordinate_v2" as const,
+                coordinate:    replyData.coordinate,
+                actions:       replyData.actions,
+                sessionIntent: intentToSend,
+                moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
+                editorScore:   replyData.editorScore,
+              }
+            : {
+                kind:          "reply" as const,
+                text:          replyData.reply!,
+                actions:       replyData.actions,
+                sessionIntent: intentToSend,
+                moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
+                editorScore:   replyData.editorScore,
+              };
           replaceMessage(setMessages, loadingId, replyContent);
-          // ★ H-4a: thread 選択中は assistant reply も DB 永続化(metadata に原 Message 保持)
+          // ★ H-4a: thread 選択中は assistant 応答も DB 永続化(metadata に原 Message 保持)
           if (currentThreadId) {
+            const displayText = replyData.coordinate
+              ? (replyData.coordinate.summary || replyData.coordinate.direction || "(コーデ提案)")
+              : replyData.reply!;
             void threadMessages.persistMessage(
               currentThreadId,
               { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
-              replyData.reply,
+              displayText,
             );
           }
         } catch (err) {
@@ -603,7 +618,8 @@ function getSessionIntent(messages: Message[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.role !== "assistant") continue;
-    if (m.content.kind === "reply") {
+    // ★ H-4b1-b-1: coordinate_v2 も sessionIntent を持つ(修正ボタンの追従発話で継続維持)
+    if (m.content.kind === "reply" || m.content.kind === "coordinate_v2") {
       return m.content.sessionIntent ?? null;
     }
     // intent-result / loading / error が間に挟まったらセッション切断扱い
@@ -623,6 +639,9 @@ function buildStylistHistory(messages: Message[]): { role: "user" | "assistant";
       out.push({ role: "user", text: m.content.text });
     } else if (m.role === "assistant" && m.content.kind === "reply") {
       out.push({ role: "assistant", text: m.content.text });
+    } else if (m.role === "assistant" && m.content.kind === "coordinate_v2") {
+      // ★ H-4b1-b-1: coordinate_v2 は summary を履歴本文に(JSON 全体は渡さない・継続文脈用)
+      out.push({ role: "assistant", text: m.content.coordinate.summary });
     }
     // intent-result / loading / error は履歴に入れない(構造化情報・通信状態のため)
   }
@@ -701,6 +720,27 @@ function AssistantContent({
     );
   }
   // P1-C-1.5a: 会話 AI スタイリスト 自然文 reply(末尾に補助 actions・最小新規)
+  // ★ H-4b1-b-1: 構造化コーデ応答の ★ 暫定レンダ(pre 表示・表示順7 component は H-4b1-b-2 で置換)。
+  //   ここで「JSON が出力されている」ことを verify でき、次段で見た目を完成させる。
+  if (content.kind === "coordinate_v2") {
+    const co = content.coordinate;
+    return (
+      <div className="space-y-2">
+        <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 leading-relaxed space-y-2">
+          <p className="font-bold">{co.direction}</p>
+          <p className="whitespace-pre-wrap">{co.summary}</p>
+          <pre className="text-xs bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto">{JSON.stringify(co, null, 2)}</pre>
+        </div>
+        {content.editorScore && <EditorScoreFold score={content.editorScore} />}
+        {content.actions && content.actions.length > 0 && (
+          <AssistantActions actions={content.actions} onNavigate={onNavigate} />
+        )}
+        {content.sessionIntent === "coordinate" && (
+          <VisualizeButton coordinateText={co.summary} moodboardId={content.moodboardId} />
+        )}
+      </div>
+    );
+  }
   if (content.kind === "reply") {
     return (
       <div className="space-y-2">
