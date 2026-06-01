@@ -124,11 +124,18 @@ export async function POST(request: NextRequest) {
     const queriesUsed: string[] = [];
     const rawCandidates: Array<{ category: CandidateCategory; p: Awaited<ReturnType<typeof searchByKeyword>>[number] }> = [];
     let anySearchError = false;
+    // ★ G-1 fix(429): 楽天は ★ 1 リクエスト/秒 制限。ループは元々順次だが間隔ゼロで超過していた。
+    //   実際に検索を発行したカテゴリの 2 件目以降の前に 1.1 秒待機(安全マージン)。空カテゴリは待たない。
+    let searchCount = 0;
     for (const category of CANDIDATE_CATEGORIES) {
       const kws = keywords[category];
       if (!Array.isArray(kws) || kws.length === 0) continue;
       const query = kws.join(" ");
       queriesUsed.push(`${category}: ${query}`);
+      if (searchCount > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1100));
+      }
+      searchCount++;
       try {
         const products = await searchByKeyword(query, { hits: HITS_PER_CATEGORY });
         for (const p of products.slice(0, KEEP_PER_CATEGORY)) {
