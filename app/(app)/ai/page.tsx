@@ -38,6 +38,9 @@ import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
 import type { CoordinateReply } from "@/types/coordinate-reply";
+import ProductCardList from "@/components/chat/ProductCardList";
+import SearchProductsButton from "@/components/chat/SearchProductsButton";
+import type { ProductCandidate, CandidatesResponse } from "@/types/product-candidate";
 import MenuDrawer from "@/components/chat/MenuDrawer";
 import WorldviewCard from "@/components/chat/WorldviewCard";
 import SuggestionChips from "@/components/chat/SuggestionChips";
@@ -82,6 +85,7 @@ type MessageContent =
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
   | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持)
   | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2)
+  | { kind: "products"; candidates: ProductCandidate[]; queriesUsed: string[]; moodboardId: string; loading?: boolean; error?: string | null }  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージで関心分離・/api/products/candidates 結果)
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
@@ -287,6 +291,54 @@ export default function ChatPage() {
       sessionStorage.removeItem("mb_id");
     }
   }, []);
+
+  // ★ G-2b: 「商品を探す」→ /api/products/candidates → products メッセージ(案D: coordinate_v2 と別メッセージ)。
+  //   handleSubmit は ★ 不変。loading メッセージ append → API → replaceMessage(結果/エラー)→ DB 永続化(H-4a)。
+  async function handleSearchProducts(moodboardId: string) {
+    const loadingId = newMessageId();
+    const loadingMsg: Message = {
+      id:        loadingId,
+      role:      "assistant",
+      content:   { kind: "products", candidates: [], queriesUsed: [], moodboardId, loading: true },
+      createdAt: Date.now(),
+    };
+    setMessages((prev) => trimByMax([...prev, loadingMsg]));
+    try {
+      const res = await fetch("/api/products/candidates", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ moodboardId }),
+      });
+      const data = await res.json() as CandidatesResponse & { error?: string };
+      if (!res.ok) {
+        replaceMessage(setMessages, loadingId, {
+          kind: "products", candidates: [], queriesUsed: [], moodboardId,
+          loading: false, error: data.error ?? `HTTP ${res.status}`,
+        });
+        return;
+      }
+      const resultContent = {
+        kind:        "products" as const,
+        candidates:  data.candidates ?? [],
+        queriesUsed: data.queriesUsed ?? [],
+        moodboardId,
+      };
+      replaceMessage(setMessages, loadingId, resultContent);
+      // ★ H-4a: thread 選択中は products メッセージも DB 永続化(metadata.message で忠実復元)
+      if (currentThreadId) {
+        void threadMessages.persistMessage(
+          currentThreadId,
+          { id: loadingId, role: "assistant", content: resultContent, createdAt: Date.now() } as unknown as PersistableMessage,
+          `${resultContent.candidates.length}件の商品候補`,
+        );
+      }
+    } catch (err) {
+      replaceMessage(setMessages, loadingId, {
+        kind: "products", candidates: [], queriesUsed: [], moodboardId,
+        loading: false, error: err instanceof Error ? err.message : "通信エラー",
+      });
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -522,7 +574,7 @@ export default function ChatPage() {
         ) : (
           <>
             {messages.map((m) => (
-              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} />
+              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} />
             ))}
             <div ref={endRef} />
           </>
@@ -657,9 +709,11 @@ function buildStylistHistory(messages: Message[]): { role: "user" | "assistant";
 function Bubble({
   msg,
   onNavigate,
+  onSearchProducts,
 }: {
   msg:        Message;
   onNavigate: (intent: string) => void;
+  onSearchProducts: (moodboardId: string) => void | Promise<void>;
 }) {
   if (msg.role === "user") {
     // user 吹き出し:右寄り
@@ -677,7 +731,7 @@ function Bubble({
   return (
     <div className="flex justify-start">
       <div className="max-w-[92%] w-full">
-        <AssistantContent content={msg.content} onNavigate={onNavigate} />
+        <AssistantContent content={msg.content} onNavigate={onNavigate} onSearchProducts={onSearchProducts} />
       </div>
     </div>
   );
@@ -686,9 +740,11 @@ function Bubble({
 function AssistantContent({
   content,
   onNavigate,
+  onSearchProducts,
 }: {
   content:    MessageContent;
   onNavigate: (intent: string) => void;
+  onSearchProducts: (moodboardId: string) => void | Promise<void>;
 }) {
   if (content.kind === "loading") {
     // ★ C-2c-1 UX-B(MVP・固定文言): MB 経由はパイプライン段階を併記
@@ -738,6 +794,22 @@ function AssistantContent({
         {content.sessionIntent === "coordinate" && (
           <VisualizeButton coordinateText={co.summary} moodboardId={content.moodboardId} />
         )}
+        {/* ★ G-2b: MB 経由コーデなら「この方向性で商品を探す」(E-0f 実商品試着主軸への導線)*/}
+        {content.moodboardId && (
+          <SearchProductsButton moodboardId={content.moodboardId} onSearch={onSearchProducts} />
+        )}
+      </div>
+    );
+  }
+  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージ)。onTryOn は G-3 で接続(現状 disabled「準備中」)。
+  if (content.kind === "products") {
+    return (
+      <div className="space-y-2">
+        <ProductCardList
+          candidates={content.candidates}
+          loading={content.loading}
+          error={content.error}
+        />
       </div>
     );
   }
