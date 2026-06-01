@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import WorldviewPublicityPanel from "@/components/worldview/WorldviewPublicityPanel";
 import MyPostsTab from "@/components/posts/MyPostsTab";
 import type {
@@ -225,7 +226,7 @@ function DiagnosisTab() {
       </Link>
       <DiagnosisDisplay analysis={analysis} showShare />
       {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
-      <WorldviewProductsSection analysis={analysis} variant="self" />
+      {PRODUCTS_ENABLED && <WorldviewProductsSection analysis={analysis} variant="self" />}
     </div>
   );
 }

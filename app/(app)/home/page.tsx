@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
 import { MessageCircle, RefreshCw, Music, Film, Sparkles, ExternalLink } from "lucide-react";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import type { StyleDiagnosisResult, CoordinateGenerateResponse } from "@/types/index";
 
 const ROLE_LABELS: Record<string, { label: string; style: string }> = {
@@ -178,7 +179,7 @@ export default function HomePage() {
               {firstPiece.why && (
                 <p className="text-sm text-gray-600 leading-relaxed mb-4">{firstPiece.why}</p>
               )}
-              {firstPiece.zozoKeyword && (
+              {PRODUCTS_ENABLED && firstPiece.zozoKeyword && (
                 <a
                   href={buildZozoSearchUrl({ keyword: firstPiece.zozoKeyword })}
                   target="_blank"
@@ -194,7 +195,7 @@ export default function HomePage() {
         )}
 
         {/* 3.5. 世界観に合う商品(フェーズB Step 4: 横スクロール軽量表示) */}
-        {analysis?.worldviewName && (
+        {PRODUCTS_ENABLED && analysis?.worldviewName && (
           <WorldviewProductsSection analysis={analysis} variant="home" />
         )}
 

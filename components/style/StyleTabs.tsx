@@ -5,6 +5,7 @@ import Link from "next/link";
 import CoordinateCard from "@/components/coordinate/CoordinateCard";
 import ProductMatchList from "@/components/coordinate/ProductMatchList";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import type {
   CoordinateGenerateResponse, WardrobeItem, StyleConsultResponse,
   LookAnalysisResponse, VirtualCoordinateResponse, VirtualConceptsResponse,
@@ -383,7 +384,7 @@ export function CoordinateTab() {
         <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-2">Step 3</p>
         <p className="text-sm text-gray-900 font-medium mb-3">組み方を選ぶ</p>
         <div className="space-y-2">
-          {MODES.map((m) => {
+          {MODES.filter((m) => PRODUCTS_ENABLED || m.value !== "virtual").map((m) => {
             const disabled = m.value === "owned" && ownedCount === 0;
             return (
               <button key={m.value}
@@ -610,7 +611,7 @@ function VirtualResult({
   const [matchLoading, setMatchLoading]   = useState(false);
 
   useEffect(() => {
-    if (!result.items?.length) return;
+    if (!PRODUCTS_ENABLED || !result.items?.length) return;
     setMatchLoading(true);
     const conceptKeywords = Array.from(new Set([
       ...(result.matchedRuleKeywords ?? []),
@@ -727,11 +728,15 @@ function VirtualResult({
                   {item.alternative && <div className="text-xs text-gray-600 flex gap-2"><span>🔄</span><span><span className="text-gray-400">代替：</span>{item.alternative}</span></div>}
                 </div>
               )}
-              <a href={buildZozoSearchUrl({ keyword: item.zozoKeyword || item.name })} target="_blank" rel="noopener noreferrer"
-                className="inline-block text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2">
-                ZOZOで探す →
-              </a>
-              <ProductMatchList products={matches?.find((m) => m.itemIndex === i)?.products ?? []} isLoading={matchLoading} />
+              {PRODUCTS_ENABLED && (
+                <>
+                  <a href={buildZozoSearchUrl({ keyword: item.zozoKeyword || item.name })} target="_blank" rel="noopener noreferrer"
+                    className="inline-block text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2">
+                    ZOZOで探す →
+                  </a>
+                  <ProductMatchList products={matches?.find((m) => m.itemIndex === i)?.products ?? []} isLoading={matchLoading} />
+                </>
+              )}
             </div>
           );
         })}
@@ -986,8 +991,10 @@ export function ConsultTab() {
                     {lookResult.personalAdaptation.itemsToFind.map((it, i) => (
                       <li key={i} className="flex items-start justify-between gap-3">
                         <div className="text-sm text-gray-700 flex gap-2 flex-1 min-w-0"><span className="text-gray-400 flex-shrink-0">•</span><span className="leading-relaxed">{it}</span></div>
-                        <a href={buildZozoSearchUrl({ keyword: it })} target="_blank" rel="noopener noreferrer"
-                          className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 whitespace-nowrap pt-0.5">ZOZOで探す →</a>
+                        {PRODUCTS_ENABLED && (
+                          <a href={buildZozoSearchUrl({ keyword: it })} target="_blank" rel="noopener noreferrer"
+                            className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 whitespace-nowrap pt-0.5">ZOZOで探す →</a>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -1090,8 +1097,10 @@ export function ConsultTab() {
                       <span className="text-gray-400 flex-shrink-0">•</span>
                       <span className="leading-relaxed">{it}</span>
                     </div>
-                    <a href={buildZozoSearchUrl({ keyword: it })} target="_blank" rel="noopener noreferrer"
-                      className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 whitespace-nowrap pt-0.5">ZOZOで探す →</a>
+                    {PRODUCTS_ENABLED && (
+                      <a href={buildZozoSearchUrl({ keyword: it })} target="_blank" rel="noopener noreferrer"
+                        className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 whitespace-nowrap pt-0.5">ZOZOで探す →</a>
+                    )}
                   </li>
                 ))}
               </ul>

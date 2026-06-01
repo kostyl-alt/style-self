@@ -1,6 +1,7 @@
 "use client";
 
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import { getPatternById } from "@/lib/knowledge/worldview-patterns";
 import type { StyleDiagnosisResult } from "@/types/index";
 
@@ -211,7 +212,7 @@ export function DiagnosisDisplay({
                   </div>
                 )}
 
-                {analysis.firstPiece.zozoKeyword && (
+                {PRODUCTS_ENABLED && analysis.firstPiece.zozoKeyword && (
                   <a
                     href={buildZozoSearchUrl({ keyword: analysis.firstPiece.zozoKeyword })}
                     target="_blank" rel="noopener noreferrer"

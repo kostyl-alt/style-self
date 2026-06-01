@@ -2,6 +2,7 @@
 
 import { SavedTab } from "@/components/style/StyleTabs";
 import SavedProductsList from "@/components/saved/SavedProductsList";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import { Bookmark } from "lucide-react";
 
 export default function SavedPage() {
@@ -26,10 +27,12 @@ export default function SavedPage() {
         </section>
 
         {/* Section 2: 保存した商品 */}
-        <section>
-          <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Saved Products</p>
-          <SavedProductsList />
-        </section>
+        {PRODUCTS_ENABLED && (
+          <section>
+            <p className="text-xs tracking-widest text-gray-400 uppercase mb-3">Saved Products</p>
+            <SavedProductsList />
+          </section>
+        )}
 
         {/* Section 3: 保存した投稿（将来） */}
         <section>

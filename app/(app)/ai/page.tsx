@@ -37,6 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
 import SearchProductsButton from "@/components/chat/SearchProductsButton";
@@ -795,7 +796,7 @@ function AssistantContent({
           <VisualizeButton coordinateText={co.summary} moodboardId={content.moodboardId} />
         )}
         {/* ★ G-2b: MB 経由コーデなら「この方向性で商品を探す」(E-0f 実商品試着主軸への導線)*/}
-        {content.moodboardId && (
+        {PRODUCTS_ENABLED && content.moodboardId && (
           <SearchProductsButton moodboardId={content.moodboardId} onSearch={onSearchProducts} />
         )}
       </div>
@@ -803,6 +804,7 @@ function AssistantContent({
   }
   // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージ)。onTryOn は G-3 で接続(現状 disabled「準備中」)。
   if (content.kind === "products") {
+    if (!PRODUCTS_ENABLED) return null;
     return (
       <div className="space-y-2">
         <ProductCardList

@@ -4,8 +4,14 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CoordinateTab, ConsultTab, VirtualTab } from "@/components/style/StyleTabs";
 import ClosetView from "@/components/closet/ClosetView";
+import { PRODUCTS_ENABLED } from "@/lib/flags";
 
 type OutfitTab = "coordinate" | "consult" | "closet" | "virtual";
+
+// PRODUCTS_ENABLED=false のとき「理想を探す」(virtual) タブは導線から外す。
+function isTabVisible(v: OutfitTab): boolean {
+  return PRODUCTS_ENABLED || v !== "virtual";
+}
 
 const TABS: { value: OutfitTab; label: string; description: string }[] = [
   { value: "coordinate", label: "コーデ提案",   description: "今日の気分・シーンに合わせてAIがコーデを設計します" },
@@ -22,11 +28,13 @@ function OutfitInner() {
   const params = useSearchParams();
   const router = useRouter();
   const initialTab = params.get("tab");
-  const [activeTab, setActiveTab] = useState<OutfitTab>(isOutfitTab(initialTab) ? initialTab : "coordinate");
+  const [activeTab, setActiveTab] = useState<OutfitTab>(
+    isOutfitTab(initialTab) && isTabVisible(initialTab) ? initialTab : "coordinate"
+  );
 
   useEffect(() => {
     const t = params.get("tab");
-    if (isOutfitTab(t) && t !== activeTab) setActiveTab(t);
+    if (isOutfitTab(t) && isTabVisible(t) && t !== activeTab) setActiveTab(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
@@ -47,7 +55,7 @@ function OutfitInner() {
           <h1 className="text-2xl font-light text-gray-900">コーデ</h1>
         </div>
         <div className="flex border-b border-gray-100">
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => isTabVisible(tab.value)).map((tab) => (
             <button key={tab.value} onClick={() => handleTabChange(tab.value)}
               className={`flex-1 min-w-0 pb-3 text-xs sm:text-sm transition-colors truncate ${
                 activeTab === tab.value
