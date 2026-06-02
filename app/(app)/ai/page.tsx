@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible } from "@/lib/flags";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
 import SearchProductsButton from "@/components/chat/SearchProductsButton";
@@ -622,12 +622,15 @@ export default function ChatPage() {
         onNewChat={handleNewChat}
       />
 
-      {/* A-5 P1-D: クローゼットピッカーモーダル(GET /api/wardrobe + 選択 → textarea 挿入) */}
-      <ClosetPickerModal
-        isOpen={isClosetOpen}
-        onClose={() => setIsClosetOpen(false)}
-        onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
-      />
+      {/* A-5 P1-D: クローゼットピッカーモーダル(GET /api/wardrobe + 選択 → textarea 挿入)
+            SIMPLE_MODE では👕添付導線ごと非表示(ENABLE_CLOSET=false でマウントしない) */}
+      {ENABLE_CLOSET && (
+        <ClosetPickerModal
+          isOpen={isClosetOpen}
+          onClose={() => setIsClosetOpen(false)}
+          onPick={(insertText) => setText((cur) => cur ? `${cur} ${insertText}` : insertText)}
+        />
+      )}
 
       {/* ★ Sprint C-2 段階3-D + Sprint C-3: ムードボードピッカーモーダル(MB content prompt 注入)
             選択時に GET /api/moodboards/[id] で詳細取得 → buildMoodboardPrompt → textarea 挿入 */}
@@ -792,7 +795,7 @@ function AssistantContent({
         {content.actions && content.actions.length > 0 && (
           <AssistantActions actions={content.actions} onNavigate={onNavigate} />
         )}
-        {content.sessionIntent === "coordinate" && (
+        {ENABLE_VISUALIZE && content.sessionIntent === "coordinate" && (
           <VisualizeButton coordinateText={co.summary} moodboardId={content.moodboardId} />
         )}
         {/* ★ G-2b: MB 経由コーデなら「この方向性で商品を探す」(E-0f 実商品試着主軸への導線)*/}
@@ -827,7 +830,7 @@ function AssistantContent({
           <AssistantActions actions={content.actions} onNavigate={onNavigate} />
         )}
         {/* C-2a: coordinate intent の reply 直下に「ビジュアルで見る」ボタン(MB / 直接両対応) */}
-        {content.sessionIntent === "coordinate" && (
+        {ENABLE_VISUALIZE && content.sessionIntent === "coordinate" && (
           <VisualizeButton coordinateText={content.text} moodboardId={content.moodboardId} />
         )}
       </div>
@@ -1019,7 +1022,8 @@ function AssistantActions({
     <div className="flex flex-wrap gap-2 px-1">
       {actions.map((a, i) => {
         const target = resolveNavigateTarget(a.intent);
-        if (!target) return null;  // 配線なし intent は出さない(navigate-map 整合)
+        // 配線なし intent / SIMPLE_MODE で隠した機能への提案は出さない
+        if (!target || !isNavIntentVisible(a.intent)) return null;
         return (
           <button
             key={i}
@@ -1074,6 +1078,8 @@ function ResultView({
 
   // D1-2a: navigate 群 → 即遷移ボタン
   if (mode === "navigate" && !showSuggestions) {
+    // SIMPLE_MODE で隠した機能への直接遷移は案内しない（unknown 扱いにフォールバック）
+    if (!isNavIntentVisible(intent)) return <NoneNotice intent="unknown" />;
     return (
       <NavigateConfirm intent={intent} confidence={confidence} onNavigate={onNavigate} />
     );
@@ -1197,7 +1203,7 @@ function SuggestionList({
         確信度 {(confidence * 100).toFixed(0)}% — 候補を出しました
       </p>
       <div className="flex flex-col gap-2">
-        {suggestions.map((s, i) => {
+        {suggestions.filter((s) => isNavIntentVisible(s.intent)).map((s, i) => {
           // navigate 配線済 intent のみクリック可能(D1-2a スコープ)
           const target = resolveNavigateTarget(s.intent);
           if (!target) {

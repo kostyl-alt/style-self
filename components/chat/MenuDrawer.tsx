@@ -18,6 +18,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
+import { SIMPLE_MODE, isNavIntentVisible } from "@/lib/flags";
 
 interface MenuDrawerProps {
   isOpen:    boolean;
@@ -30,9 +31,12 @@ type MenuItem =
   | { kind: "action";      id: "new-chat"; label: string }
   | { kind: "placeholder"; id: string;     label: string };
 
-// 10 項目: navigate 7 件 + 新しいチャット 1 件 + placeholder 2 件
+// navigate 8 件 + 新しいチャット 1 件 + placeholder 2 件
+// （SIMPLE_MODE 時は isMenuItemVisible で「あなたの世界観 / ムードボード /
+//   新しいチャット」の3項目だけに絞る。項目自体は削除しない。）
 const MENU_ITEMS: MenuItem[] = [
   { kind: "navigate",    intent: "worldview-profile", label: "あなたの世界観" },
+  { kind: "navigate",    intent: "moodboard",         label: "ムードボード" },
   { kind: "navigate",    intent: "closet",            label: "クローゼット" },
   { kind: "navigate",    intent: "saved",             label: "保存" },
   { kind: "navigate",    intent: "history",           label: "履歴" },
@@ -43,6 +47,14 @@ const MENU_ITEMS: MenuItem[] = [
   { kind: "action",      id: "new-chat",              label: "新しいチャット" },
   { kind: "placeholder", id: "settings",              label: "設定" },
 ];
+
+// SIMPLE_MODE 時の表示判定。navigate は intent ごとのフラグ、
+// placeholder（避けたい/設定）は SIMPLE_MODE で非表示、action（新しいチャット）は常に表示。
+function isMenuItemVisible(item: MenuItem): boolean {
+  if (item.kind === "navigate")    return isNavIntentVisible(item.intent);
+  if (item.kind === "placeholder") return !SIMPLE_MODE;
+  return true;
+}
 
 export default function MenuDrawer({ isOpen, onClose, onNewChat }: MenuDrawerProps) {
   const router = useRouter();
@@ -114,7 +126,7 @@ export default function MenuDrawer({ isOpen, onClose, onNewChat }: MenuDrawerPro
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
-          {MENU_ITEMS.map((item, i) => {
+          {MENU_ITEMS.filter(isMenuItemVisible).map((item, i) => {
             const isPlaceholder = item.kind === "placeholder";
             return (
               <button

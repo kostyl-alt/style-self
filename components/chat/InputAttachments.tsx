@@ -14,6 +14,7 @@
 // notice はインラインメッセージ(自動消去 3 秒)で表示する。
 
 import { useRef, useState } from "react";
+import { ENABLE_CLOSET, PRODUCTS_ENABLED } from "@/lib/flags";
 
 interface InputAttachmentsProps {
   onClosetOpen:    () => void;
@@ -85,8 +86,10 @@ export default function InputAttachments({
     <div className="space-y-2">
       <div className="flex gap-1.5 items-center">
         <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />
-        <AttachButton icon="🔗" label="URL"      onClick={handleUrlClick} />
-        <AttachButton icon="👕" label="服"       onClick={onClosetOpen}    />
+        {/* 🔗URL(商品URL)は PRODUCTS_ENABLED、👕服(クローゼット)は ENABLE_CLOSET で制御。
+            SIMPLE_MODE では写真と MB の2つだけ表示。 */}
+        {PRODUCTS_ENABLED && <AttachButton icon="🔗" label="URL"      onClick={handleUrlClick} />}
+        {ENABLE_CLOSET    && <AttachButton icon="👕" label="服"       onClick={onClosetOpen}    />}
         <AttachButton icon="🎨" label="MB"       onClick={handleMbClick} />
         {notice && (
           <span className="text-[11px] text-gray-500 ml-2 truncate">{notice.text}</span>

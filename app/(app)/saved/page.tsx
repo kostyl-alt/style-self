@@ -1,11 +1,23 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { SavedTab } from "@/components/style/StyleTabs";
 import SavedProductsList from "@/components/saved/SavedProductsList";
-import { PRODUCTS_ENABLED } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_SAVED } from "@/lib/flags";
 import { Bookmark } from "lucide-react";
 
 export default function SavedPage() {
+  const router = useRouter();
+
+  // SIMPLE_MODE: /saved ページごと非表示。チャット主役画面 /ai へ送る。
+  useEffect(() => {
+    if (!ENABLE_SAVED) router.replace("/ai");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!ENABLE_SAVED) return null;
+
   return (
     <div className="min-h-screen bg-white pb-24">
       <div className="max-w-lg mx-auto px-4 py-12 space-y-10">

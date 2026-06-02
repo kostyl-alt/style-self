@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CoordinateTab, ConsultTab, VirtualTab } from "@/components/style/StyleTabs";
 import ClosetView from "@/components/closet/ClosetView";
-import { PRODUCTS_ENABLED } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_OUTFIT } from "@/lib/flags";
 
 type OutfitTab = "coordinate" | "consult" | "closet" | "virtual";
 
@@ -32,11 +32,19 @@ function OutfitInner() {
     isOutfitTab(initialTab) && isTabVisible(initialTab) ? initialTab : "coordinate"
   );
 
+  // SIMPLE_MODE: /outfit ページごと非表示。チャット主役画面 /ai へ送る。
+  useEffect(() => {
+    if (!ENABLE_OUTFIT) router.replace("/ai");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const t = params.get("tab");
     if (isOutfitTab(t) && isTabVisible(t) && t !== activeTab) setActiveTab(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  if (!ENABLE_OUTFIT) return null;
 
   function handleTabChange(t: OutfitTab) {
     setActiveTab(t);

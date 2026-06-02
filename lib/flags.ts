@@ -9,3 +9,35 @@
 // クライアントコンポーネントからも参照するため NEXT_PUBLIC_* を読む。
 export const PRODUCTS_ENABLED =
   process.env.NEXT_PUBLIC_PRODUCTS_ENABLED === "true";
+
+// SIMPLE_MODE: UI を「世界観診断 / チャット相談 / ムードボード」の 3 機能だけに絞る。
+//   既定 true（明示的に "false" を入れたときだけ全機能モードに戻る）。
+//   コード・API・DB は保持し、表示のみ各派生フラグで制御する。後で 1 機能ずつ戻す
+//   ときは下の該当 const の右辺を true（または個別 env 参照）に書き換えるだけ。
+export const SIMPLE_MODE = process.env.NEXT_PUBLIC_SIMPLE_MODE !== "false";
+
+export const ENABLE_OUTFIT     = !SIMPLE_MODE; // /outfit（コーデ提案/着こなし相談/クローゼット）
+export const ENABLE_CLOSET     = !SIMPLE_MODE; // クローゼット導線・チャットの👕添付
+export const ENABLE_SAVED      = !SIMPLE_MODE; // /saved
+export const ENABLE_HISTORY    = !SIMPLE_MODE; // /self?tab=history
+export const ENABLE_BODY       = !SIMPLE_MODE; // /self?tab=body
+export const ENABLE_PREFERENCE = !SIMPLE_MODE; // /self?tab=worldview（好み編集）
+export const ENABLE_POSTS      = !SIMPLE_MODE; // 投稿・/self?tab=posts
+export const ENABLE_VISUALIZE  = !SIMPLE_MODE; // VisualizeButton / tryon（画像生成・品質都合で停止中）
+
+// navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
+// （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
+// diagnose / worldview-profile / moodboard / coordinate 等は常に可視。
+export function isNavIntentVisible(intent: string): boolean {
+  switch (intent) {
+    case "closet":          return ENABLE_CLOSET;
+    case "saved":           return ENABLE_SAVED;
+    case "history":         return ENABLE_HISTORY;
+    case "body-edit":       return ENABLE_BODY;
+    case "preference-edit": return ENABLE_PREFERENCE;
+    case "my-posts":
+    case "create-post":     return ENABLE_POSTS;
+    case "tryon":           return ENABLE_VISUALIZE;
+    default:                return true;
+  }
+}

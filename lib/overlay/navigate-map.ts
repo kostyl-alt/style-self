@@ -30,6 +30,11 @@ export const NAVIGATE_MAP: Record<string, NavigateTarget> = {
     description: "あなたの世界観プロフィールを開きます",
   },
 
+  moodboard: {
+    url:         "/moodboard",
+    description: "ムードボードを開きます",
+  },
+
   "create-post": {
     url:         "/self/new-post",
     description: "投稿作成画面を開きます",

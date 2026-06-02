@@ -7,7 +7,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
 import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
-import { PRODUCTS_ENABLED } from "@/lib/flags";
+import {
+  PRODUCTS_ENABLED, ENABLE_BODY, ENABLE_PREFERENCE, ENABLE_HISTORY, ENABLE_POSTS,
+} from "@/lib/flags";
 import WorldviewPublicityPanel from "@/components/worldview/WorldviewPublicityPanel";
 import MyPostsTab from "@/components/posts/MyPostsTab";
 import type {
@@ -937,19 +939,34 @@ const TABS: { value: SelfTab; label: string }[] = [
   { value: "history",   label: "履歴" },
 ];
 
+// SIMPLE_MODE: 世界観診断(diagnosis)タブのみ残し、投稿/身体/好み/履歴は非表示。
+function isSelfTabVisible(v: SelfTab): boolean {
+  switch (v) {
+    case "posts":     return ENABLE_POSTS;
+    case "body":      return ENABLE_BODY;
+    case "worldview": return ENABLE_PREFERENCE; // label「好み」(命名トリック)
+    case "history":   return ENABLE_HISTORY;
+    default:          return true; // diagnosis
+  }
+}
+
 function SelfInner() {
   // D1-2x: URL クエリ ?tab=xxx で初期タブを決める(/outfit /discover と同型)。
   // 不正値 / ?tab= なし は既存デフォルト "diagnosis"(=「世界観」タブ・SelfTab 命名トリック)。
   const params = useSearchParams();
   const initialTab = params.get("tab");
-  const [activeTab, setActiveTab] = useState<SelfTab>(isSelfTab(initialTab) ? initialTab : "diagnosis");
+  const [activeTab, setActiveTab] = useState<SelfTab>(
+    isSelfTab(initialTab) && isSelfTabVisible(initialTab) ? initialTab : "diagnosis"
+  );
 
   // URL が後から変わった場合に同期(/outfit /discover と同型)
   useEffect(() => {
     const t = params.get("tab");
-    if (isSelfTab(t) && t !== activeTab) setActiveTab(t);
+    if (isSelfTab(t) && isSelfTabVisible(t) && t !== activeTab) setActiveTab(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  const visibleTabs = TABS.filter((tab) => isSelfTabVisible(tab.value));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -959,22 +976,24 @@ function SelfInner() {
           <h1 className="text-2xl font-light text-gray-900">あなたの世界観</h1>
         </div>
 
-        {/* タブ */}
-        <div className="flex gap-1 bg-white border border-gray-100 rounded-xl p-1 mb-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className={`flex-1 min-w-0 py-2 rounded-lg text-xs font-medium transition-all truncate ${
-                activeTab === tab.value
-                  ? "bg-gray-800 text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* タブ（SIMPLE_MODE で diagnosis のみのときはタブバー自体を隠す） */}
+        {visibleTabs.length > 1 && (
+          <div className="flex gap-1 bg-white border border-gray-100 rounded-xl p-1 mb-2">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`flex-1 min-w-0 py-2 rounded-lg text-xs font-medium transition-all truncate ${
+                  activeTab === tab.value
+                    ? "bg-gray-800 text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {activeTab === "diagnosis" && <DiagnosisTab />}
         {activeTab === "posts"     && <MyPostsTab />}
