@@ -31,7 +31,7 @@
 //   ・既存画面(/home /discover /outfit /self /saved /onboarding /u /p)0 変更
 //   ・③ プライバシー専章 / コスト管理 / Phase 2 後ゲートに干渉しない
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
@@ -146,7 +146,7 @@ function newMessageId(): string {
 // モーダル枠 / onClose / 外側クリック閉じる は廃止。
 // 中身(state / handler / Bubble / 5 サブ)は D1-2b' から シグネチャ無変更で transfer。
 // ====================================================================
-export default function ChatPage() {
+function ChatPageInner() {
   const router = useRouter();
   // ★ H-3: 左ペイン スレッド選択状態は URL クエリ ?thread=id 由来(リロード耐性・共有可)。
   //   中央チャットへの messages ロード接続は H-4(本 H-3 は選択状態 + URL 更新まで)。
@@ -1247,7 +1247,7 @@ function ApiHybridPlaceholder({ result }: { result: IntentResponse }) {
         </div>
       )}
       <p className="text-[10px] text-gray-400 pt-2 border-t border-gray-100">
-        この機能は D1-2c' / D1-2e' で配線します(現状は判定結果のみ表示)
+        {"この機能は D1-2c' / D1-2e' で配線します(現状は判定結果のみ表示)"}
       </p>
     </div>
   );
@@ -1259,5 +1259,14 @@ function KeyVal({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] tracking-widest text-gray-400 uppercase w-20 shrink-0">{label}</p>
       <p className="text-sm font-medium text-gray-900 break-all">{value}</p>
     </div>
+  );
+}
+
+// useSearchParams を使うため Suspense でラップ(/outfit /self と同パターン)
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <ChatPageInner />
+    </Suspense>
   );
 }

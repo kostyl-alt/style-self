@@ -21,12 +21,12 @@ interface AuthInfo {
 }
 
 export default function DevAuthBadge() {
-  // 本番では描画自体しない(user.id/email が本番 bundle に乗らない)
-  if (process.env.NODE_ENV === "production") return null;
-
+  const isProd = process.env.NODE_ENV === "production";
   const [info, setInfo] = useState<AuthInfo | null>(null);
 
   useEffect(() => {
+    // 本番では getUser を呼ばない(user.id/email を本番で取得・描画しない)
+    if (isProd) return;
     createSupabaseBrowserClient()
       .auth.getUser()
       .then(({ data }) => {
@@ -36,8 +36,10 @@ export default function DevAuthBadge() {
           setInfo({ email: "未ログイン", id: "-" });
         }
       });
-  }, []);
+  }, [isProd]);
 
+  // 本番では描画自体しない(user.id/email が本番 bundle に乗らない)
+  if (isProd) return null;
   if (!info) return null;
 
   // id の先頭 8 文字 + …(フル UUID は長すぎて視覚ノイズ)
