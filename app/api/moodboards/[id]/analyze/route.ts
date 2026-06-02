@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { MODEL } from "@/lib/claude";
 import { analyzeMoodboard } from "@/lib/prompts/moodboard-analysis";
+import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
 import type {
   MoodboardAnalysisRow,
   MoodboardAnalysisLLM,
@@ -48,6 +49,27 @@ function buildProfileNote(result: unknown): string | null {
 
 function toStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+// 既存解析の有無確認（Phase 2: クライアントの遅延自動生成の判定用）。
+// 返り値 { analysis: 行 | null }。未生成でも 200（null）を返す。
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  try {
+    if (!UUID_RE.test(params.id)) {
+      return NextResponse.json({ error: "moodboard_id が不正です" }, { status: 400 });
+    }
+    const supabase = createSupabaseServerClient();
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
+      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+    }
+    const analysis = await getMoodboardAnalysis(supabase, params.id);
+    return NextResponse.json({ analysis });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[moodboards/analyze GET] failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(_request: NextRequest, { params }: RouteContext) {

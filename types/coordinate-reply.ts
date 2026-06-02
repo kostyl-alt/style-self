@@ -64,9 +64,24 @@ export interface PromptDebug {
   userPrompt:   string;
 }
 
+// ★ Phase 2: 素材・色・丈・シルエットの「選ぶ条件」（行動可能・MB由来coordinateのみ付与）
+export interface FitConditions {
+  materials:   string[];
+  colors:      string[];
+  lengths:     string[];   // 丈
+  silhouettes: string[];
+}
+
 // ★ 構造化コーデ応答本体(Message 判別共用体に "coordinate_v2" として追加予定 = H-4b1-b)
 export interface CoordinateReply {
   type: "coordinate_v2";
+
+  // ★ Phase 2: 行動可能フィールド（すべて optional・MB context object 経路でのみ付与）。
+  //   直接コーデ / 旧 coordinate_v2 は未付与＝後方互換（UI は presence で出し分け）。
+  findThese?:      string[];      // 探すべき服
+  avoidThese?:     string[];      // 避ける服
+  searchKeywords?: string[];      // 検索ワード（ZOZO/Instagram/店で使える短語）
+  fitConditions?:  FitConditions; // 素材/色/丈/シルエット条件
 
   // 表示順 7(① direction 〜 ⑦ 折りたたみは下記詳細群)
   direction:     string;              // ①

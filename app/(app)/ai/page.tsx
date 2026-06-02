@@ -37,7 +37,8 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT } from "@/lib/flags";
+import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
 import SearchProductsButton from "@/components/chat/SearchProductsButton";
@@ -185,6 +186,37 @@ function ChatPageInner() {
   //   /api/tryon/generate に渡せるようにする。
   const [lastMoodboardId, setLastMoodboardId] = useState<string | null>(null);
 
+  // ★ Phase 2: MB context object 経路の添付状態（添付中は coordinate を analysis 駆動で短文応答）。
+  const [attachedMb, setAttachedMb] = useState<{ id: string; name: string } | null>(null);
+  const [mbAnalyzing, setMbAnalyzing] = useState(false);
+  const analysisPromiseRef = useRef<Promise<void> | null>(null);
+
+  // MB 添付時に moodboard_analysis を遅延自動生成（無ければ生成）。送信前に await される。
+  function ensureMbAnalysis(id: string) {
+    if (!MB_CONTEXT_OBJECT) return;
+    setMbAnalyzing(true);
+    const p = (async () => {
+      try {
+        const res = await fetch(`/api/moodboards/${id}/analyze`);
+        const data = res.ok ? (await res.json()) as { analysis: unknown } : null;
+        if (!data?.analysis) {
+          await fetch(`/api/moodboards/${id}/analyze`, { method: "POST" });
+        }
+      } catch {
+        // 失敗時はサーバ側フォールバック（通常 coordinate）に委ねる
+      } finally {
+        setMbAnalyzing(false);
+      }
+    })();
+    analysisPromiseRef.current = p;
+  }
+
+  function attachMoodboard(id: string, name: string) {
+    setAttachedMb({ id, name });
+    setLastMoodboardId(id);
+    ensureMbAnalysis(id);
+  }
+
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -280,17 +312,29 @@ function ChatPageInner() {
   //   URL param 長さ制限(2048 文字)回避・同一タブ内のみ・受け取り後即削除で再挿入防止
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const mbId   = sessionStorage.getItem("mb_id");
+    const mbName = sessionStorage.getItem("mb_name");
+
+    if (MB_CONTEXT_OBJECT && mbId !== null && mbId !== "") {
+      // ★ Phase 2: MB 詳細「チャットに渡す」→ 長文は使わず添付して analysis 準備。
+      attachMoodboard(mbId, mbName && mbName !== "" ? mbName : "ムードボード");
+      sessionStorage.removeItem("mb_id");
+      sessionStorage.removeItem("mb_name");
+      sessionStorage.removeItem("mb_prompt");
+      return;
+    }
+
+    // 旧経路（フラグ off）: 長文 prompt を textarea に流し込む。
     const mbPrompt = sessionStorage.getItem("mb_prompt");
     if (mbPrompt !== null && mbPrompt !== "") {
       setText((cur) => (cur ? `${cur}\n\n${mbPrompt}` : mbPrompt));
       sessionStorage.removeItem("mb_prompt");
     }
-    // ★ C-2a: MB 詳細ページ「チャットに渡す」から mb.id を引き継ぐ(ビジュアル化ボタン用)
-    const mbId = sessionStorage.getItem("mb_id");
     if (mbId !== null && mbId !== "") {
       setLastMoodboardId(mbId);
       sessionStorage.removeItem("mb_id");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ★ G-2b: 「商品を探す」→ /api/products/candidates → products メッセージ(案D: coordinate_v2 と別メッセージ)。
@@ -341,10 +385,13 @@ function ChatPageInner() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = text.trim();
+  async function handleSubmit(e?: React.FormEvent, explicitText?: string) {
+    e?.preventDefault();
+    const trimmed = (explicitText ?? text).trim();
     if (!trimmed || loading) return;
+
+    // ★ Phase 2: MB 添付中（フラグ ON）は coordinate を analysis 駆動の短文応答で返す。
+    const isMbContextSend = MB_CONTEXT_OBJECT && attachedMb !== null;
 
     // 1) user メッセージ append
     const userMsg: Message = {
@@ -361,13 +408,18 @@ function ChatPageInner() {
     const loadingMsg: Message = {
       id:        loadingId,
       role:      "assistant",
-      content:   { kind: "loading", mbCoordinate: isMbCoordinatePreview },
+      content:   { kind: "loading", mbCoordinate: isMbCoordinatePreview || isMbContextSend },
       createdAt: Date.now(),
     };
 
     setMessages((prev) => trimByMax([...prev, userMsg, loadingMsg]));
-    setText("");           // 入力欄クリア(連続発話可能に)
+    if (explicitText === undefined) setText("");  // 入力欄クリア(連続発話可能に・quickAction は維持)
     setLoading(true);
+
+    // ★ Phase 2: MB 添付直後で解析がまだ走っていれば完了を待つ（遅延自動生成）。
+    if (isMbContextSend && analysisPromiseRef.current) {
+      try { await analysisPromiseRef.current; } catch { /* 失敗時はサーバ側フォールバック */ }
+    }
 
     // ★ H-4a: thread 選択中は user メッセージを DB 永続化(currentThreadId=null 時は既存挙動のまま)
     if (currentThreadId) {
@@ -380,7 +432,8 @@ function ChatPageInner() {
       //   intent="coordinate" を client side で直接確定する(★ Haiku を呼ばない =
       //   JSON parse 失敗が ★ 構造的に起きない)。
       //   他経路(MVP-1c 直接コーデ依頼 / 5 intent / 通常会話)は ★ 既存通り段階 A 経由(完全不変)。
-      const isMbCoordinate = isMbCoordinatePreview;
+      //   ★ Phase 2: MB 添付（context object 経路）も同様に段階 A を skip して coordinate 確定。
+      const isMbCoordinate = isMbCoordinatePreview || isMbContextSend;
 
       let data: IntentResponse & { error?: string };
       if (isMbCoordinate) {
@@ -450,6 +503,8 @@ function ChatPageInner() {
               text:    trimmed,
               intent:  intentToSend,
               history: recentHistory,
+              // ★ Phase 2: MB 添付中は moodboardId を送り、サーバが moodboard_analysis を読んで短文応答。
+              moodboardId: isMbContextSend ? attachedMb!.id : undefined,
             }),
           });
           const replyData = await replyRes.json() as StylistChatResponse;
@@ -531,6 +586,7 @@ function ChatPageInner() {
     if (messages.length === 0) return;
     if (!confirm("現在の会話履歴を削除して新規セッションを開始しますか?")) return;
     setMessages([]);
+    setAttachedMb(null);  // ★ Phase 2: MB 添付も解除
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   }
 
@@ -575,7 +631,7 @@ function ChatPageInner() {
         ) : (
           <>
             {messages.map((m) => (
-              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} />
+              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} />
             ))}
             <div ref={endRef} />
           </>
@@ -584,6 +640,23 @@ function ChatPageInner() {
 
       {/* 下部固定入力(D1-2b' と同等・連続発話可能) */}
       <form onSubmit={handleSubmit} className="border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
+        {/* ★ Phase 2: MB 添付チップ（添付中はコーデを analysis 駆動の短文応答で返す）*/}
+        {MB_CONTEXT_OBJECT && attachedMb && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full">
+              🎨 {attachedMb.name}
+              {mbAnalyzing && <span className="text-gray-400">（解析中…）</span>}
+              <button
+                type="button"
+                onClick={() => setAttachedMb(null)}
+                aria-label="ムードボードの添付を解除"
+                className="text-gray-400 hover:text-gray-700 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          </div>
+        )}
         {/* A-5 P1-D: 入力欄近接 4 ボタン(写真 / URL / クローゼット / MB) */}
         <InputAttachments
           onClosetOpen={() => setIsClosetOpen(true)}
@@ -638,11 +711,15 @@ function ChatPageInner() {
         isOpen={isMbOpen}
         onClose={() => setIsMbOpen(false)}
         onPick={(mb: MoodboardWithItems) => {
-          // ★ 統合 Sprint: 体型登録済なら世界観フィッティング軸を注入(未登録なら従来出力)
-          const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
-          setText((cur) => (cur ? `${cur}\n\n${prompt}` : prompt));
-          // ★ C-2a: 「ビジュアルで見る」ボタンが MB データを fetch できるよう id を保持
-          setLastMoodboardId(mb.id);
+          if (MB_CONTEXT_OBJECT) {
+            // ★ Phase 2: 長文プロンプトを textarea に入れず、MB を添付して analysis を準備。
+            attachMoodboard(mb.id, mb.name);
+          } else {
+            // 旧経路（フラグ off）: buildMoodboardPrompt の長文を textarea に流し込む。
+            const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
+            setText((cur) => (cur ? `${cur}\n\n${prompt}` : prompt));
+            setLastMoodboardId(mb.id);
+          }
         }}
       />
     </div>
@@ -714,10 +791,12 @@ function Bubble({
   msg,
   onNavigate,
   onSearchProducts,
+  onSendPrompt,
 }: {
   msg:        Message;
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
+  onSendPrompt: (prompt: string) => void;
 }) {
   if (msg.role === "user") {
     // user 吹き出し:右寄り
@@ -735,7 +814,7 @@ function Bubble({
   return (
     <div className="flex justify-start">
       <div className="max-w-[92%] w-full">
-        <AssistantContent content={msg.content} onNavigate={onNavigate} onSearchProducts={onSearchProducts} />
+        <AssistantContent content={msg.content} onNavigate={onNavigate} onSearchProducts={onSearchProducts} onSendPrompt={onSendPrompt} />
       </div>
     </div>
   );
@@ -745,10 +824,12 @@ function AssistantContent({
   content,
   onNavigate,
   onSearchProducts,
+  onSendPrompt,
 }: {
   content:    MessageContent;
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
+  onSendPrompt: (prompt: string) => void;
 }) {
   if (content.kind === "loading") {
     // ★ C-2c-1 UX-B(MVP・固定文言): MB 経由はパイプライン段階を併記
@@ -784,6 +865,21 @@ function AssistantContent({
   //   ここで「JSON が出力されている」ことを verify でき、次段で見た目を完成させる。
   if (content.kind === "coordinate_v2") {
     const co = content.coordinate;
+    // ★ Phase 2: 行動可能フィールドがあれば（MB context object 経路）短文カードで描画。
+    //   無ければ（直接コーデ / 旧経路）従来の暫定 pre 表示にフォールバック（直接コーデ不変）。
+    const hasActionable = !!(
+      co.findThese?.length || co.avoidThese?.length || co.searchKeywords?.length || co.fitConditions
+    );
+    if (hasActionable) {
+      return (
+        <div className="space-y-2">
+          <CoordinateReplyCard coordinate={co} onSendPrompt={onSendPrompt} />
+          {content.actions && content.actions.length > 0 && (
+            <AssistantActions actions={content.actions} onNavigate={onNavigate} />
+          )}
+        </div>
+      );
+    }
     return (
       <div className="space-y-2">
         <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 leading-relaxed space-y-2">

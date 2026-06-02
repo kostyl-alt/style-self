@@ -29,6 +29,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadMoodboardImage } from "@/lib/storage";
 import { buildMoodboardPrompt } from "@/lib/prompts/moodboard-prompt";
+import { MB_CONTEXT_OBJECT } from "@/lib/flags";
 import type {
   MoodboardWithItems,
   MoodboardItemRow,
@@ -282,12 +283,18 @@ export default function MoodboardDetailPage() {
   //   sessionStorage 経由で ChatPage に MB prompt を渡す(URL param 長さ制限回避)
   function handleShoot(): void {
     if (!mb) return;
-    // ★ 統合 Sprint: 体型登録済なら世界観フィッティング軸を注入(未登録なら従来出力)
-    const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
     if (typeof window !== "undefined") {
-      sessionStorage.setItem("mb_prompt", prompt);
-      // ★ C-2a: 「ビジュアルで見る」ボタンが MB データを fetch できるよう mb.id も渡す
-      sessionStorage.setItem("mb_id", mb.id);
+      if (MB_CONTEXT_OBJECT) {
+        // ★ Phase 2: 長文 prompt を渡さず MB を添付（ChatPage が analysis を読んで短文応答）。
+        sessionStorage.setItem("mb_id", mb.id);
+        sessionStorage.setItem("mb_name", mb.name);
+        sessionStorage.removeItem("mb_prompt");
+      } else {
+        // 旧経路（フラグ off）: buildMoodboardPrompt の長文を渡す。
+        const prompt = buildMoodboardPrompt(mb, bodyProfile ?? undefined);
+        sessionStorage.setItem("mb_prompt", prompt);
+        sessionStorage.setItem("mb_id", mb.id);
+      }
     }
     router.push("/ai");
   }

@@ -37,10 +37,14 @@ import { callClaude, HAIKU_MODEL } from "@/lib/claude";
 import {
   STYLIST_CHAT_SYSTEM_PROMPT,
   COORDINATE_JSON_OUTPUT_INSTRUCTION,
+  COORDINATE_ACTIONABLE_OUTPUT_INSTRUCTION,
   buildStylistChatUserMessage,
+  buildMbAnalysisUserMessage,
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
+import { MB_CONTEXT_OBJECT } from "@/lib/flags";
+import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
 // ★ H-4b1-b-1: coordinate(MB 経由)の JSON 化接続(privacy 再帰 strip + parse フォールバック)
 import { stripCanonicalSlugsRecursive } from "@/lib/utils/strip-canonical-slugs";
 import { parseCoordinateReply } from "@/lib/utils/parse-coordinate-reply";
@@ -85,10 +89,13 @@ const MAX_REPLY_TOKENS = 2048;
 const MB_REPLY_TOKENS = 6144;
 
 interface StylistChatRequest {
-  text?:    unknown;
-  intent?:  unknown;
-  history?: unknown;
+  text?:        unknown;
+  intent?:      unknown;
+  history?:     unknown;
+  moodboardId?: unknown;  // ★ Phase 2: MB context object 経路（指定時 moodboard_analysis を読んで短文応答）
 }
+
+const MB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface StylistChatActionItem {
   intent: string;
@@ -141,6 +148,50 @@ export async function POST(request: NextRequest) {
       });
     }
     const history = sanitizeHistory(body.history);
+
+    // ★ Phase 2: MB context object 経路。
+    //   moodboardId 指定 + intent=coordinate + フラグ ON のとき、moodboard_analysis（Phase 1）を
+    //   読んで「探す/避ける/検索ワード/条件」を短く行動可能に返す（長文 buildMoodboardPrompt 不使用）。
+    //   analysis が見つからない場合のみ下の既存ロジックへフォールスルー（退行ゼロ）。
+    //   ★ editorScore は本経路では走らせない（評価ルーブリックは旧長文形式向けのため・既存挙動は不変）。
+    const mbId = typeof body.moodboardId === "string" ? body.moodboardId : "";
+    if (MB_CONTEXT_OBJECT && intent === "coordinate" && MB_UUID_RE.test(mbId)) {
+      const analysis = await getMoodboardAnalysis(supabase, mbId);
+      if (analysis) {
+        const mbSystemPrompt = `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${COORDINATE_ACTIONABLE_OUTPUT_INSTRUCTION}`;
+        const mbUserMessage  = buildMbAnalysisUserMessage(analysis, text, history);
+        let mbRaw: string;
+        try {
+          mbRaw = await callClaude({
+            systemPrompt: mbSystemPrompt,
+            userMessage:  mbUserMessage,
+            model:        HAIKU_MODEL,
+            maxTokens:    MB_REPLY_TOKENS,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn("[stylist-chat] MB context object claude failed:", message);
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+        const parsed = parseCoordinateReply(mbRaw);
+        if (parsed.coordinate) {
+          const safeCoordinate = stripCanonicalSlugsRecursive<CoordinateReply>(parsed.coordinate);
+          return NextResponse.json<StylistChatResponse>({
+            ok:         true,
+            coordinate: safeCoordinate,
+            actions:    buildActions(intent),
+          });
+        }
+        // parse 失敗 → strip して reply フォールバック（退行ゼロ）
+        const { cleaned } = stripCanonicalSlugs(mbRaw);
+        return NextResponse.json<StylistChatResponse>({
+          ok:      true,
+          reply:   cleaned.length > 0 ? cleaned : "うまく言葉にできませんでした。もう一度教えてください。",
+          actions: buildActions(intent),
+        });
+      }
+      // analysis 未生成 → 既存ロジックへフォールスルー（通常 coordinate として処理）
+    }
 
     // 3) ★ contextData はサーバ自前 SELECT(client 渡しは受けない)
     //    intent ごとに取得先テーブルを切替(各分岐とも ★ 列絞り SELECT で worldview_tags 構造遮断)

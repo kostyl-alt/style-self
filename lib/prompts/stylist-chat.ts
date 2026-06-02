@@ -25,6 +25,7 @@
 // ★ B-2(X1): concerns 英語スラッグの leak 根絶のため body-rules.ts の reframe マップを流用。
 // short_legs → 「重心高めの構成」/ top_heavy →「上半身に存在感」等(★ R-2 否定形ゼロ)。
 import { CONCERN_REFRAME } from "@/lib/utils/body-rules";
+import type { MoodboardAnalysisRow } from "@/types/moodboard";
 
 export const STYLIST_CHAT_SYSTEM_PROMPT = `あなたは STYLE-SELF というファッションアプリ内の「AI スタイリスト」です。ユーザーと自然な日本語で短い対話を行い、世界観診断の振り返りを手助けします。
 
@@ -131,6 +132,94 @@ JSON の summary と各 items[].description に ★ 織り込む(別立ての説
 ・quickActions は ★ 上記 5 個 固定(label/prompt そのまま)
 ・customActions は ★ 1〜2 個・この MB の文脈特有(無ければ空配列 [])
 ・★ 全 string 値で「★絶対禁止」の英語スラッグ・内部 ID・禁止語は使わない(JSON でも厳守)`;
+
+// ★ Phase 2: MB context object 経路の出力契約（短く行動可能）。
+//   既存 COORDINATE_JSON_OUTPUT_INSTRUCTION は ★ 残す（直接コーデ / 旧経路 / フラグ off 用）。
+//   この instruction は moodboard_analysis を context として渡された MB由来coordinateのみで使う。
+export const COORDINATE_ACTIONABLE_OUTPUT_INSTRUCTION = `【★ コーデ提案の出力形式(最優先・上記「本文のみ」を上書き)】
+アプリ内で服は売らない。ユーザーがどこで買うにせよ「自分の世界観に合う服を選べる判断軸」を
+★ 短く・行動可能に渡すのが目的。長い分析文ではなく、探す/避ける/検索ワード/条件を主役にする。
+以下の JSON のみを出力する(前後に文章・コードフェンス・注釈を一切付けない)。
+
+{
+  "type": "coordinate_v2",
+  "direction": "今回の方向性を 1 文で",
+  "summary": "要点を 2〜3 文で(具体的に・長くしない)",
+  "findThese": ["探すべき服を行動可能に 2〜4 個(例: 落ち感のある黒のロングシャツ)"],
+  "avoidThese": ["避ける服を 1〜3 個(例: 光沢の強い化繊ブルゾン)"],
+  "searchKeywords": ["検索でヒットしやすい短い一般名詞を 3〜6 個(例: 黒 ロングシャツ レーヨン)"],
+  "fitConditions": {
+    "materials": ["素材条件"],
+    "colors": ["色条件"],
+    "lengths": ["丈条件"],
+    "silhouettes": ["シルエット条件"]
+  },
+  "items": [
+    { "category": "トップス", "description": "簡潔な要点(詳細な11項目説明は不要)" }
+  ],
+  "sources": [],
+  "quickActions": [
+    { "label": "もっと日常化", "prompt": "今の提案をもっと日常的にして" },
+    { "label": "もっと尖らせる", "prompt": "今の提案をもっと尖らせて" },
+    { "label": "この服は合う？", "prompt": "今考えている服がこの世界観に合うか相談したい" },
+    { "label": "買うなら何を探す？", "prompt": "買うなら具体的に何を探せばいいか教えて" }
+  ],
+  "customActions": []
+}
+
+【厳守】
+・findThese / searchKeywords は ★ 実際に探せる具体・短語(抽象語のみは禁止)
+・searchKeywords は ★ ブランド名・英語スラッグ禁止(検索でヒットする一般名詞のみ)
+・avoidThese / fitConditions は与えられた世界観・NG要素・買う判断軸に基づく
+・items は 1〜5 個の簡潔な要点でよい(長文の 11 項目説明は ★ 書かない)
+・sources は空配列 [] でよい
+・quickActions は ★ 上記 4 個固定(label/prompt そのまま) / customActions は 0〜2 個
+・★ 全 string 値で英語スラッグ・内部 ID・禁止語は使わない`;
+
+// ★ Phase 2: moodboard_analysis（context object）を user メッセージに整形する。
+//   buildStylistChatUserMessage は他 intent 用なので触らず、MB context object 経路専用に分離。
+export function buildMbAnalysisUserMessage(
+  analysis: MoodboardAnalysisRow,
+  userText: string,
+  history: StylistChatHistoryItem[],
+): string {
+  const lines: string[] = [];
+
+  lines.push("[ムードボードの世界観(解析済み context)]");
+  if (analysis.worldview_core) lines.push(`世界観コア: ${analysis.worldview_core}`);
+  if (analysis.colors.length > 0)      lines.push(`色: ${analysis.colors.join(" / ")}`);
+  if (analysis.materials.length > 0)   lines.push(`素材: ${analysis.materials.join(" / ")}`);
+  if (analysis.silhouettes.length > 0) lines.push(`シルエット: ${analysis.silhouettes.join(" / ")}`);
+  if (analysis.mood)                   lines.push(`空気感: ${analysis.mood}`);
+  if (analysis.ng_elements.length > 0) lines.push(`NG要素: ${analysis.ng_elements.join(" / ")}`);
+
+  const sa = analysis.shopping_axis ?? {};
+  const saLines: string[] = [];
+  if (Array.isArray(sa.where_to_look) && sa.where_to_look.length > 0) saLines.push(`探す場所: ${sa.where_to_look.join(" / ")}`);
+  if (Array.isArray(sa.check_points) && sa.check_points.length > 0)   saLines.push(`確認点: ${sa.check_points.join(" / ")}`);
+  if (Array.isArray(sa.avoid_when) && sa.avoid_when.length > 0)       saLines.push(`見送る条件: ${sa.avoid_when.join(" / ")}`);
+  if (saLines.length > 0) {
+    lines.push("");
+    lines.push("[買う判断軸]");
+    lines.push(...saLines);
+  }
+
+  if (history.length > 0) {
+    lines.push("");
+    lines.push("[会話履歴]");
+    for (const h of history) {
+      lines.push(`${h.role === "user" ? "ユーザー" : "アシスタント"}: ${h.text}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("[ユーザーの依頼]");
+  lines.push(userText);
+  lines.push("");
+  lines.push("上記の世界観・買う判断軸に基づき、指定の JSON 形式で短く行動可能に答えてください。");
+
+  return lines.join("\n");
+}
 
 export interface StylistChatContext {
   // diagnose 用(1.5a)
