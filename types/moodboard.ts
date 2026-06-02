@@ -97,6 +97,22 @@ export interface ShoppingAxis {
   avoid_when?:    string[];   // 見送る条件
 }
 
+// ★ Phase 4-a: 着こなし操作の軸（shopping_axis と対構造＝「買う軸／着る軸」）。
+// jsonb なので将来フィールド追加は後方互換。固有店名・英語スラッグに依存しない「操作」指針。
+export interface StylingAxis {
+  layering?:        string[];   // レイヤードの組み方
+  lengths?:         string[];   // 丈・袖・裾の扱い
+  silhouetteBuild?: string[];   // シルエットの組み立て方
+  colorBalance?:    string[];   // 色配分
+  materialMix?:     string[];   // 素材の混ぜ方
+  accessories?:     string[];   // 小物の置き方
+  shoesConnection?: string[];   // 靴との接続
+  hairMakeup?:      string[];   // 髪型・メイクとの接続
+  anomaly?:         string[];   // 普通に見えないための違和感
+  mbStylingRules?:  string[];   // MB由来の着こなしルール
+  avoidStyling?:    string[];   // 避けるべき着方
+}
+
 export interface MoodboardAnalysisRow {
   moodboard_id:   string;
   worldview_core: string;     // 世界観コア（1〜2文）
@@ -106,6 +122,7 @@ export interface MoodboardAnalysisRow {
   mood:           string;     // 空気感
   ng_elements:    string[];
   shopping_axis:  ShoppingAxis;
+  styling_axis:   StylingAxis;  // ★ Phase 4-a: 着こなし操作の軸
   source:         string;     // 生成元（モデル名等）
   created_at:     string;
   updated_at:     string;

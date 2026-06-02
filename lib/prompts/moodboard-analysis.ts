@@ -34,8 +34,11 @@ const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化す
 - 固有のブランド名・店名は出さない（どこで買うかに依存しない普遍的な判断軸にする）。
 - 抽象語の羅列ではなく、実際に服を選べる粒度で具体的に書く。
 - 入力に無い要素は世界観・コンセプトから自然に推定して補完してよい。
-- 参考の判断ルール・影響源（Knowledge OS）があれば、世界観コア/素材/シルエット/NG/買う判断軸の
-  言語化に活かす。ただし固有名（人名・作品名）の丸写しはせず、世界観の言葉に翻訳する。日本語のみ。
+- 参考の判断ルール・影響源（Knowledge OS）があれば、世界観コア/素材/シルエット/NG/買う判断軸/
+  着こなし操作の言語化に活かす。ただし固有名（人名・作品名）の丸写しはせず、世界観の言葉に翻訳する。日本語のみ。
+- ★ おしゃれは「良い服」ではなく「スタイリングが上手い」ことで決まる。同じ服でも丈・腰位置・
+  ベルト・裾のため・小物・髪型・崩し・視線設計で印象が変わる。styling_axis では「何を着るか」ではなく
+  「どう着るか＝操作」を、実際に手を動かせる粒度で書く（例:「丈を上げて腰位置を見せる」「裾を靴にためる」）。
 
 【出力 JSON 形式】
 {
@@ -49,11 +52,24 @@ const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化す
     "where_to_look": ["どんな店・売り場で探すと出会いやすいか（店種の指針・固有店名は不可）"],
     "check_points": ["買う前に必ず確認する点（素材/丈/シルエット/色味 等）"],
     "avoid_when": ["この条件なら見送る、という判断基準"]
+  },
+  "styling_axis": {
+    "layering": ["レイヤードの組み方（例: 短丈を上に重ねて縦のリズムを作る）"],
+    "lengths": ["丈・袖・裾の扱い（例: 袖をたくし上げて手首を見せる）"],
+    "silhouetteBuild": ["シルエットの組み立て方（例: 上をコンパクト・下をボリュームでYライン）"],
+    "colorBalance": ["色配分（例: 黒を主役に1色だけ差し色を小面積で）"],
+    "materialMix": ["素材の混ぜ方（例: マット素材に光沢を一点だけ）"],
+    "accessories": ["小物の置き方（例: ベルトで腰を主役にし手首で色を拾う）"],
+    "shoesConnection": ["靴との接続（例: 裾を靴にためて下半身に重心）"],
+    "hairMakeup": ["髪型・メイクとの接続（例: タイトなまとめ髪で抜けを作る）"],
+    "anomaly": ["普通に見えないための違和感（例: スカーフを巻いて視線を一点に集める）"],
+    "mbStylingRules": ["このMB世界観特有の着こなしルール"],
+    "avoidStyling": ["避けるべき着方（例: 全部をジャストサイズで揃えて平坦にしない）"]
   }
 }
 
 【各配列の目安】colors/materials/silhouettes/ng_elements は各 3〜6 個。
-shopping_axis の各配列は 2〜4 個。`;
+shopping_axis の各配列は 2〜4 個。styling_axis の各配列は 1〜3 個（操作は具体的に・空でよい項目は省略可）。`;
 
 export function buildMoodboardAnalysisUserMessage(input: MoodboardAnalysisInput): string {
   const lines: string[] = [];
@@ -99,7 +115,7 @@ export function buildMoodboardAnalysisUserMessage(input: MoodboardAnalysisInput)
   }
 
   lines.push("");
-  lines.push("上記から、指定の JSON 形式で世界観コアと買う判断軸を出力してください。");
+  lines.push("上記から、指定の JSON 形式で世界観コア・買う判断軸・着こなし操作を出力してください。");
 
   return lines.join("\n");
 }
@@ -110,6 +126,7 @@ export async function analyzeMoodboard(
   return callClaudeJSON<MoodboardAnalysisLLM>({
     systemPrompt: SYSTEM_PROMPT,
     userMessage:  buildMoodboardAnalysisUserMessage(input),
-    maxTokens:    2048,
+    // ★ Phase 4-a: styling_axis 追加で出力が増えたため 2048→3072（途中切れ防止）
+    maxTokens:    3072,
   });
 }

@@ -178,6 +178,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       mood:           typeof llm.mood === "string" ? llm.mood : "",
       ng_elements:    toStringArray(llm.ng_elements),
       shopping_axis:  (llm.shopping_axis && typeof llm.shopping_axis === "object") ? llm.shopping_axis : {},
+      styling_axis:   (llm.styling_axis && typeof llm.styling_axis === "object") ? llm.styling_axis : {},
       source:         MODEL,
       created_at:     now,
       updated_at:     now,
@@ -186,7 +187,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
     const { data: saved, error: upsertErr } = await supabase
       .from("moodboard_analysis")
       .upsert(payload as never, { onConflict: "moodboard_id" })
-      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, source, created_at, updated_at")
+      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, source, created_at, updated_at")
       .single() as unknown as {
         data: MoodboardAnalysisRow | null;
         error: { message: string } | null;

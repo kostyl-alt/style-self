@@ -217,7 +217,8 @@ style-self/
 │   │   ├── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
 │   │   ├── 021_avoid_items.sql            # Sprint 47: users.avoid_items text[]（Q16「着たくない服」をNG制約として保存）
 │   │   ├── 027_h1_chat_threads.sql        # Sprint H-1: 対話型AIスタイリスト永続文脈基盤（chat_threads / messages / feedback / judgment_rules・RLS本人FOR ALL+親thread経由EXISTS）※022-026は本ファイル未記載
-│   │   └── 029_phase1_moodboard_analysis.sql # Phase 1: moodboard_analysis（board単位 context object・RLS親moodboards経由EXISTS・冪等）※028は本ファイル未記載
+│   │   ├── 029_phase1_moodboard_analysis.sql # Phase 1: moodboard_analysis（board単位 context object・RLS親moodboards経由EXISTS・冪等）※028は本ファイル未記載
+│   │   └── 030_phase4a_styling_axis.sql      # Phase 4-a: moodboard_analysis に styling_axis jsonb 追加（着こなし操作の軸・additive・冪等）
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
@@ -281,7 +282,7 @@ ADMIN_EMAILS=
 | `messages` | スレッド内メッセージ（Sprint H-1：role=user/assistant・attachments/metadata jsonb） |
 | `feedback` | メッセージへのフィードバック（Sprint H-1：like/dislike/more_x/change_item 等） |
 | `judgment_rules` | ユーザーごとの判断ルール（Sprint H-1：好み/NG/style_rule を次回生成に反映・priority 1-10） |
-| `moodboard_analysis` | ムードボードの board単位 context object（Phase 1：worldview_core/colors/materials/silhouettes/mood/ng_elements/shopping_axis jsonb・1 MBに1行・再解析で上書き・RLSは親moodboards経由EXISTS） |
+| `moodboard_analysis` | ムードボードの board単位 context object（Phase 1：worldview_core/colors/materials/silhouettes/mood/ng_elements/shopping_axis jsonb・1 MBに1行・再解析で上書き・RLSは親moodboards経由EXISTS。Phase 4-aで styling_axis jsonb＝着こなし操作の軸を追加） |
 
 ---
 
