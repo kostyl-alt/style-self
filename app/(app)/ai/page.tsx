@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP } from "@/lib/flags";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
@@ -590,6 +590,45 @@ function ChatPageInner() {
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   }
 
+  // ★ Phase 3: 評価フィードバック（好き/違う/保存）。会話は流さず裏で記録し、judgment_rules 抽出を起動。
+  //   案B: ephemeral（thread 未作成）時はその場で thread を作り、現在の会話を永続化してから feedback 保存。
+  //   message_id は使わず content に提案の核を同梱（DB id マッピング回避）。best-effort・失敗は握りつぶし。
+  async function submitFeedback(kind: "like" | "dislike" | "save", reason?: string) {
+    if (!FEEDBACK_LOOP) return;
+    try {
+      let tid = currentThreadId;
+      if (!tid) {
+        const firstUser = messages.find((m) => m.role === "user" && m.content.kind === "text");
+        const title = firstUser && firstUser.content.kind === "text"
+          ? firstUser.content.text.slice(0, 40)
+          : "コーデ相談";
+        const res = await fetch("/api/threads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (!res.ok) return;
+        const data = await res.json() as { thread?: { id: string } };
+        tid = data.thread?.id ?? null;
+        if (!tid) return;
+        // 現在の会話を新 thread へ永続化（best-effort・永続化可能な kind のみ）。
+        for (const m of messages) {
+          const dt = feedbackDisplayText(m.content);
+          if (dt === null) continue;
+          await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+        }
+        router.replace(`/ai?thread=${tid}`);
+      }
+      await fetch(`/api/threads/${tid}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, content: reason ?? "" }),
+      });
+    } catch {
+      // best-effort: 失敗しても会話・既存挙動は不変
+    }
+  }
+
   return (
     // ★ H-3: 2 ペイン化(左: スレッド履歴 / 中央: 既存チャットを ★ 中身ゼロ変更で内包)。
     //   左ペインは /ai/page.tsx 内で完結((app)/layout.tsx は最小 pass-through)。
@@ -631,7 +670,7 @@ function ChatPageInner() {
         ) : (
           <>
             {messages.map((m) => (
-              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} />
+              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={submitFeedback} />
             ))}
             <div ref={endRef} />
           </>
@@ -728,6 +767,15 @@ function ChatPageInner() {
   );
 }
 
+// ★ Phase 3: thread 自動作成時の永続化用 displayText（永続化しない kind は null）。
+function feedbackDisplayText(content: MessageContent): string | null {
+  if (content.kind === "text" || content.kind === "reply") return content.text;
+  if (content.kind === "coordinate_v2") {
+    return content.coordinate.summary || content.coordinate.direction || "(コーデ提案)";
+  }
+  return null; // loading / intent-result / error / products は永続化しない
+}
+
 // ---- 履歴ヘルパ ----
 
 function trimByMax(msgs: Message[]): Message[] {
@@ -792,11 +840,13 @@ function Bubble({
   onNavigate,
   onSearchProducts,
   onSendPrompt,
+  onFeedback,
 }: {
   msg:        Message;
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
   onSendPrompt: (prompt: string) => void;
+  onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }) {
   if (msg.role === "user") {
     // user 吹き出し:右寄り
@@ -814,7 +864,7 @@ function Bubble({
   return (
     <div className="flex justify-start">
       <div className="max-w-[92%] w-full">
-        <AssistantContent content={msg.content} onNavigate={onNavigate} onSearchProducts={onSearchProducts} onSendPrompt={onSendPrompt} />
+        <AssistantContent content={msg.content} onNavigate={onNavigate} onSearchProducts={onSearchProducts} onSendPrompt={onSendPrompt} onFeedback={onFeedback} />
       </div>
     </div>
   );
@@ -825,11 +875,13 @@ function AssistantContent({
   onNavigate,
   onSearchProducts,
   onSendPrompt,
+  onFeedback,
 }: {
   content:    MessageContent;
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
   onSendPrompt: (prompt: string) => void;
+  onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }) {
   if (content.kind === "loading") {
     // ★ C-2c-1 UX-B(MVP・固定文言): MB 経由はパイプライン段階を併記
@@ -873,7 +925,7 @@ function AssistantContent({
     if (hasActionable) {
       return (
         <div className="space-y-2">
-          <CoordinateReplyCard coordinate={co} onSendPrompt={onSendPrompt} />
+          <CoordinateReplyCard coordinate={co} onSendPrompt={onSendPrompt} onFeedback={onFeedback} />
           {content.actions && content.actions.length > 0 && (
             <AssistantActions actions={content.actions} onNavigate={onNavigate} />
           )}

@@ -43,8 +43,9 @@ import {
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
-import { MB_CONTEXT_OBJECT } from "@/lib/flags";
+import { MB_CONTEXT_OBJECT, FEEDBACK_LOOP } from "@/lib/flags";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
+import { getJudgmentRules } from "@/lib/utils/judgment-rules-service";
 // ★ H-4b1-b-1: coordinate(MB 経由)の JSON 化接続(privacy 再帰 strip + parse フォールバック)
 import { stripCanonicalSlugsRecursive } from "@/lib/utils/strip-canonical-slugs";
 import { parseCoordinateReply } from "@/lib/utils/parse-coordinate-reply";
@@ -158,8 +159,10 @@ export async function POST(request: NextRequest) {
     if (MB_CONTEXT_OBJECT && intent === "coordinate" && MB_UUID_RE.test(mbId)) {
       const analysis = await getMoodboardAnalysis(supabase, mbId);
       if (analysis) {
+        // ★ Phase 3: 学習ルール注入（FEEDBACK_LOOP 時のみ・空なら Phase 2 と同一出力）
+        const mbRules = FEEDBACK_LOOP ? await getJudgmentRules(supabase, userId) : [];
         const mbSystemPrompt = `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${COORDINATE_ACTIONABLE_OUTPUT_INSTRUCTION}`;
-        const mbUserMessage  = buildMbAnalysisUserMessage(analysis, text, history);
+        const mbUserMessage  = buildMbAnalysisUserMessage(analysis, text, history, mbRules);
         let mbRaw: string;
         try {
           mbRaw = await callClaude({
@@ -209,6 +212,12 @@ export async function POST(request: NextRequest) {
       fetchKnowledgeOSContext(text),
     ]);
     const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
+
+    // ★ Phase 3: 学習ルール注入（FEEDBACK_LOOP 時のみ・空なら ctx.judgmentRules=undefined＝従来と同一）
+    if (FEEDBACK_LOOP) {
+      const rules = await getJudgmentRules(supabase, userId);
+      if (rules.length > 0) ctx.judgmentRules = rules;
+    }
 
     // ★ B-2(X2)+ B-4: MB 経路の判別(buildMoodboardPrompt の固定 signature 検出)。
     //   B-2 X2: bodyProfile 注入を skip(2 重 leak 根絶・案 F 同思想で MB は client 完結)。

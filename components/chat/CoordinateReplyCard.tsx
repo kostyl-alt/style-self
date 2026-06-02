@@ -10,13 +10,25 @@
 
 import { useState } from "react";
 import type { CoordinateReply, QuickAction } from "@/types/coordinate-reply";
+import { FEEDBACK_LOOP } from "@/lib/flags";
 
 interface Props {
   coordinate:  CoordinateReply;
   onSendPrompt: (prompt: string) => void;
+  // ★ Phase 3: 評価フィードバック（FEEDBACK_LOOP=true 時のみ表示）。会話は流さず裏で記録。
+  onFeedback?: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }
 
-export default function CoordinateReplyCard({ coordinate, onSendPrompt }: Props) {
+// ★ Phase 3: 「違う」理由は世界観軸の語彙（analysis 構成要素と地続き）。
+const DISLIKE_REASONS = [
+  "この世界観じゃない",
+  "素材感が違う",
+  "シルエットが違う",
+  "装飾が多い/演出っぽい",
+  "重い / 軽い",
+];
+
+export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedback }: Props) {
   const [open, setOpen] = useState(false);
   const co = coordinate;
 
@@ -133,6 +145,57 @@ export default function CoordinateReplyCard({ coordinate, onSendPrompt }: Props)
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ★ Phase 3: 評価フィードバック行（記録のみ・会話は流さない） */}
+      {FEEDBACK_LOOP && onFeedback && (
+        <FeedbackRow direction={co.direction} onFeedback={onFeedback} />
+      )}
+    </div>
+  );
+}
+
+function FeedbackRow({
+  direction,
+  onFeedback,
+}: {
+  direction: string;
+  onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
+}) {
+  const [sent, setSent] = useState<string | null>(null);
+  const [showReasons, setShowReasons] = useState(false);
+
+  if (sent) {
+    return <div className="border-t border-gray-200 pt-2 text-xs text-gray-400">✓ 記録しました（次回の提案に反映されます）</div>;
+  }
+
+  // 提案の核（direction）を content に同梱して抽出器の文脈にする。
+  const proposalNote = direction ? `提案: ${direction}` : "";
+
+  return (
+    <div className="border-t border-gray-200 pt-2 space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => { onFeedback("like", proposalNote); setSent("like"); }}
+          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-100 transition-colors">👍 好き</button>
+        <button type="button" onClick={() => setShowReasons((v) => !v)}
+          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-100 transition-colors">👎 違う</button>
+        <button type="button" onClick={() => { onFeedback("save", proposalNote); setSent("save"); }}
+          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-full text-xs hover:bg-gray-100 transition-colors">🔖 保存</button>
+      </div>
+      {showReasons && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-gray-400">どこが違いましたか？（任意）</p>
+          <div className="flex flex-wrap gap-1.5">
+            {DISLIKE_REASONS.map((r) => (
+              <button key={r} type="button"
+                onClick={() => { onFeedback("dislike", `理由: ${r}${proposalNote ? ` ｜ ${proposalNote}` : ""}`); setSent("dislike"); }}
+                className="px-2.5 py-1 bg-white border border-gray-200 text-gray-600 rounded-full text-xs hover:border-gray-400 transition-colors">{r}</button>
+            ))}
+            <button type="button"
+              onClick={() => { onFeedback("dislike", proposalNote); setSent("dislike"); }}
+              className="px-2.5 py-1 text-gray-400 rounded-full text-xs hover:text-gray-600 transition-colors">理由なしで送る</button>
+          </div>
         </div>
       )}
     </div>

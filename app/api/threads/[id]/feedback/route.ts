@@ -14,9 +14,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { FEEDBACK_LOOP } from "@/lib/flags";
+import { extractAndSaveJudgmentRules } from "@/lib/utils/judgment-rules-service";
 import type { FeedbackRow } from "@/types/chat-thread";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;  // ★ Phase 3: FEEDBACK_LOOP 時の judgment_rules 抽出（LLM）分
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KIND_MAX = 50;
@@ -118,6 +121,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         { error: insErr?.message ?? "フィードバックの保存に失敗しました" },
         { status: 500 },
       );
+    }
+
+    // ★ Phase 3: 保存成功後、judgment_rules を抽出（FEEDBACK_LOOP 時のみ・best-effort）。
+    //   保存契約は不変＝抽出が失敗しても feedback 保存レスポンスには影響させない。
+    if (FEEDBACK_LOOP) {
+      try {
+        await extractAndSaveJudgmentRules(supabase, user.id, params.id, kind, content);
+      } catch (extractErr) {
+        console.warn("[feedback POST] judgment extract failed:", extractErr instanceof Error ? extractErr.message : extractErr);
+      }
     }
 
     return NextResponse.json({ feedback: inserted });
