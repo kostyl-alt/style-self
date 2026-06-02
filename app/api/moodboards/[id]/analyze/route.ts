@@ -18,6 +18,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { MODEL } from "@/lib/claude";
 import { analyzeMoodboard } from "@/lib/prompts/moodboard-analysis";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
+import { getDecisionRules, getInfluences } from "@/lib/knowledge-os/client";
 import type {
   MoodboardAnalysisRow,
   MoodboardAnalysisLLM,
@@ -28,6 +29,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;  // LLM 生成は秒単位かかる
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ★ 案A: KO 初回 cold（実測 ~5.5s）が client 既定 5s を超えるため、analyze では 20s に延長。
+//   analyze は maxDuration=60s の重い処理なので許容内。タイムアウト時は [] 縮退（退行ゼロ）。
+const KO_TIMEOUT_MS = 20000;
 
 interface RouteContext {
   params: { id: string };
@@ -125,7 +130,25 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       .maybeSingle() as unknown as { data: { result: unknown } | null };
     const worldviewProfileNote = buildProfileNote(profile?.result ?? null);
 
-    // 6) LLM 解析（テキスト統合・1回）
+    // 6) Knowledge OS 参考（案A・best-effort）。初回 cold は数秒かかるため timeout を 20s に延長。
+    //    到達不可/タイムアウト/エラーは [] に縮退 → KO 節を足さず通常生成（退行ゼロ）。
+    const [koRulesRaw, koInflRaw] = await Promise.all([
+      getDecisionRules({ importance_min: 4, limit: 8 }, KO_TIMEOUT_MS).catch(() => []),
+      getInfluences({ limit: 5 }, KO_TIMEOUT_MS).catch(() => []),
+    ]);
+    const koDecisionRules = koRulesRaw
+      .map((r) => (typeof r.rule === "string" ? r.rule.trim() : ""))
+      .filter((s) => s !== "");
+    const koInfluences = koInflRaw
+      .map((i) => {
+        const name = (i.subject_name ?? "").trim();
+        const essence = (i.fusion_essence ?? "").trim();
+        if (name === "" && essence === "") return "";
+        return essence !== "" ? `${name}：${essence}` : name;
+      })
+      .filter((s) => s !== "");
+
+    // 7) LLM 解析（テキスト統合・1回）
     let llm: MoodboardAnalysisLLM;
     try {
       llm = await analyzeMoodboard({
@@ -135,6 +158,8 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
         worldviewKeywords:    toStringArray(mb.worldview_keywords),
         itemCaptions,
         worldviewProfileNote,
+        koDecisionRules,
+        koInfluences,
       });
     } catch (llmErr) {
       const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);

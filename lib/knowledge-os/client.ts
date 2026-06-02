@@ -126,7 +126,11 @@ function cacheKey(name: string, args: Record<string, unknown>): string {
   return `${name}::${JSON.stringify(args)}`;
 }
 
-async function callToolCached<T>(name: string, args: Record<string, unknown>): Promise<T[]> {
+async function callToolCached<T>(
+  name: string,
+  args: Record<string, unknown>,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<T[]> {
   const key = cacheKey(name, args);
   const hit = cache.get(key);
   const now = Date.now();
@@ -135,17 +139,21 @@ async function callToolCached<T>(name: string, args: Record<string, unknown>): P
     // 配列要素のオブジェクトは共有なので、呼び出し側はオブジェクトをミューテートしない約束。
     return (hit.data as T[]).slice();
   }
-  const fresh = await callTool<T>(name, args);
+  const fresh = await callTool<T>(name, args, timeoutMs);
   cache.set(key, { data: fresh, expiresAt: now + CACHE_TTL_MS });
   return fresh.slice();
 }
 
-async function callTool<T>(name: string, args: Record<string, unknown>): Promise<T[]> {
+async function callTool<T>(
+  name: string,
+  args: Record<string, unknown>,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<T[]> {
   const { url, apiKey } = getConfig();
   if (!apiKey) return [];
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {
@@ -199,12 +207,12 @@ async function callTool<T>(name: string, args: Record<string, unknown>): Promise
   }
 }
 
-export async function getInfluences(args: GetInfluencesArgs = {}): Promise<InfluenceData[]> {
-  return callToolCached<InfluenceData>("get_influences", args as Record<string, unknown>);
+export async function getInfluences(args: GetInfluencesArgs = {}, timeoutMs?: number): Promise<InfluenceData[]> {
+  return callToolCached<InfluenceData>("get_influences", args as Record<string, unknown>, timeoutMs);
 }
 
-export async function getDecisionRules(args: GetDecisionRulesArgs = {}): Promise<DecisionRule[]> {
-  return callToolCached<DecisionRule>("get_decision_rules", args as Record<string, unknown>);
+export async function getDecisionRules(args: GetDecisionRulesArgs = {}, timeoutMs?: number): Promise<DecisionRule[]> {
+  return callToolCached<DecisionRule>("get_decision_rules", args as Record<string, unknown>, timeoutMs);
 }
 
 export async function getCategories(args: GetCategoriesArgs = {}): Promise<CategoryData[]> {

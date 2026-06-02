@@ -20,6 +20,9 @@ export interface MoodboardAnalysisInput {
   worldviewKeywords:    string[];        // 日本語キーワードのみ（英語スラッグは渡さない）
   itemCaptions:         string[];        // items の caption 群（既存 per-image 解析資産）
   worldviewProfileNote: string | null;   // worldview_profiles 由来の短い文脈（任意）
+  // ★ 案A: Knowledge OS の参考知見（best-effort・空なら何も足さない＝従来出力と同一）
+  koDecisionRules?:     string[];        // 判断ルール文
+  koInfluences?:        string[];        // 影響源（subject_name：fusion_essence 等）
 }
 
 const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化する専門家です。
@@ -31,6 +34,8 @@ const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化す
 - 固有のブランド名・店名は出さない（どこで買うかに依存しない普遍的な判断軸にする）。
 - 抽象語の羅列ではなく、実際に服を選べる粒度で具体的に書く。
 - 入力に無い要素は世界観・コンセプトから自然に推定して補完してよい。
+- 参考の判断ルール・影響源（Knowledge OS）があれば、世界観コア/素材/シルエット/NG/買う判断軸の
+  言語化に活かす。ただし固有名（人名・作品名）の丸写しはせず、世界観の言葉に翻訳する。日本語のみ。
 
 【出力 JSON 形式】
 {
@@ -75,6 +80,22 @@ export function buildMoodboardAnalysisUserMessage(input: MoodboardAnalysisInput)
     lines.push("");
     lines.push("[診断プロフィール（参考）]");
     lines.push(input.worldviewProfileNote);
+  }
+
+  // ★ 案A: Knowledge OS 参考（空なら何も足さない＝従来出力と同一）
+  const koRules = input.koDecisionRules ?? [];
+  const koInfl  = input.koInfluences ?? [];
+  if (koRules.length > 0 || koInfl.length > 0) {
+    lines.push("");
+    lines.push("[Knowledge OS 参考（判断ルール / 影響源・固有名は丸写しせず世界観に翻訳）]");
+    if (koRules.length > 0) {
+      lines.push("判断ルール:");
+      koRules.forEach((r) => lines.push(`- ${r}`));
+    }
+    if (koInfl.length > 0) {
+      lines.push("影響源:");
+      koInfl.forEach((i) => lines.push(`- ${i}`));
+    }
   }
 
   lines.push("");
