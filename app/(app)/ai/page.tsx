@@ -921,6 +921,7 @@ function AssistantContent({
     //   無ければ（直接コーデ / 旧経路）従来の暫定 pre 表示にフォールバック（直接コーデ不変）。
     const hasActionable = !!(
       co.findThese?.length || co.avoidThese?.length || co.searchKeywords?.length || co.fitConditions
+      || co.stylingMoves?.length || co.signatureMove  // ★ Phase 4-b: 着こなし操作のみでもカード描画
     );
     if (hasActionable) {
       return (

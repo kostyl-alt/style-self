@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MoodboardAnalysisRow } from "@/types/moodboard";
 
 const ANALYSIS_COLUMNS =
-  "moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, source, created_at, updated_at";
+  "moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, source, created_at, updated_at";
 
 // moodboard_analysis を1行取得（無ければ null）。RLS で本人/public のみ読める。
 export async function getMoodboardAnalysis(

@@ -28,8 +28,11 @@ const DISLIKE_REASONS = [
   "重い / 軽い",
 ];
 
+const ACTIONS_VISIBLE = 6;  // ★ 4-c: 可視6個＋「他の相談 ▾」で残り展開
+
 export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedback }: Props) {
   const [open, setOpen] = useState(false);
+  const [showAllActions, setShowAllActions] = useState(false);
   const co = coordinate;
 
   const fit = co.fitConditions;
@@ -50,6 +53,28 @@ export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedba
     <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-4 space-y-4 leading-relaxed">
       {/* 方向性 */}
       {co.direction && <p className="font-bold">{co.direction}</p>}
+
+      {/* ★ Phase 4-b: どう着る（操作・順序付き・新方針の主役・direction直下） */}
+      {(co.stylingMoves?.length ?? 0) > 0 && (
+        <Section label="👗 どう着る">
+          <ol className="space-y-1.5">
+            {co.stylingMoves!.map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="flex-shrink-0 w-4 h-4 mt-0.5 bg-gray-800 text-white rounded-full flex items-center justify-center text-[10px] font-medium">{i + 1}</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {/* ★ Phase 4-b: 効かせる1点（普通に見えないための違和感） */}
+      {co.signatureMove && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+          <p className="text-xs text-amber-700 mb-0.5">✨ 効かせる1点</p>
+          <p className="text-gray-800">{co.signatureMove}</p>
+        </div>
+      )}
 
       {/* 探す */}
       {(co.findThese?.length ?? 0) > 0 && (
@@ -96,10 +121,10 @@ export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedba
         </Section>
       )}
 
-      {/* アクションボタン */}
+      {/* アクションボタン（4-c: 可視6個＋「他の相談 ▾」で残り展開） */}
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
-          {actions.map((a, i) => (
+          {(showAllActions ? actions : actions.slice(0, ACTIONS_VISIBLE)).map((a, i) => (
             <button
               key={i}
               type="button"
@@ -109,6 +134,15 @@ export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedba
               {a.label}
             </button>
           ))}
+          {!showAllActions && actions.length > ACTIONS_VISIBLE && (
+            <button
+              type="button"
+              onClick={() => setShowAllActions(true)}
+              className="px-3 py-1.5 text-gray-400 rounded-full text-xs hover:text-gray-600 transition-colors"
+            >
+              他の相談 ▾
+            </button>
+          )}
         </div>
       )}
 

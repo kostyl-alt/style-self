@@ -82,6 +82,9 @@ export interface CoordinateReply {
   avoidThese?:     string[];      // 避ける服
   searchKeywords?: string[];      // 検索ワード（ZOZO/Instagram/店で使える短語）
   fitConditions?:  FitConditions; // 素材/色/丈/シルエット条件
+  // ★ Phase 4-b: 「どう着るか＝操作」（アイテム名で終わらせない・順序付き）
+  stylingMoves?:   string[];      // 着こなし操作（丈/腰位置/ベルト/裾のため/レイヤード/視線設計/崩し）
+  signatureMove?:  string;        // 普通に見えないための「1点の違和感」
 
   // 表示順 7(① direction 〜 ⑦ 折りたたみは下記詳細群)
   direction:     string;              // ①
