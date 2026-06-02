@@ -84,3 +84,37 @@ export interface AnalyzeItemResponse {
 export interface FromUrlItemResponse extends AnalyzeItemResponse {
   source_url: string;
 }
+
+// ---- Phase 1: board単位 context object（moodboard_analysis）----
+// 設計: 長文プロンプト往復をやめ、MB を構造化データとして1回だけ解析・保存する起点。
+// supabase/migrations/029_phase1_moodboard_analysis.sql と同型（snake_case 踏襲）。
+
+// 買う判断軸（shopping_guidelines を独立させず shopping_axis jsonb に内包）。
+// jsonb なので将来フィールド追加は後方互換。固有店名に依存しない指針を入れる。
+export interface ShoppingAxis {
+  where_to_look?: string[];   // どこで探すと良いか（店種・EC種別の指針）
+  check_points?:  string[];   // 買う前に確認する点（素材/丈/シルエット等）
+  avoid_when?:    string[];   // 見送る条件
+}
+
+export interface MoodboardAnalysisRow {
+  moodboard_id:   string;
+  worldview_core: string;     // 世界観コア（1〜2文）
+  colors:         string[];
+  materials:      string[];
+  silhouettes:    string[];
+  mood:           string;     // 空気感
+  ng_elements:    string[];
+  shopping_axis:  ShoppingAxis;
+  source:         string;     // 生成元（モデル名等）
+  created_at:     string;
+  updated_at:     string;
+}
+
+// LLM 出力（DBメタ抜き）。analyze API が callClaudeJSON で受け取る形。
+export type MoodboardAnalysisLLM =
+  Omit<MoodboardAnalysisRow, "moodboard_id" | "source" | "created_at" | "updated_at">;
+
+export interface AnalyzeMoodboardResponse {
+  analysis: MoodboardAnalysisRow;
+}

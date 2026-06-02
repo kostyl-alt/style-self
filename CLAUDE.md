@@ -105,6 +105,7 @@ style-self/
 │   │       ├── [id]/route.ts                         # スレッド GET（詳細+messages）/ PATCH（title/moodboard_id）/ DELETE（FK CASCADE）（H-2）
 │   │       ├── [id]/messages/route.ts                # メッセージ GET（一覧）/ POST（保存・AI生成はH-4）（H-2）
 │   │       └── [id]/feedback/route.ts                # フィードバック POST（保存・judgment_rules抽出はH-6）（H-2）
+│   │   └── moodboards/[id]/analyze/route.ts          # Phase 1: MB board単位解析 POST（items全キャプション+description+worldview→moodboard_analysis を1回生成・upsert。per-imageのitems/analyzeとは別物）
 │   ├── layout.tsx
 │   └── page.tsx                          # トップ（認証状態でリダイレクト）
 ├── components/
@@ -190,6 +191,7 @@ style-self/
 │       ├── extract-product-info.ts    # URL→商品情報＋8軸抽出プロンプト（Sprint 41.1 / 41.2で素材混率対応）
 │       ├── analyze-product-image.ts   # スクショ→商品情報＋8軸＋素材混率の Vision プロンプト（Sprint 41.2）
 │       ├── analyze-product-text.ts    # ペースト本文→商品情報＋8軸＋素材混率のプロンプト（Sprint 41.2+）
+│       ├── moodboard-analysis.ts      # Phase 1: MB board単位解析プロンプト（context object 生成・テキスト統合・英語スラッグ非露出）
 │       └── trends.ts                 # トレンド分析プロンプト（未使用・旧版）
 ├── supabase/
 │   ├── migrations/
@@ -214,7 +216,8 @@ style-self/
 │   │   ├── 019_material_composition.sql   # Sprint 41.2: material_composition jsonb追加（素材混率を percentage 付きで保存）
 │   │   ├── 020_diagnosis_v2.sql           # Sprint 42: diagnosis_sessions / worldview_profiles / user_style_events
 │   │   ├── 021_avoid_items.sql            # Sprint 47: users.avoid_items text[]（Q16「着たくない服」をNG制約として保存）
-│   │   └── 027_h1_chat_threads.sql        # Sprint H-1: 対話型AIスタイリスト永続文脈基盤（chat_threads / messages / feedback / judgment_rules・RLS本人FOR ALL+親thread経由EXISTS）※022-026は本ファイル未記載
+│   │   ├── 027_h1_chat_threads.sql        # Sprint H-1: 対話型AIスタイリスト永続文脈基盤（chat_threads / messages / feedback / judgment_rules・RLS本人FOR ALL+親thread経由EXISTS）※022-026は本ファイル未記載
+│   │   └── 029_phase1_moodboard_analysis.sql # Phase 1: moodboard_analysis（board単位 context object・RLS親moodboards経由EXISTS・冪等）※028は本ファイル未記載
 │   └── seeds/
 │       └── 015_knowledge_rules_seed.sql  # Sprint 37: 管理者キュレーション初期15件（手動投入用）
 ├── types/
@@ -278,6 +281,7 @@ ADMIN_EMAILS=
 | `messages` | スレッド内メッセージ（Sprint H-1：role=user/assistant・attachments/metadata jsonb） |
 | `feedback` | メッセージへのフィードバック（Sprint H-1：like/dislike/more_x/change_item 等） |
 | `judgment_rules` | ユーザーごとの判断ルール（Sprint H-1：好み/NG/style_rule を次回生成に反映・priority 1-10） |
+| `moodboard_analysis` | ムードボードの board単位 context object（Phase 1：worldview_core/colors/materials/silhouettes/mood/ng_elements/shopping_axis jsonb・1 MBに1行・再解析で上書き・RLSは親moodboards経由EXISTS） |
 
 ---
 
