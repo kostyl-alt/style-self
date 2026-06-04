@@ -1,0 +1,288 @@
+#!/usr/bin/env tsx
+// ③-c 比較ツール: stylist-chat の KO 連携を「get_*方式(OFF相当)」と「query_knowledge方式(ON相当)」で
+// 同一発話に通し、最終 reply・使った rules・レイテンシ・品質ゲート mode・薄さ指標を並べる。
+//
+// 設計: docs/phase3c-style-self-query-knowledge-plan.md §4-3。
+// ・フラグに依らず両経路を直接呼ぶ（route の生成ロジックは lib/stylist-chat/context.ts に抽出済・挙動不変）。
+// ・intent context は両方式で同一 baseline（差は KO 部分のみ）。
+// ・query_knowledge 方式は品質ゲート（systemPrompt 自己チェック）+ resolveGatedReply を適用。
+// ・(C) QK の koRequestId を KO の rule_applications で引いて記録 ✓/✗（KO Supabase env がある時のみ）。
+//
+// 前提:
+//   - KO(:3001) 稼働（query_knowledge 実呼び）。style-self .env.local の KNOWLEDGE_OS_URL/API_KEY を使う。
+//   - service-role で style-self Supabase を読む（intent fetcher は明示 .eq(userId) なので RLS 不要）。
+//   - 診断完了ユーザー（worldview_profiles に行がある）が対象。--user で明示も可。
+//   - (C)の記録確認は KO_SUPABASE_URL / KO_SUPABASE_SERVICE_ROLE_KEY が両方ある時のみ実行。
+//
+// 実行（IPv4優先必須・重いので順次）:
+//   set -a; source .env.local; set +a
+//   # (任意) KO 記録確認するなら KO の Supabase を別名で:
+//   #   export KO_SUPABASE_URL=...; export KO_SUPABASE_SERVICE_ROLE_KEY=...
+//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts
+//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts --only A
+//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts --n 3 --user <uuid>
+
+import { createClient } from "@supabase/supabase-js";
+import {
+  fetchDiagnoseContext,
+  fetchStyleConsultContext,
+  fetchCoordinateContext,
+  fetchBrandLearnContext,
+  fetchKnowledgeOSContext,
+  fetchKnowledgeOSViaQueryKnowledge,
+  stripCanonicalSlugs,
+} from "@/lib/stylist-chat/context";
+import {
+  STYLIST_CHAT_SYSTEM_PROMPT,
+  buildStylistChatUserMessage,
+  buildQualityGateInstruction,
+  type StylistChatContext,
+} from "@/lib/prompts/stylist-chat";
+import { parseGatedReply, applyThinGate } from "@/lib/utils/parse-gated-reply";
+import { callClaude, HAIKU_MODEL } from "@/lib/claude";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が未設定です（set -a; source .env.local; set +a）。");
+  process.exit(1);
+}
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("ANTHROPIC_API_KEY が未設定です（reply 生成に必要）。");
+  process.exit(1);
+}
+
+const onlyArg = process.argv.indexOf("--only");
+const ONLY = onlyArg >= 0 ? (process.argv[onlyArg + 1] ?? "").toUpperCase() : "";
+const userArg = process.argv.indexOf("--user");
+const USER_OPT = userArg >= 0 ? process.argv[userArg + 1] : undefined;
+const nArg = process.argv.indexOf("--n");
+const N_LIMIT = nArg >= 0 ? Number(process.argv[nArg + 1]) || 999 : 999;
+
+const MAX_REPLY_TOKENS = 2048; // route の非MB値に合わせる
+const ACTIONABLE_RE = /着|合わせ|足す|避け|抜く|外す|入れ|変え|寄せ|崩/;
+
+const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+// (C) KO 側 Supabase（別プロジェクト・rule_applications 記録確認用）。env が無ければ null。
+const KO_URL = process.env.KO_SUPABASE_URL;
+const KO_KEY = process.env.KO_SUPABASE_SERVICE_ROLE_KEY;
+const koSb = KO_URL && KO_KEY ? createClient(KO_URL, KO_KEY, { auth: { persistSession: false } }) : null;
+
+type Method = "get_*" | "query_knowledge";
+
+const QUESTIONS: { id: string; q: string; intent: string }[] = [
+  // A系（明確）
+  { id: "A1", q: "全身黒で重心を下げたい", intent: "coordinate" },
+  { id: "A2", q: "マットな素材で世界観を強くしたい", intent: "style-consult" },
+  { id: "A3", q: "白Tとワイドパンツを、普通に見せず世界観化したい", intent: "coordinate" },
+  { id: "A4", q: "ブランドの世界観を一貫させたい", intent: "brand-learn" },
+  { id: "A5", q: "診断結果を踏まえて、次に何を足せばいい？", intent: "diagnose" },
+  // B系（口語）
+  { id: "B1", q: "なんか普通に見えるんだけどどうしたらいい？", intent: "style-consult" },
+  { id: "B2", q: "この服、自分に合う？", intent: "style-consult" },
+  { id: "B3", q: "黒でかっこよくしたいけど重く見える", intent: "coordinate" },
+  { id: "B4", q: "もっと尖らせたい", intent: "style-consult" },
+  { id: "B5", q: "小物って何足せばいい？", intent: "coordinate" },
+];
+
+async function intentContext(userId: string, intent: string): Promise<StylistChatContext> {
+  switch (intent) {
+    case "style-consult": return fetchStyleConsultContext(sb as never, userId);
+    case "coordinate":    return fetchCoordinateContext(sb as never, userId);
+    case "brand-learn":   return fetchBrandLearnContext(sb as never, userId);
+    default:              return fetchDiagnoseContext(sb as never, userId);
+  }
+}
+
+interface RunResult {
+  reply: string;
+  ko: StylistChatContext["knowledgeOS"];
+  requestId: string | null;
+  safeMode: boolean;
+  mode: "answer" | "safe" | null; // QK のみ
+  koMs: number;
+  totalMs: number;
+}
+
+async function runOne(userId: string, text: string, intent: string, method: Method): Promise<RunResult> {
+  const t0 = Date.now();
+  const baseCtx = await intentContext(userId, intent);
+
+  const k0 = Date.now();
+  let ko: StylistChatContext["knowledgeOS"];
+  let requestId: string | null = null;
+  let safeMode = false;
+  if (method === "get_*") {
+    ko = await fetchKnowledgeOSContext(text);
+  } else {
+    const r = await fetchKnowledgeOSViaQueryKnowledge(text);
+    ko = r.knowledgeOS;
+    requestId = r.requestId;
+    safeMode = r.safeMode;
+  }
+  const koMs = Date.now() - k0;
+
+  const ctx: StylistChatContext = { ...baseCtx, knowledgeOS: ko };
+  const systemPrompt =
+    method === "query_knowledge"
+      ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${buildQualityGateInstruction({ forceSafe: safeMode })}`
+      : STYLIST_CHAT_SYSTEM_PROMPT;
+  const userMessage = buildStylistChatUserMessage({ text, intent, history: [], ctx });
+
+  const replyRaw = await callClaude({ systemPrompt, userMessage, model: HAIKU_MODEL, maxTokens: MAX_REPLY_TOKENS });
+
+  let mode: "answer" | "safe" | null = null;
+  let replyForOutput = replyRaw;
+  if (method === "query_knowledge") {
+    const gated = parseGatedReply(replyRaw);
+    mode = gated.mode;
+    replyForOutput = applyThinGate(gated);
+  }
+  const reply = stripCanonicalSlugs(replyForOutput).cleaned;
+  return { reply, ko, requestId, safeMode, mode, koMs, totalMs: Date.now() - t0 };
+}
+
+function rulesSummary(ko: StylistChatContext["knowledgeOS"]): string {
+  if (!ko) return "（KO context なし＝安全モード）";
+  const parts: string[] = [];
+  parts.push(`decision ${ko.decisionRules.length}`);
+  if (ko.decisionRules[0]) parts.push(`先頭"${clip(ko.decisionRules[0].rule, 28)}"`);
+  parts.push(`failure ${ko.failurePatterns.length}`);
+  parts.push(`influence ${ko.influences.length}`);
+  if (ko.relatedEntries) parts.push(`related ${ko.relatedEntries.length}`);
+  if (ko.answerSummary) parts.push(`answer補助"${clip(ko.answerSummary, 24)}"`);
+  return parts.join(" / ");
+}
+
+function thinMetrics(reply: string): string {
+  const len = reply.length;
+  const actionable = ACTIONABLE_RE.test(reply) ? "有" : "無";
+  const extremeShort = len < 12 ? "★極端短文" : "no";
+  return `len ${len} / actionable語 ${actionable} / 極端短文 ${extremeShort}`;
+}
+
+const clip = (s: string, n: number) => (s ?? "").replace(/\s+/g, " ").slice(0, n);
+
+async function checkRuleApplications(requestId: string | null): Promise<string> {
+  if (!requestId) return "request_id なし（安全モード or 失敗）";
+  if (!koSb) return "（KO_SUPABASE_URL/KEY 未設定＝記録確認スキップ）";
+  try {
+    const { count, error } = await koSb
+      .from("rule_applications")
+      .select("id", { count: "exact", head: true })
+      .eq("request_id", requestId);
+    if (error) return `✗ 確認エラー: ${error.message}`;
+    return (count ?? 0) > 0 ? `✓ rule_applications ${count}行 記録あり` : "✗ 0行（記録なし）";
+  } catch (e) {
+    return `✗ 確認例外: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// NAT64 の間欠 "fetch failed" 対策。data が取れるまで最大4回リトライ（error/throw を握って再試行）。
+async function selectWithRetry(
+  label: string,
+  run: () => PromiseLike<unknown>,
+): Promise<unknown[]> {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const { data, error } = (await run()) as {
+        data: unknown;
+        error: { message?: string } | null;
+      };
+      if (!error && data != null) return data as unknown[];
+      if (error) console.warn(`  ⚠ ${label} (${attempt}/4): ${error.message ?? "error"}`);
+    } catch (e) {
+      console.warn(`  ⚠ ${label} (${attempt}/4): ${e instanceof Error ? e.message : String(e)}`);
+    }
+    if (attempt < 4) await sleep(1200);
+  }
+  return [];
+}
+
+// 対象 userId を決める。優先: 診断完了ユーザー（worldview_profiles）。無ければ users から。
+// intent fetcher は診断が無くても null context で動くので、最小条件は「有効な user_id 1つ」。
+async function detectUserId(): Promise<string> {
+  if (USER_OPT) return USER_OPT;
+
+  // 1) 診断完了ユーザー（推奨・worldview_profiles）
+  const wp = (await selectWithRetry("worldview_profiles 検出", () =>
+    sb.from("worldview_profiles").select("user_id").limit(50),
+  )) as { user_id: string }[];
+  const wpIds = Array.from(new Set(wp.map((r) => r.user_id)));
+  if (wpIds.length === 1) {
+    console.log(`対象ユーザー: ${wpIds[0]}（診断完了・worldview_profiles）`);
+    return wpIds[0];
+  }
+  if (wpIds.length > 1) {
+    console.error(`診断完了ユーザーが複数（${wpIds.length}）。--user <uuid> で指定してください: ${wpIds.join(", ")}`);
+    process.exit(1);
+  }
+
+  // 2) フォールバック: users（診断未完了でも intent fetcher は null context で動く）
+  console.warn("worldview_profiles に診断完了ユーザーが見つからないため users にフォールバックします。");
+  const us = (await selectWithRetry("users 検出", () =>
+    sb.from("users").select("id").limit(50),
+  )) as { id: string }[];
+  const ids = Array.from(new Set(us.map((r) => r.id)));
+  if (ids.length === 0) {
+    console.error("users も取得できませんでした（NAT64 fetch failed の可能性）。NODE_OPTIONS=--dns-result-order=ipv4first を付け、--user <uuid> で指定してください。");
+    process.exit(1);
+  }
+  if (ids.length > 1) {
+    console.error(`users が複数（${ids.length}）。--user <uuid> で指定してください。`);
+    process.exit(1);
+  }
+  console.log(`対象ユーザー: ${ids[0]}（users・診断未完了の可能性）`);
+  return ids[0];
+}
+
+async function main() {
+  const userId = await detectUserId();
+  const sets = QUESTIONS
+    .filter((q) => (ONLY === "A" ? q.id.startsWith("A") : ONLY === "B" ? q.id.startsWith("B") : true))
+    .slice(0, N_LIMIT);
+
+  console.log(
+    `比較対象 user=${userId} / 質問 ${sets.length}問 / KO記録確認=${koSb ? "ON" : "OFF"}\n` +
+      `（get_*方式=OFF相当 / query_knowledge方式=ON相当・品質ゲート付き）\n`,
+  );
+
+  for (let i = 0; i < sets.length; i++) {
+    const { id, q, intent } = sets[i];
+    console.log(`\n================ ${id} [${intent}]: ${q} ================`);
+
+    // get_* 方式
+    try {
+      const g = await runOne(userId, q, intent, "get_*");
+      console.log(`── 旧[get_*]  KO ${g.koMs}ms / total ${g.totalMs}ms`);
+      console.log(`   rules: ${rulesSummary(g.ko)}`);
+      console.log(`   [薄さ] ${thinMetrics(g.reply)}`);
+      console.log(`   reply: ${g.reply}`);
+    } catch (e) {
+      console.warn(`   旧[get_*] 失敗: ${e instanceof Error ? e.message : e}`);
+    }
+
+    // query_knowledge 方式
+    try {
+      const v = await runOne(userId, q, intent, "query_knowledge");
+      console.log(`── 新[query_knowledge]  KO ${v.koMs}ms / total ${v.totalMs}ms | gate mode: ${v.mode ?? "n/a"}${v.safeMode ? " (KO取得失敗→forceSafe)" : ""}`);
+      console.log(`   rules: ${rulesSummary(v.ko)}`);
+      console.log(`   [薄さ] ${thinMetrics(v.reply)}`);
+      console.log(`   reply: ${v.reply}`);
+      console.log(`   [記録] ${await checkRuleApplications(v.requestId)}`);
+    } catch (e) {
+      console.warn(`   新[query_knowledge] 失敗: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  console.log("\n========== 比較完了 ==========");
+  console.log("8評価軸（直接回答/具体性/世界観色素材シルエット着方/足す避ける/KO判断軸の自然さ/長いだけで薄くない/ゴミ無し/レイテンシ）で目視採点してください。");
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
