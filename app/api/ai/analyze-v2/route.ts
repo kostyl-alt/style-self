@@ -31,8 +31,13 @@ import {
   type WorldviewStep1Output,
 } from "@/lib/prompts/analyze-v2-worldview";
 import {
-  ANALYZE_V2_DETAILS_SYSTEM_PROMPT,
+  ANALYZE_V2_DETAILS_G1_SYSTEM_PROMPT,
+  ANALYZE_V2_DETAILS_G2_SYSTEM_PROMPT,
+  ANALYZE_V2_DETAILS_G3_SYSTEM_PROMPT,
   type DetailsStep2Output,
+  type DetailsG1Output,
+  type DetailsG2Output,
+  type DetailsG3Output,
 } from "@/lib/prompts/analyze-v2-details";
 import type { Json } from "@/types/database";
 import type {
@@ -209,15 +214,45 @@ export async function POST(request: NextRequest) {
       "上記を踏まえて、指定の JSON スキーマで 13項目を全て返してください。",
     ].join("\n");
 
-    const step2 = await callClaudeJSON<DetailsStep2Output>({
-      systemPrompt: ANALYZE_V2_DETAILS_SYSTEM_PROMPT,
-      userMessage:  step2UserMessage,
-      // 13項目の JSON は 5000+ 文字に達するため 4000 では切り詰められて
-      // parse 失敗していた。Sonnet 4.6 は 64K 出力対応なので 8000 まで広げる。
-      maxTokens:    8000,
-      temperature:  0.4,
-    });
-    mark(`step4_ai_call2_details (input_chars=${step2UserMessage.length} output_keys=${Object.keys(step2 ?? {}).length})`);
+    // 高速化(g): 13項目を3群(G1世界観の核 / G2具体スタイル / G3実践)に分けて Sonnet で並列生成。
+    //   各群は共通入力(step2UserMessage)を重複して受け取り、独立に部分スキーマを生成する。
+    //   wall-clock を ~94s(1コール) → ~33s(3群並列) に短縮。品質は Sonnet 維持・全群に共通アンカー
+    //   (worldview_name / selected_influences / avoidItems)を渡す(step2UserMessage に含まれる)。
+    //   群ごとに1リトライ(parse失敗/タイムアウト時)。失敗群は null → 下の Step5 で既定値補完。
+    const callGroup = async <T,>(systemPrompt: string, label: string): Promise<T | null> => {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          return await callClaudeJSON<T>({
+            systemPrompt,
+            userMessage: step2UserMessage,
+            maxTokens:   4000, // 各群の出力は全体の1/3程度。4000で十分(切り詰め回避)。
+            temperature: 0.4,
+          });
+        } catch (e) {
+          console.warn(`[analyze-v2] ${label} 失敗(${attempt}/2):`, e instanceof Error ? e.message : e);
+        }
+      }
+      return null;
+    };
+
+    const [g1r, g2r, g3r] = await Promise.allSettled([
+      callGroup<DetailsG1Output>(ANALYZE_V2_DETAILS_G1_SYSTEM_PROMPT, "G1世界観の核"),
+      callGroup<DetailsG2Output>(ANALYZE_V2_DETAILS_G2_SYSTEM_PROMPT, "G2具体スタイル"),
+      callGroup<DetailsG3Output>(ANALYZE_V2_DETAILS_G3_SYSTEM_PROMPT, "G3実践"),
+    ]);
+    const g1 = g1r.status === "fulfilled" ? g1r.value : null;
+    const g2 = g2r.status === "fulfilled" ? g2r.value : null;
+    const g3 = g3r.status === "fulfilled" ? g3r.value : null;
+
+    // マージ: worldviewName は step1 コピー。各群の部分出力を spread して DetailsStep2Output に戻す。
+    // 失敗群は ?? {} で欠落 → 下の Step5 / validateAndFixStyleDiagnosis が既定値補完(1群コケても完成)。
+    const step2: DetailsStep2Output = {
+      worldviewName: step1.worldview_name,
+      ...(g1 ?? {}),
+      ...(g2 ?? {}),
+      ...(g3 ?? {}),
+    } as DetailsStep2Output;
+    mark(`step4_ai_call2_details_parallel (g1=${g1 ? "ok" : "fail"} g2=${g2 ? "ok" : "fail"} g3=${g3 ? "ok" : "fail"} input_chars=${step2UserMessage.length})`);
 
     // ----- Step 5: バリデーション + 永続化 -----
     const result: StyleDiagnosisResult = {

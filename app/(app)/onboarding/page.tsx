@@ -28,7 +28,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   );
 }
 
-// フェーズB Step 5: analyze-v2 は AI コール 2 回で 90〜110 秒かかる。
+// フェーズB Step 5: analyze-v2 は AI コール(step4は3群並列)で 約40〜50秒かかる。
 // 「分析中…」ボタン文字だけだとフリーズに見えるため、専用ローディング画面を出す。
 // Step 6 でストリーミング化したら、この画面は段階的に文字が現れる UI に進化させる想定。
 function AnalyzingScreen() {
@@ -40,12 +40,21 @@ function AnalyzingScreen() {
     }, 1000);
     return () => clearInterval(id);
   }, []);
+  // 経過秒ベースの段階メッセージ(サーバ無変更・体感改善)。
+  // 実処理: 〜8秒=KO照合+世界観言語化(Haiku) / 8〜25秒=詳細生成(Sonnet 3群並列) / それ以降=仕上げ。
+  const stage =
+    elapsed < 8
+      ? "知識ベースと照合しています"
+      : elapsed < 25
+        ? "あなたの世界観を言語化しています"
+        : "詳細を組み立てています";
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="max-w-xs mx-auto px-6 text-center space-y-4">
         <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase">Analyzing</p>
         <h1 className="text-xl font-light text-gray-900 leading-snug">
-          あなたの世界観を<br />言語化しています
+          {stage}
         </h1>
         <p className="text-xs text-gray-500 leading-relaxed">
           16問の回答と影響源データを照合し、<br />
@@ -56,7 +65,7 @@ function AnalyzingScreen() {
           <span className="text-base text-gray-400 ml-1">秒</span>
         </p>
         <p className="text-[10px] text-gray-400">
-          合計 90〜110 秒かかります
+          合計 約40〜50秒かかります
         </p>
       </div>
     </div>
@@ -196,7 +205,7 @@ export default function OnboardingPage() {
     setBrands([]);
   }
 
-  // フェーズB Step 5: analyze-v2 の 90〜110 秒待機中は専用画面を出す。
+  // フェーズB Step 5: analyze-v2 の 約40〜50秒待機中は専用画面を出す。
   // 既存の「分析中…」ボタン文字だけだとフリーズに見えるため。
   if (isLoading && !result) {
     return <AnalyzingScreen />;

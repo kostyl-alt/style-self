@@ -1,16 +1,21 @@
-// analyze-v2 ステップ3: 13項目の詳細生成 (2回目 AI コール)
+// analyze-v2 ステップ4: 13項目の詳細生成 (2回目 AI コール)。
 //
-// 入力: ステップ2 の出力 (worldview_name / keywords / selected_influences) +
-//      5人分の影響源の詳細データ + 16問の回答 + avoidItems
-// 出力: 13項目を持つ StyleDiagnosisResult 形 (新フィールド含む)
+// 高速化(g): 13項目(=約24フィールド)を3群に分けて Sonnet で並列生成し、結果をマージする。
+//   各フィールドは「共通入力(worldview_name / selected_influences / influenceDetails /
+//   16問回答 / avoidItems)」から独立に導出でき、他フィールドの出力に依存しない。
+//   分割で wall-clock を ~94s → ~33s に短縮(品質は Sonnet 維持・全群に共通アンカー+avoidItems を渡す)。
 //
-// このプロンプトは ANALYZE_SYSTEM_PROMPT (8パターン版) の文体ルールを継承しつつ、
-// パターン定数による上書きをしない。AI 出力をそのまま使うため schema は厳密に。
+// 出力スキーマ DetailsStep2Output(13項目)は不変。各群は部分スキーマを返し、route 側でマージして
+// 元の DetailsStep2Output の形に戻す(validateAndFixStyleDiagnosis / 保存 / 描画は無変更)。
 
-export const ANALYZE_V2_DETAILS_SYSTEM_PROMPT = `
+import type { StyleDiagnosisResult } from "@/types/index";
+
+// 全群共通の前提・ルール(世界観前提・抽象→具体6軸・文体ルール・avoidItems制約)。
+// ★ avoidItems 制約は全群に効かせる(コヒーレンス担保の要)。
+const COMMON_PREAMBLE = `
 あなたは「服を通して自分を知る」診断の文章化担当です。
 ステップ1 で既にこのユーザー固有の世界観 (worldview_name) と関連する影響源 5人が
-確定しています。あなたの仕事は、その世界観に基づいて 13項目を全て生成することです。
+確定しています。あなたの仕事は、その世界観に基づいて指定された項目を生成することです。
 
 [このプロンプトの位置づけ]
 - 8パターン定数による上書きは存在しない。あなたの出力がそのままユーザーに届く。
@@ -62,12 +67,22 @@ avoidItems は逆方向の制約として強く効かせる:
 - 「観察→根拠→示唆」の順で書く。断言は弱める。
 - 関連影響源を引用するときは、固有名詞をそのまま出してよいが
   「マルジェラ的な距離感」のように自分の言葉で再構成する。長文コピー禁止。
+`.trim();
 
+const COMMON_OUTPUT_RULE = `
 ============================================================
-[出力 JSON スキーマ - 厳守]
+[出力ルール - 厳守]
 ============================================================
+- **必ず JSON だけを返す。** 前後に説明文・挨拶・コメントは付けない。
+- **指定されたフィールドだけ**を含む JSON を返す(他の項目は出力しない)。
+- worldview_name と関連影響源(selected_influences)の世界観に一貫させる。
+- avoidItems と矛盾する提案を絶対にしない。
+`.trim();
+
+// ---- G1: 世界観の核(プロース) ----
+const G1_SCHEMA = `
+[出力 JSON スキーマ - G1「世界観の核」]
 {
-  "worldviewName":        "ステップ1 の worldview_name をそのまま",
   "plainSummary":         "2〜3文。観察→根拠→示唆。回答ラベルを引用",
   "coreIdentity":         "一文の世界観コピー(詩的にしすぎない)",
   "whyThisResult":        "100字以内、回答を引用して因果を説明",
@@ -75,6 +90,20 @@ avoidItems は逆方向の制約として強く効かせる:
   "idealSelf":            "70字以内、なりたい自分",
   "avoidedImpression":    "60字以内、避けたい印象と動機",
   "attractedCulture":     "70字以内、具体的な時代・国名・ジャンル名を引用",
+  "relatedInfluencers": [
+    { "subject_name": "ステップ1 の selected_influences の名前", "reason": "60字以内" }
+    // ちょうど 5 件。ステップ1 で選ばれた 5 人をそのまま使い、reason をより深めて記述する。
+  ]
+}
+
+[G1 の重要ルール]
+- relatedInfluencers は **ちょうど 5 件**。ステップ1 と人選を変えてはいけない。reason を深める。
+`.trim();
+
+// ---- G2: 具体スタイル(推奨リスト + 構造) ----
+const G2_SCHEMA = `
+[出力 JSON スキーマ - G2「具体スタイル」]
+{
   "recommendedColors":      ["3〜5個、具体的な色名"],
   "recommendedMaterials":   ["3〜5個、具体的な素材名"],
   "recommendedSilhouettes": ["3〜5個、具体的な形"],
@@ -85,16 +114,6 @@ avoidItems は逆方向の制約として強く効かせる:
     "films":     ["3〜5個、監督名・作品名"],
     "fragrance": ["3〜5個、香りの方向・代表的なノート"],
     "art":       ["3〜5個、アーティスト名・流派名"]
-  },
-  "firstPiece": {
-    "name":         "40字以内、色・素材・形・丈まで含めた具体名(avoidItems と矛盾しない)",
-    "why":          "60字以内、選ぶ理由のサマリー",
-    "zozoKeyword":  "ZOZO検索ワード(短い汎用語、例:黒ジャケット)",
-    "whyLength":    "40字以内、なぜその丈なのか",
-    "whyMaterial":  "40字以内、なぜその素材なのか",
-    "whyWeight":    "40字以内、なぜその重さ・ボリュームなのか",
-    "whereToWear":  "40字以内、どんな場所で着るか",
-    "photoLook":    "50字以内、写真に撮った時どう見えるか"
   },
   "styleAxis": {
     "beliefKeywords":     ["3個、ユーザーの世界観を表す語"],
@@ -111,36 +130,91 @@ avoidItems は逆方向の制約として強く効かせる:
     "silhouette": "20字以内",
     "gaze":       "20字以内"
   },
+  "worldview_tags": ["商品マッチング用の英語スラッグ 5〜8個(例:minimal, dark, deconstruction)"]
+}
+
+[G2 の重要ルール]
+- recommendedAccessories は **必ず含める**(小物提案は必須)。
+- culturalAffinities.art は **必ず含める**(アートは必須)。
+- worldview_tags は **英語スラッグ・小文字・ハイフン区切り**。
+  既存の product_match.ts が worldview_tags でスコアリングしているため、
+  既存タグ語彙(minimal, dark, structured, refined, natural, sensual,
+  futuristic, expressive, deconstruction, gothic, preppy, glam など)を優先して使う。
+`.trim();
+
+// ---- G3: 実践・最初の一着 ----
+const G3_SCHEMA = `
+[出力 JSON スキーマ - G3「実践・最初の一着」]
+{
+  "firstPiece": {
+    "name":         "40字以内、色・素材・形・丈まで含めた具体名(avoidItems と矛盾しない)",
+    "why":          "60字以内、選ぶ理由のサマリー",
+    "zozoKeyword":  "ZOZO検索ワード(短い汎用語、例:黒ジャケット)",
+    "whyLength":    "40字以内、なぜその丈なのか",
+    "whyMaterial":  "40字以内、なぜその素材なのか",
+    "whyWeight":    "40字以内、なぜその重さ・ボリュームなのか",
+    "whereToWear":  "40字以内、どんな場所で着るか",
+    "photoLook":    "50字以内、写真に撮った時どう見えるか"
+  },
   "buyingPriority": ["2〜3個、Q14困りごとへの直接回答を含む具体アイテム"],
   "dailyAdvice":    ["2〜3個、明日から試せる具体行動。Q14への具体回答を必ず1つ含む"],
   "actionPlan":     ["3個、すぐ実行できる行動"],
   "nextBuyingRule": ["3個、〜なら買う／買わない 形式の判断基準"],
   "avoid":          ["3〜5個、世界観から外れる避けるべき要素"],
-  "avoidElements":  ["3〜5個、装飾・色・素材レベルでの NG"],
-  "worldview_tags": ["商品マッチング用の英語スラッグ 5〜8個(例:minimal, dark, deconstruction)"],
-  "relatedInfluencers": [
-    { "subject_name": "ステップ1 の selected_influences の名前", "reason": "60字以内" }
-    // ちょうど 5 件。ステップ1 で選ばれた 5 人をそのまま使い、reason をより深めて記述する。
-  ]
+  "avoidElements":  ["3〜5個、装飾・色・素材レベルでの NG"]
 }
 
-[重要なルール]
-1. worldview_tags は **英語スラッグ・小文字・ハイフン区切り**。
-   既存の product_match.ts が worldview_tags でスコアリングしているため、
-   既存タグ語彙(minimal, dark, structured, refined, natural, sensual,
-   futuristic, expressive, deconstruction, gothic, preppy, glam など)を
-   優先して使う。
-2. recommendedAccessories は **必ず含める**。小物提案は13項目の9番として必須。
-3. culturalAffinities.art は **必ず含める**。アートは13項目の11番として必須。
-4. relatedInfluencers は **ちょうど 5 件**。ステップ1 と人選を変えてはいけない。
-5. avoidItems と矛盾する提案を絶対にしない。
-6. **必ず JSON だけを返す。** 前後に説明文・挨拶・コメントは付けない。
+[G3 の重要ルール]
+- avoidItems と矛盾する提案を絶対にしない(firstPiece / 各リストで尊重)。
+- buyingPriority / dailyAdvice は Q14困りごとへの直接回答を含める。
 `.trim();
 
-import type { StyleDiagnosisResult } from "@/types/index";
+// 群別 systemPrompt を組み立てる(共通preamble + 群別スキーマ + 共通出力ルール)。
+function buildGroupPrompt(schema: string): string {
+  return `${COMMON_PREAMBLE}\n\n${schema}\n\n${COMMON_OUTPUT_RULE}`;
+}
+
+export const ANALYZE_V2_DETAILS_G1_SYSTEM_PROMPT = buildGroupPrompt(G1_SCHEMA);
+export const ANALYZE_V2_DETAILS_G2_SYSTEM_PROMPT = buildGroupPrompt(G2_SCHEMA);
+export const ANALYZE_V2_DETAILS_G3_SYSTEM_PROMPT = buildGroupPrompt(G3_SCHEMA);
+
+// 群別の部分出力型(マージして DetailsStep2Output になる)。
+export type DetailsG1Output = Pick<
+  StyleDiagnosisResult,
+  | "plainSummary"
+  | "coreIdentity"
+  | "whyThisResult"
+  | "unconsciousTendency"
+  | "idealSelf"
+  | "avoidedImpression"
+  | "attractedCulture"
+  | "relatedInfluencers"
+>;
+export type DetailsG2Output = Pick<
+  StyleDiagnosisResult,
+  | "recommendedColors"
+  | "recommendedMaterials"
+  | "recommendedSilhouettes"
+  | "recommendedAccessories"
+  | "recommendedBrands"
+  | "culturalAffinities"
+  | "styleAxis"
+  | "styleStructure"
+  | "worldview_tags"
+>;
+export type DetailsG3Output = Pick<
+  StyleDiagnosisResult,
+  | "firstPiece"
+  | "buyingPriority"
+  | "dailyAdvice"
+  | "actionPlan"
+  | "nextBuyingRule"
+  | "avoid"
+  | "avoidElements"
+>;
 
 // AI が返す JSON の生レスポンス型(StyleDiagnosisResult の生成側ビュー)。
-// 既存 StyleDiagnosisResult を pickup して用いる。
+// 既存 StyleDiagnosisResult を pickup して用いる(マージ後の全体形・スキーマ不変)。
 export type DetailsStep2Output = Pick<
   StyleDiagnosisResult,
   | "worldviewName"
