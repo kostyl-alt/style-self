@@ -120,6 +120,7 @@ interface StylistChatResponse {
   reason?:      "auth_required" | "empty_input" | "intent_out_of_scope";
   error?:       string;
   editorScore?: EditorScorePayload;
+  koRequestId?: string | null;  // ③-c-3: query_knowledge 使用の突合キー（フラグON・非MB時のみ・null可）
 }
 
 // P1-C-1.5a: 段階B に渡す history(直近 N=3・本体 7.4 抑制策)
@@ -551,6 +552,7 @@ function ChatPageInner() {
               currentThreadId,
               { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
               displayText,
+              replyData.koRequestId, // ③-c-3: query_knowledge 使用の request_id を永続化（null時は従来どおり）
             );
           }
         } catch (err) {

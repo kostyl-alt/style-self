@@ -9,6 +9,11 @@
 const DEFAULT_URL = "http://localhost:3001/api/mcp/rpc";
 const TIMEOUT_MS = 5000;
 
+// ③-c-1: query_knowledge は KO 側で LLM 合成(embed + Claude 4096tok)を回す重い処理のため、
+// get_* の 5s とは別枠の長いタイムアウト。通常 20s で諦め・25s を絶対上限とする(設計 §4-1)。
+const QUERY_KNOWLEDGE_TIMEOUT_MS = 20_000;
+const QUERY_KNOWLEDGE_TIMEOUT_MAX_MS = 25_000;
+
 let warnedMissingKey = false;
 function getConfig(): { url: string; apiKey: string | undefined } {
   const url = process.env.KNOWLEDGE_OS_URL || DEFAULT_URL;
@@ -223,4 +228,150 @@ export async function getCategories(args: GetCategoriesArgs = {}): Promise<Categ
 // 注: getFashionRules は worldview_tags 配列を返すため A-10 では追加しない(構造的排除)
 export async function getFailurePatterns(args: GetFailurePatternsArgs = {}): Promise<FailurePattern[]> {
   return callToolCached<FailurePattern>("get_failure_patterns", args as Record<string, unknown>);
+}
+
+// ====================================================================
+// ③-c-1: query_knowledge（KO の意味検索＋合成回答）
+// ====================================================================
+// get_* と異なり、KO は KnowledgeAnswer "オブジェクト" を content[0].text に入れて返す
+// (get_* は配列)。さらに result._meta.request_id を返す(③-b)。突合の核なのでここで受領する。
+//
+// callTool/callToolCached は使わない(配列前提・キャッシュ前提のため):
+//   - パースが配列ではなくオブジェクト。
+//   - request_id を一意に保つにはキャッシュ禁止(毎回 KO を実呼びして新しい request_id を得る)。
+//   - タイムアウトが get_* の 5s では足りない(LLM 合成のため 20-25s)。
+//
+// graceful: 失敗/タイムアウト/パース失敗/キー未設定は全て { answer:null, requestId:null }。throw しない。
+// 呼び出し側(stylist-chat・③-c-2)は answer===null を「安全モードへ」の信号として扱う。
+
+export interface KnowledgeAnswer {
+  answer: string;
+  related_entries: Array<{ id: string; title: string; summary: string; decision_rules: string[] }>;
+  decision_rules: string[];
+  failure_patterns: string[];
+  design_principles: string[];
+  implementation_hints: string[];
+  used_references?: Array<{ source_type: string; source_id: string; rule_text: string; why_used: string }>;
+}
+
+export interface QueryKnowledgeResult {
+  answer: KnowledgeAnswer | null; // 失敗/タイムアウト時 null
+  requestId: string | null;       // KO の _meta.request_id（突合の核）
+}
+
+const EMPTY_QUERY_KNOWLEDGE_RESULT: QueryKnowledgeResult = { answer: null, requestId: null };
+
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+// content[0].text(オブジェクト)を KnowledgeAnswer に正規化(欠損は空で補完)。
+function normalizeKnowledgeAnswer(raw: unknown): KnowledgeAnswer | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    answer: typeof o.answer === "string" ? o.answer : "",
+    related_entries: Array.isArray(o.related_entries)
+      ? (o.related_entries as unknown[]).map((e) => {
+          const r = (e ?? {}) as Record<string, unknown>;
+          return {
+            id: typeof r.id === "string" ? r.id : "",
+            title: typeof r.title === "string" ? r.title : "",
+            summary: typeof r.summary === "string" ? r.summary : "",
+            decision_rules: asStringArray(r.decision_rules),
+          };
+        })
+      : [],
+    decision_rules: asStringArray(o.decision_rules),
+    failure_patterns: asStringArray(o.failure_patterns),
+    design_principles: asStringArray(o.design_principles),
+    implementation_hints: asStringArray(o.implementation_hints),
+    used_references: Array.isArray(o.used_references)
+      ? (o.used_references as unknown[]).map((u) => {
+          const r = (u ?? {}) as Record<string, unknown>;
+          return {
+            source_type: typeof r.source_type === "string" ? r.source_type : "",
+            source_id: typeof r.source_id === "string" ? r.source_id : "",
+            rule_text: typeof r.rule_text === "string" ? r.rule_text : "",
+            why_used: typeof r.why_used === "string" ? r.why_used : "",
+          };
+        })
+      : undefined,
+  };
+}
+
+export async function queryKnowledge(
+  question: string,
+  opts?: { timeoutMs?: number },
+): Promise<QueryKnowledgeResult> {
+  const { url, apiKey } = getConfig();
+  if (!apiKey) return EMPTY_QUERY_KNOWLEDGE_RESULT;
+
+  const q = (question ?? "").trim();
+  if (!q) return EMPTY_QUERY_KNOWLEDGE_RESULT;
+
+  const timeoutMs = Math.min(
+    opts?.timeoutMs ?? QUERY_KNOWLEDGE_TIMEOUT_MS,
+    QUERY_KNOWLEDGE_TIMEOUT_MAX_MS,
+  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      // project は渡さない(KO の project はプロvenンスフィルタ・'style-self' 指定で 0 件事故)
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: { name: "query_knowledge", arguments: { question: q } },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      console.warn(`[knowledge-os] query_knowledge HTTP ${res.status}`);
+      return EMPTY_QUERY_KNOWLEDGE_RESULT;
+    }
+
+    const body = (await res.json()) as {
+      result?: {
+        content?: Array<{ type?: string; text?: string }>;
+        _meta?: { request_id?: string };
+      };
+      error?: { message?: string };
+    };
+
+    if (body.error) {
+      console.warn("[knowledge-os] query_knowledge RPC error:", body.error.message ?? body.error);
+      return EMPTY_QUERY_KNOWLEDGE_RESULT;
+    }
+
+    const requestId = body.result?._meta?.request_id ?? null;
+
+    const text = body.result?.content?.[0]?.text;
+    if (!text) {
+      console.warn("[knowledge-os] query_knowledge empty content");
+      // request_id は取れていれば返す(ログ目的・本文は null)
+      return { answer: null, requestId };
+    }
+
+    const parsed = normalizeKnowledgeAnswer(JSON.parse(text) as unknown);
+    if (!parsed) {
+      console.warn("[knowledge-os] query_knowledge content[0] is not a KnowledgeAnswer object");
+      return { answer: null, requestId };
+    }
+    return { answer: parsed, requestId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[knowledge-os] query_knowledge failed:", msg);
+    return EMPTY_QUERY_KNOWLEDGE_RESULT;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

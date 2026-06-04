@@ -205,6 +205,39 @@ export function formatJudgmentRulesLines(
   return lines;
 }
 
+// ③-c-2: 品質ゲート（設計 §3.5・案C＝プロンプト自己チェックを主）。
+//   STYLE_SELF_QUERY_KNOWLEDGE_CHAT ON かつ非 MB-coordinate のときだけ systemPrompt 末尾に付ける。
+//   出力を JSON 1個 { mode, reply, missing? } に固定し、合格条件を満たさなければ mode:"safe"（確認質問）に倒す。
+//   parse は寛容（失敗時は本文プロースにフォールバック＝退行ゼロ・lib/utils/parse-gated-reply.ts）。
+//   forceSafe=true（query_knowledge 失敗/タイムアウト）のときは必ず mode:"safe" の確認質問にする。
+export function buildQualityGateInstruction(opts: { forceSafe: boolean }): string {
+  const head = opts.forceSafe
+    ? `【★ 出力形式（最優先・上記「本文のみ」を上書き）— 参考知識が取得できなかったため安全モード固定】
+参考にできる知識が今回は取得できませんでした。深い提案や断定はせず、相談を前に進めるための短い確認質問を1つだけ返してください。`
+    : `【★ 出力形式（最優先・上記「本文のみ」を上書き）— 品質ゲート】
+回答を出力する前に、以下のチェックリストで自己評価してください。`;
+
+  return `${head}
+
+# 合格条件（mode:"answer" を出してよいのは全て満たすときだけ）
+- ユーザーの相談に直接答えている
+- 世界観・色・素材・シルエット・着方のうち最低2つ以上に具体性がある
+- 「どう着るか」「何を足すか」「何を避けるか」のいずれかが含まれている
+- アイテム名の羅列で終わっていない
+- KO 由来の判断軸、またはユーザー入力に基づいた明確な理由がある
+
+# 安全モード（いずれかに当てはまれば mode:"safe"）
+- 自信が低い → 断定しない
+- 情報が不足している → 深い提案をせず、要点を1つだけ確認する短い質問を返す
+- 参考知識が無い/薄い → 深い回答のフリをしない
+※安全モードの reply は「短い確認質問（1つ）」とし、アイテム羅列や断定的な提案にしない。
+
+# 出力形式（厳守）
+必ず次の JSON を1個だけ出力する。前後に説明文・コードフェンスを付けない。
+{"mode":"answer"|"safe","reply":"<ユーザーに見せる自然文。answer なら相談への回答、safe なら短い確認質問1つ>","missing":"<safe のとき何が不足かを一言。answer のときは空文字>"}
+reply は必ず日本語の自然文。上記「絶対禁止」の英語スラッグ等の制約は引き続き優先する。`;
+}
+
 // ★ Phase 2: moodboard_analysis（context object）を user メッセージに整形する。
 //   buildStylistChatUserMessage は他 intent 用なので触らず、MB context object 経路専用に分離。
 //   ★ Phase 3: judgmentRules があれば学習ルールセクションを足す（空なら無注入＝Phase 2 と同一）。
@@ -344,6 +377,10 @@ export interface StylistChatContext {
     decisionRules:   Array<{ rule: string; importance?: number }>;
     failurePatterns: Array<{ title: string; summary?: string }>;
     influences:      Array<{ subjectName: string; summary?: string; fusion?: string }>;
+    // ③-c-2: query_knowledge 経路でのみ付与（OFF/get_* 経路は undefined＝描画不変）。
+    //   answerSummary: KO answer（補助文脈・本文化しない）。relatedEntries: 根拠ナレッジ。
+    answerSummary?:  string;
+    relatedEntries?: Array<{ title: string; summary?: string }>;
     dictionaries: {
       materials:   string;
       colors:      string;
@@ -579,9 +616,15 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
   const kos = ctx.knowledgeOS;
   if (kos && (kos.decisionRules.length > 0 || kos.failurePatterns.length > 0
               || kos.influences.length > 0
+              || (kos.answerSummary && kos.answerSummary.length > 0)
+              || (kos.relatedEntries && kos.relatedEntries.length > 0)
               || kos.dictionaries.materials || kos.dictionaries.colors
               || kos.dictionaries.silhouettes || kos.dictionaries.ratios)) {
     lines.push("【参考(Knowledge OS から本人 contextData として取得・★ 入口 sanitize 済)】");
+    // ③-c-2: KO answer は補助文脈（軽く添えるのみ・本文化／再要約しない・主素材を上書きしない）。
+    if (kos.answerSummary) {
+      lines.push(`・KO 要約観点(補助・参考程度。これをそのまま本文化しない): ${truncate(kos.answerSummary, 200)}`);
+    }
     if (kos.decisionRules.length > 0) {
       lines.push("・判断ルール(重要度順):");
       for (const r of kos.decisionRules) {
@@ -604,6 +647,14 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
         const body = parts.join(": ");
         const fusion = i.fusion ? `(融合: ${truncate(i.fusion, 60)})` : "";
         lines.push(`  ・ ${body}${fusion}`);
+      }
+    }
+    // ③-c-2: 根拠ナレッジ（related_entries）。主素材の補強として該当 entry を提示。
+    if (kos.relatedEntries && kos.relatedEntries.length > 0) {
+      lines.push("・根拠(該当ナレッジ):");
+      for (const e of kos.relatedEntries) {
+        const body = e.summary ? `${e.title}: ${truncate(e.summary, 100)}` : e.title;
+        lines.push(`  ・ ${body}`);
       }
     }
     if (kos.dictionaries.materials)   lines.push(`・素材辞書:\n${kos.dictionaries.materials}`);

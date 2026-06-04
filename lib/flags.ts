@@ -35,6 +35,15 @@ export const MB_CONTEXT_OBJECT = process.env.NEXT_PUBLIC_MB_CONTEXT_OBJECT !== "
 //   検証後に NEXT_PUBLIC_FEEDBACK_LOOP=true で有効化。UI(client) と feedback route(server) 双方で参照。
 export const FEEDBACK_LOOP = process.env.NEXT_PUBLIC_FEEDBACK_LOOP === "true";
 
+// STYLE_SELF_QUERY_KNOWLEDGE_CHAT: stylist-chat の KO 連携を get_* 3並列 → query_knowledge 主素材に
+//   寄せる（③-c）。query_knowledge を待ち（通常20s/最大25s）、decision_rules/failure_patterns/
+//   related_entries を【参考】の主素材に、answer は補助に、getInfluences は併用で温存。失敗/タイムアウトや
+//   品質ゲート不合格時は通常回答を出さず安全モード（純粋な確認質問）。応答に koRequestId を載せる。
+//   既定 OFF（"true" のときだけ ON）。OFF 時は完全に現状（get_* 3並列・queryKnowledge 不使用・新コード不走行）。
+//   stylist-chat は server なので NEXT_PUBLIC_ 不要。実機比較してから採用判断する。
+export const STYLE_SELF_QUERY_KNOWLEDGE_CHAT =
+  process.env.STYLE_SELF_QUERY_KNOWLEDGE_CHAT === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

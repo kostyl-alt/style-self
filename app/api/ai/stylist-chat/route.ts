@@ -40,10 +40,12 @@ import {
   COORDINATE_ACTIONABLE_OUTPUT_INSTRUCTION,
   buildStylistChatUserMessage,
   buildMbAnalysisUserMessage,
+  buildQualityGateInstruction,
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
-import { MB_CONTEXT_OBJECT, FEEDBACK_LOOP } from "@/lib/flags";
+import { MB_CONTEXT_OBJECT, FEEDBACK_LOOP, STYLE_SELF_QUERY_KNOWLEDGE_CHAT } from "@/lib/flags";
+import { resolveGatedReply } from "@/lib/utils/parse-gated-reply";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
 import { getJudgmentRules } from "@/lib/utils/judgment-rules-service";
 // ★ H-4b1-b-1: coordinate(MB 経由)の JSON 化接続(privacy 再帰 strip + parse フォールバック)
@@ -52,7 +54,7 @@ import { parseCoordinateReply } from "@/lib/utils/parse-coordinate-reply";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
 import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
-import { getDecisionRules, getFailurePatterns, getInfluences } from "@/lib/knowledge-os/client";
+import { getDecisionRules, getFailurePatterns, getInfluences, queryKnowledge } from "@/lib/knowledge-os/client";
 import {
   getMaterialContext,
   getColorContext,
@@ -113,6 +115,8 @@ interface StylistChatResponse {
   reason?:  "auth_required" | "empty_input" | "intent_out_of_scope";
   // ★ C-2c-1: MB 経由 coordinate のみ付与(エディタ AI 評価結果 + 試行回数)
   editorScore?: EditorResult & { attempts: 1 | 2 };
+  // ③-c-2: query_knowledge 経路(フラグ ON・非MB)で付与。c-3 で message.metadata.ko に永続化する核。
+  koRequestId?: string | null;
 }
 
 // ====================================================================
@@ -201,17 +205,30 @@ export async function POST(request: NextRequest) {
     //    - diagnose:   worldview_profiles から jsonb 列絞り(1.5a)
     //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
     //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
+    // ③-c-2: KO 連携の源を分岐する。MB 経由 coordinate は従来どおり get_*（editor 経路を乱さない）。
+    //   フラグ ON かつ非 MB のときだけ query_knowledge 主素材に寄せる。OFF/MB は完全に従来（get_* 3並列）。
+    const isMbCoordinate = intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE);
+    const useQueryKnowledge = STYLE_SELF_QUERY_KNOWLEDGE_CHAT && !isMbCoordinate;
+
     // A-10: 各 intent fetcher と Knowledge OS フェッチを ★ Promise.all で並列化(レイテンシ抑制)。
     //       A-6b は 5 intent 共通注入(diagnose / closet / coordinate / style-consult / brand-learn)。
-    const [baseCtx, knowledgeOS] = await Promise.all([
+    const [baseCtx, koResult] = await Promise.all([
       intent === "closet"          ? fetchClosetContext(supabase, userId)
       : intent === "coordinate"     ? fetchCoordinateContext(supabase, userId)
       : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
       : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId)
       :                                fetchDiagnoseContext(supabase, userId),
-      fetchKnowledgeOSContext(text),
+      useQueryKnowledge
+        ? fetchKnowledgeOSViaQueryKnowledge(text)
+        : fetchKnowledgeOSContext(text).then((knowledgeOS) => ({
+            knowledgeOS,
+            requestId: null as string | null,
+            safeMode: false,
+          })),
     ]);
-    const ctx: StylistChatContext = { ...baseCtx, knowledgeOS };
+    const ctx: StylistChatContext = { ...baseCtx, knowledgeOS: koResult.knowledgeOS };
+    const koRequestId = koResult.requestId;     // c-3 で永続化する核（OFF/MB/失敗時は null）
+    const koSafeMode  = koResult.safeMode;       // query_knowledge 失敗/タイムアウト → 安全モード固定
 
     // ★ Phase 3: 学習ルール注入（FEEDBACK_LOOP 時のみ・空なら ctx.judgmentRules=undefined＝従来と同一）
     if (FEEDBACK_LOOP) {
@@ -223,16 +240,19 @@ export async function POST(request: NextRequest) {
     //   B-2 X2: bodyProfile 注入を skip(2 重 leak 根絶・案 F 同思想で MB は client 完結)。
     //   B-4   : maxTokens を MB_REPLY_TOKENS(6144)へ引き上げ(B-1 具体化 + 11 項目 + 3 分類で 2048 超過)。
     //   他 5 intent(MVP-1c 直接 coordinate / diagnose / closet / style-consult / brand-learn)は ★ 完全不変。
-    const isMbCoordinate = intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE);
     if (isMbCoordinate) {
       ctx.bodyProfile = undefined;
     }
 
     // 4) Claude(Haiku 4.5)呼出
     // ★ H-4b1-b-1: coordinate(MB 経由)★ のみ ★ JSON 出力指示を append(他 4 intent は完全不変)
+    // ③-c-2: 非 MB かつフラグ ON は品質ゲートの JSON 出力指示を append（§3.5・案A）。
+    //   query_knowledge 失敗時(koSafeMode)は forceSafe で安全モード固定。MB/OFF は完全不変。
     const systemPrompt = isMbCoordinate
       ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${COORDINATE_JSON_OUTPUT_INSTRUCTION}`
-      : STYLIST_CHAT_SYSTEM_PROMPT;
+      : useQueryKnowledge
+        ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${buildQualityGateInstruction({ forceSafe: koSafeMode })}`
+        : STYLIST_CHAT_SYSTEM_PROMPT;
     const userMessage  = buildStylistChatUserMessage({ text, intent, history, ctx });
 
     let replyRaw: string;
@@ -311,8 +331,13 @@ export async function POST(request: NextRequest) {
       // parsed.fallbackText(= replyRaw)→ 既存経路で strip し reply として返す
     }
 
+    // ③-c-2: フラグ ON(非MB)は品質ゲートの JSON 出力をパース → mode 適用（§3.5・案C）。
+    //   parse 失敗時は raw をそのまま本文扱い（退行ゼロ）。mode:safe / 薄い機械検査で安全モード文に倒す。
+    //   OFF/MB は replyRaw のまま（従来不変）。
+    const replyForOutput = useQueryKnowledge ? resolveGatedReply(replyRaw) : replyRaw;
+
     // 5) 出力フィルタ(三重防御の 3 つ目・31 語辞書で検出削除)
-    const { cleaned, removed } = stripCanonicalSlugs(replyRaw);
+    const { cleaned, removed } = stripCanonicalSlugs(replyForOutput);
     if (removed) {
       console.warn("[stylist-chat] english slug detected in reply, removed");
     }
@@ -330,6 +355,7 @@ export async function POST(request: NextRequest) {
       reply,
       actions:     actions.length > 0 ? actions : undefined,
       editorScore,
+      koRequestId, // ③-c-2: c-3 で message.metadata.ko に永続化（OFF/MB/失敗時は null）
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -723,6 +749,79 @@ async function fetchKnowledgeOSContext(text: string): Promise<StylistChatContext
       dictionaries:    { materials: "", colors: "", silhouettes: "", ratios: "" },
     };
   }
+}
+
+// ③-c-2: query_knowledge 主素材版の KO context fetcher（フラグ ON・非 MB のみ使用）。
+// ・queryKnowledge(text)（c-1・キャッシュ外・graceful・通常20s/最大25s）を待つ。
+// ・answer!==null: decision_rules/failure_patterns/related_entries を主素材、answer を補助、
+//   getInfluences 併用で influences 温存。dictionaries は従来どおり text マッチで抽出。
+// ・answer===null（失敗/タイムアウト）: 安全モード（knowledgeOS=undefined・get_* は使わない）。
+// ・入口 sanitize（stripCanonicalSlugs 31語）を query_knowledge 戻り値にも適用（描画指示「sanitize 済」と整合）。
+// 戻り: { knowledgeOS, requestId, safeMode }。
+async function fetchKnowledgeOSViaQueryKnowledge(text: string): Promise<{
+  knowledgeOS: StylistChatContext["knowledgeOS"];
+  requestId: string | null;
+  safeMode: boolean;
+}> {
+  // queryKnowledge と getInfluences を並列（influences 併用温存）。getInfluences は graceful([])。
+  const [qk, influencesRaw] = await Promise.all([
+    queryKnowledge(text),
+    getInfluences({ limit: KOS_INFLUENCES_LIMIT }),
+  ]);
+
+  // 失敗/タイムアウト → 安全モード（KO 文脈なし・get_* も使わない）
+  if (!qk.answer) {
+    return { knowledgeOS: undefined, requestId: qk.requestId, safeMode: true };
+  }
+  const a = qk.answer;
+
+  const decisionRules = a.decision_rules
+    .map((r) => ({ rule: stripCanonicalSlugs(r ?? "").cleaned }))
+    .filter((r) => r.rule.trim().length > 0)
+    .slice(0, KOS_DECISION_RULES_LIMIT);
+
+  const failurePatterns = a.failure_patterns
+    .map((f) => ({ title: stripCanonicalSlugs(f ?? "").cleaned }))
+    .filter((f) => f.title.trim().length > 0)
+    .slice(0, KOS_FAILURE_PATTERNS_LIMIT);
+
+  const relatedEntries = a.related_entries
+    .map((e) => ({
+      title:   stripCanonicalSlugs(e.title ?? "").cleaned,
+      summary: stripCanonicalSlugs(e.summary ?? "").cleaned,
+    }))
+    .filter((e) => e.title.trim().length > 0)
+    .slice(0, 5);
+
+  const answerSummary = stripCanonicalSlugs(a.answer ?? "").cleaned || undefined;
+
+  const influences = influencesRaw.slice(0, KOS_INFLUENCES_LIMIT)
+    .map((i) => ({
+      subjectName: stripCanonicalSlugs(i.subject_name ?? "").cleaned,
+      summary:     stripCanonicalSlugs(i.subject_summary ?? "").cleaned,
+      fusion:      stripCanonicalSlugs(i.fusion_essence ?? "").cleaned,
+    }))
+    .filter((i) => i.subjectName.trim().length > 0);
+
+  const matched = matchDictionaryKeys(text);
+
+  return {
+    knowledgeOS: {
+      decisionRules,
+      failurePatterns,
+      influences,
+      answerSummary,
+      relatedEntries,
+      dictionaries: {
+        materials:   getMaterialContext(matched.materials),
+        colors:      getColorContext(matched.colors),
+        silhouettes: getLineContext(matched.silhouettes),
+        ratios:      getRatioContext(matched.ratios),
+      },
+    },
+    requestId: qk.requestId,
+    safeMode: false,
+  };
 }
 
 // 発話 text に含まれる dictionary キー(日本語)を 4 種類抽出。

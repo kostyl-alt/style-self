@@ -26,7 +26,8 @@ interface DbMessageRow {
   role:       "user" | "assistant";
   content:    string;
   attachments: unknown | null;
-  metadata:   { message?: PersistableMessage } | null;  // ★ H-4a: 原 Message を忠実復元するため格納
+  // ★ H-4a: 原 Message を忠実復元するため格納。③-c-3: ko.request_id は KO 使用追跡の突合キー（任意）。
+  metadata:   { message?: PersistableMessage; ko?: { request_id: string } } | null;
   created_at: string;
 }
 
@@ -36,7 +37,8 @@ interface UseThreadMessagesResult {
   // DB → page Message[] にマップして返す(threadId が null なら空)
   loadMessages:   (threadId: string) => Promise<PersistableMessage[]>;
   // user/assistant 1 件を DB に永続化(fire-and-forget 用途・失敗は error に積むだけ)
-  persistMessage: (threadId: string, message: PersistableMessage, displayText: string) => Promise<void>;
+  // ③-c-3: koRequestId があれば metadata.ko.request_id に格納（query_knowledge 使用の突合キー・任意）。
+  persistMessage: (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null) => Promise<void>;
 }
 
 // DB 行 → page Message。metadata.message があれば忠実復元、無ければ text バブルにフォールバック。
@@ -76,16 +78,20 @@ export function useThreadMessages(): UseThreadMessagesResult {
   }, []);
 
   const persistMessage = useCallback(
-    async (threadId: string, message: PersistableMessage, displayText: string): Promise<void> => {
+    async (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null): Promise<void> => {
       try {
         // content は表示テキスト(DB の text 列)・原 Message は metadata.message に格納し H-4b で活用
+        // ③-c-3: koRequestId があれば ko を additive で足す（null/undefined のときは従来どおり {message} のまま）
+        const metadata = koRequestId
+          ? { message, ko: { request_id: koRequestId } }
+          : { message };
         const res = await fetch(`/api/threads/${threadId}/messages`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({
             role:     message.role,
             content:  displayText.length > 0 ? displayText : "(空)",
-            metadata: { message },
+            metadata,
           }),
         });
         if (!res.ok) {
