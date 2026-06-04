@@ -375,3 +375,145 @@ export async function queryKnowledge(
     clearTimeout(timeout);
   }
 }
+
+// ====================================================================
+// 高速化: search_knowledge（KO の合成なし意味検索）
+// ====================================================================
+// query_knowledge と並置。KO側で Claude 合成(Sonnet 4096tok)を行わず、生の ranked entry を返す。
+// 合成が無いぶん高速(curl 実測 ~3s/local・本番 ~1s 見込み・query_knowledge の 20-25s より大幅短い)。
+// queryKnowledge と同様: キャッシュ外・_meta.request_id 受領・graceful。タイムアウトは合成無しで短い(10s)。
+
+const SEARCH_KNOWLEDGE_TIMEOUT_MS = 10_000;
+
+export interface SearchKnowledgeEntry {
+  id: string;
+  title: string | null;
+  ai_summary: string | null;
+  decision_rules: Array<{ rule: string; condition?: string }>;
+  log_type: string;
+  importance: number;
+  confidence: number;
+  score: number;       // cos_sim
+  final: number;
+  embedding_id: string;
+  chunk_index: number;
+}
+export interface SearchKnowledgeResult {
+  outcome: "ranked" | "no_relevant" | "no_embeddings";
+  entries: SearchKnowledgeEntry[];
+}
+export interface SearchKnowledgeReturn {
+  result: SearchKnowledgeResult | null; // 失敗/タイムアウト時 null
+  requestId: string | null;             // KO の _meta.request_id（突合の核）
+}
+
+const EMPTY_SEARCH_KNOWLEDGE_RETURN: SearchKnowledgeReturn = { result: null, requestId: null };
+
+function normalizeSearchKnowledge(raw: unknown): SearchKnowledgeResult | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const outcome =
+    o.outcome === "no_relevant" || o.outcome === "no_embeddings" ? o.outcome : "ranked";
+  const entries = Array.isArray(o.entries)
+    ? (o.entries as unknown[]).map((e) => {
+        const r = (e ?? {}) as Record<string, unknown>;
+        const rules = Array.isArray(r.decision_rules)
+          ? (r.decision_rules as unknown[])
+              .map((d) => {
+                const dr = (d ?? {}) as Record<string, unknown>;
+                if (typeof dr.rule !== "string") return null;
+                return typeof dr.condition === "string"
+                  ? { rule: dr.rule, condition: dr.condition }
+                  : { rule: dr.rule };
+              })
+              .filter((x): x is { rule: string; condition?: string } => x !== null)
+          : [];
+        return {
+          id: typeof r.id === "string" ? r.id : "",
+          title: typeof r.title === "string" ? r.title : null,
+          ai_summary: typeof r.ai_summary === "string" ? r.ai_summary : null,
+          decision_rules: rules,
+          log_type: typeof r.log_type === "string" ? r.log_type : "",
+          importance: typeof r.importance === "number" ? r.importance : 0,
+          confidence: typeof r.confidence === "number" ? r.confidence : 0,
+          score: typeof r.score === "number" ? r.score : 0,
+          final: typeof r.final === "number" ? r.final : 0,
+          embedding_id: typeof r.embedding_id === "string" ? r.embedding_id : "",
+          chunk_index: typeof r.chunk_index === "number" ? r.chunk_index : 0,
+        };
+      })
+    : [];
+  return { outcome, entries };
+}
+
+export async function searchKnowledge(
+  question: string,
+  opts?: { timeoutMs?: number },
+): Promise<SearchKnowledgeReturn> {
+  const { url, apiKey } = getConfig();
+  if (!apiKey) return EMPTY_SEARCH_KNOWLEDGE_RETURN;
+
+  const q = (question ?? "").trim();
+  if (!q) return EMPTY_SEARCH_KNOWLEDGE_RETURN;
+
+  const timeoutMs = opts?.timeoutMs ?? SEARCH_KNOWLEDGE_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      // project は渡さない(query_knowledge と同じ理由)
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: { name: "search_knowledge", arguments: { question: q } },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      console.warn(`[knowledge-os] search_knowledge HTTP ${res.status}`);
+      return EMPTY_SEARCH_KNOWLEDGE_RETURN;
+    }
+
+    const body = (await res.json()) as {
+      result?: {
+        content?: Array<{ type?: string; text?: string }>;
+        _meta?: { request_id?: string };
+      };
+      error?: { message?: string };
+    };
+
+    if (body.error) {
+      console.warn("[knowledge-os] search_knowledge RPC error:", body.error.message ?? body.error);
+      return EMPTY_SEARCH_KNOWLEDGE_RETURN;
+    }
+
+    const requestId = body.result?._meta?.request_id ?? null;
+
+    const text = body.result?.content?.[0]?.text;
+    if (!text) {
+      console.warn("[knowledge-os] search_knowledge empty content");
+      return { result: null, requestId };
+    }
+
+    const parsed = normalizeSearchKnowledge(JSON.parse(text) as unknown);
+    if (!parsed) {
+      console.warn("[knowledge-os] search_knowledge content[0] is not a SearchKnowledgeResult object");
+      return { result: null, requestId };
+    }
+    return { result: parsed, requestId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[knowledge-os] search_knowledge failed:", msg);
+    return EMPTY_SEARCH_KNOWLEDGE_RETURN;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

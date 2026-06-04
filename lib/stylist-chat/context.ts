@@ -5,7 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { StylistChatContext } from "@/lib/prompts/stylist-chat";
-import { getDecisionRules, getFailurePatterns, getInfluences, queryKnowledge } from "@/lib/knowledge-os/client";
+import { getDecisionRules, getFailurePatterns, getInfluences, queryKnowledge, searchKnowledge } from "@/lib/knowledge-os/client";
 import {
   getMaterialContext,
   getColorContext,
@@ -443,6 +443,90 @@ export async function fetchKnowledgeOSViaQueryKnowledge(text: string): Promise<{
       },
     },
     requestId: qk.requestId,
+    safeMode: false,
+  };
+}
+
+// 高速版: search_knowledge（合成なし・生 ranked entry）から KO context を組む。
+// fetchKnowledgeOSViaQueryKnowledge と同 shape の knowledgeOS を返す（描画不変）。answer補助は無し（合成廃止）。
+// ・decisionRules: 上位entry(score降順=ranked順)の entry.decision_rules を flat 収集・condition展開・上限10。
+// ・failurePatterns: log_type==='failure_pattern' の entry → {title, summary: ai_summary}・上限5。
+// ・relatedEntries: ranked entry → {title, summary: ai_summary}・上限5。
+// ・influences: getInfluences 併用で温存。dictionaries 不変。入口 sanitize 適用。
+// ・outcome!=="ranked"（no_relevant/no_embeddings/失敗）→ safeMode=true・knowledgeOS=undefined（get_*に落とさない）。
+export async function fetchKnowledgeOSViaSearchKnowledge(text: string): Promise<{
+  knowledgeOS: StylistChatContext["knowledgeOS"];
+  requestId: string | null;
+  safeMode: boolean;
+}> {
+  const [sk, influencesRaw] = await Promise.all([
+    searchKnowledge(text),
+    getInfluences({ limit: KOS_INFLUENCES_LIMIT }),
+  ]);
+
+  if (!sk.result || sk.result.outcome !== "ranked" || sk.result.entries.length === 0) {
+    return { knowledgeOS: undefined, requestId: sk.requestId, safeMode: true };
+  }
+  const entries = sk.result.entries;
+
+  // 判断ルール: 上位 entry から flat 収集（condition は「〜（条件: …）」展開）・上限 KOS_DECISION_RULES_LIMIT
+  const decisionRules: Array<{ rule: string; importance?: number }> = [];
+  for (const e of entries) {
+    for (const d of e.decision_rules) {
+      const ruleText = stripCanonicalSlugs(
+        d.condition ? `${d.rule}（条件: ${d.condition}）` : d.rule,
+      ).cleaned;
+      if (ruleText.trim().length === 0) continue;
+      decisionRules.push({ rule: ruleText, importance: e.importance });
+      if (decisionRules.length >= KOS_DECISION_RULES_LIMIT) break;
+    }
+    if (decisionRules.length >= KOS_DECISION_RULES_LIMIT) break;
+  }
+
+  // 失敗パターン: log_type='failure_pattern' の entry → {title, summary}
+  const failurePatterns = entries
+    .filter((e) => e.log_type === "failure_pattern")
+    .map((e) => ({
+      title:   stripCanonicalSlugs(e.title ?? "").cleaned,
+      summary: stripCanonicalSlugs(e.ai_summary ?? "").cleaned,
+    }))
+    .filter((f) => f.title.trim().length > 0)
+    .slice(0, KOS_FAILURE_PATTERNS_LIMIT);
+
+  // 根拠: ranked entry → {title, summary}
+  const relatedEntries = entries
+    .map((e) => ({
+      title:   stripCanonicalSlugs(e.title ?? "").cleaned,
+      summary: stripCanonicalSlugs(e.ai_summary ?? "").cleaned,
+    }))
+    .filter((e) => e.title.trim().length > 0)
+    .slice(0, 5);
+
+  const influences = influencesRaw.slice(0, KOS_INFLUENCES_LIMIT)
+    .map((i) => ({
+      subjectName: stripCanonicalSlugs(i.subject_name ?? "").cleaned,
+      summary:     stripCanonicalSlugs(i.subject_summary ?? "").cleaned,
+      fusion:      stripCanonicalSlugs(i.fusion_essence ?? "").cleaned,
+    }))
+    .filter((i) => i.subjectName.trim().length > 0);
+
+  const matched = matchDictionaryKeys(text);
+
+  return {
+    knowledgeOS: {
+      decisionRules,
+      failurePatterns,
+      influences,
+      // answerSummary: 無し（合成answer廃止・設計通り）
+      relatedEntries,
+      dictionaries: {
+        materials:   getMaterialContext(matched.materials),
+        colors:      getColorContext(matched.colors),
+        silhouettes: getLineContext(matched.silhouettes),
+        ratios:      getRatioContext(matched.ratios),
+      },
+    },
+    requestId: sk.requestId,
     safeMode: false,
   };
 }

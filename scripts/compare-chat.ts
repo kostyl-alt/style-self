@@ -1,15 +1,18 @@
 #!/usr/bin/env tsx
-// ③-c 比較ツール: stylist-chat の KO 連携を「get_*方式(OFF相当)」と「query_knowledge方式(ON相当)」で
-// 同一発話に通し、最終 reply・使った rules・レイテンシ・品質ゲート mode・薄さ指標を並べる。
+// ③-c / 高速化 比較ツール: stylist-chat の KO 連携を 3方式で同一発話に通し、
+// 最終 reply・使った rules・レイテンシ・品質ゲート mode・薄さ指標を並べる。
+//   - get_*           : fetchKnowledgeOSContext（現状ベースライン）
+//   - query_knowledge : fetchKnowledgeOSViaQueryKnowledge（合成あり・遅い・旧案）
+//   - search_knowledge: fetchKnowledgeOSViaSearchKnowledge（合成なし・速い・新案）
 //
-// 設計: docs/phase3c-style-self-query-knowledge-plan.md §4-3。
-// ・フラグに依らず両経路を直接呼ぶ（route の生成ロジックは lib/stylist-chat/context.ts に抽出済・挙動不変）。
-// ・intent context は両方式で同一 baseline（差は KO 部分のみ）。
-// ・query_knowledge 方式は品質ゲート（systemPrompt 自己チェック）+ resolveGatedReply を適用。
-// ・(C) QK の koRequestId を KO の rule_applications で引いて記録 ✓/✗（KO Supabase env がある時のみ）。
+// 設計: docs/phase3c-style-self-query-knowledge-plan.md §4-3 + search_knowledge 高速化。
+// ・フラグに依らず各経路を直接呼ぶ（route の生成ロジックは lib/stylist-chat/context.ts に抽出済・挙動不変）。
+// ・intent context は全方式で同一 baseline（差は KO 部分のみ）。
+// ・query_knowledge / search_knowledge は品質ゲート（systemPrompt 自己チェック）+ resolveGatedReply を適用。
+// ・(C) QK/search の koRequestId を KO の rule_applications で引いて記録 ✓/✗（KO Supabase env がある時のみ）。
 //
 // 前提:
-//   - KO(:3001) 稼働（query_knowledge 実呼び）。style-self .env.local の KNOWLEDGE_OS_URL/API_KEY を使う。
+//   - KO(:3001) 稼働（query_knowledge / search_knowledge 実呼び）。style-self .env.local の KNOWLEDGE_OS_URL/API_KEY を使う。
 //   - service-role で style-self Supabase を読む（intent fetcher は明示 .eq(userId) なので RLS 不要）。
 //   - 診断完了ユーザー（worldview_profiles に行がある）が対象。--user で明示も可。
 //   - (C)の記録確認は KO_SUPABASE_URL / KO_SUPABASE_SERVICE_ROLE_KEY が両方ある時のみ実行。
@@ -18,8 +21,8 @@
 //   set -a; source .env.local; set +a
 //   # (任意) KO 記録確認するなら KO の Supabase を別名で:
 //   #   export KO_SUPABASE_URL=...; export KO_SUPABASE_SERVICE_ROLE_KEY=...
-//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts
-//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts --only A
+//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts                 # 3方式
+//   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts --skip-qk --only A  # get_* vs search のみ(速い)
 //   NODE_OPTIONS=--dns-result-order=ipv4first npx tsx scripts/compare-chat.ts --n 3 --user <uuid>
 
 import { createClient } from "@supabase/supabase-js";
@@ -30,6 +33,7 @@ import {
   fetchBrandLearnContext,
   fetchKnowledgeOSContext,
   fetchKnowledgeOSViaQueryKnowledge,
+  fetchKnowledgeOSViaSearchKnowledge,
   stripCanonicalSlugs,
 } from "@/lib/stylist-chat/context";
 import {
@@ -58,6 +62,8 @@ const userArg = process.argv.indexOf("--user");
 const USER_OPT = userArg >= 0 ? process.argv[userArg + 1] : undefined;
 const nArg = process.argv.indexOf("--n");
 const N_LIMIT = nArg >= 0 ? Number(process.argv[nArg + 1]) || 999 : 999;
+// query_knowledge は遅い(57-120s)ので除外して get_* と search_knowledge の2方式だけ速く回すオプション。
+const SKIP_QK = process.argv.includes("--skip-qk");
 
 const MAX_REPLY_TOKENS = 2048; // route の非MB値に合わせる
 const ACTIONABLE_RE = /着|合わせ|足す|避け|抜く|外す|入れ|変え|寄せ|崩/;
@@ -69,7 +75,7 @@ const KO_URL = process.env.KO_SUPABASE_URL;
 const KO_KEY = process.env.KO_SUPABASE_SERVICE_ROLE_KEY;
 const koSb = KO_URL && KO_KEY ? createClient(KO_URL, KO_KEY, { auth: { persistSession: false } }) : null;
 
-type Method = "get_*" | "query_knowledge";
+type Method = "get_*" | "query_knowledge" | "search_knowledge";
 
 const QUESTIONS: { id: string; q: string; intent: string }[] = [
   // A系（明確）
@@ -115,26 +121,33 @@ async function runOne(userId: string, text: string, intent: string, method: Meth
   let safeMode = false;
   if (method === "get_*") {
     ko = await fetchKnowledgeOSContext(text);
-  } else {
+  } else if (method === "query_knowledge") {
     const r = await fetchKnowledgeOSViaQueryKnowledge(text);
+    ko = r.knowledgeOS;
+    requestId = r.requestId;
+    safeMode = r.safeMode;
+  } else {
+    // search_knowledge（合成なし・高速）
+    const r = await fetchKnowledgeOSViaSearchKnowledge(text);
     ko = r.knowledgeOS;
     requestId = r.requestId;
     safeMode = r.safeMode;
   }
   const koMs = Date.now() - k0;
 
+  // 品質ゲートは query_knowledge / search_knowledge（rules主素材）に適用。get_* は従来 raw。
+  const useGate = method !== "get_*";
   const ctx: StylistChatContext = { ...baseCtx, knowledgeOS: ko };
-  const systemPrompt =
-    method === "query_knowledge"
-      ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${buildQualityGateInstruction({ forceSafe: safeMode })}`
-      : STYLIST_CHAT_SYSTEM_PROMPT;
+  const systemPrompt = useGate
+    ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${buildQualityGateInstruction({ forceSafe: safeMode })}`
+    : STYLIST_CHAT_SYSTEM_PROMPT;
   const userMessage = buildStylistChatUserMessage({ text, intent, history: [], ctx });
 
   const replyRaw = await callClaude({ systemPrompt, userMessage, model: HAIKU_MODEL, maxTokens: MAX_REPLY_TOKENS });
 
   let mode: "answer" | "safe" | null = null;
   let replyForOutput = replyRaw;
-  if (method === "query_knowledge") {
+  if (useGate) {
     const gated = parseGatedReply(replyRaw);
     mode = gated.mode;
     replyForOutput = applyThinGate(gated);
@@ -245,41 +258,46 @@ async function main() {
     .filter((q) => (ONLY === "A" ? q.id.startsWith("A") : ONLY === "B" ? q.id.startsWith("B") : true))
     .slice(0, N_LIMIT);
 
+  // 3方式（get_* / query_knowledge / search_knowledge）。--skip-qk で query_knowledge を除外。
+  const methods: { method: Method; label: string }[] = [
+    { method: "get_*", label: "get_*(現状)" },
+    ...(SKIP_QK ? [] : [{ method: "query_knowledge" as Method, label: "query_knowledge(合成・遅)" }]),
+    { method: "search_knowledge", label: "search_knowledge(合成なし・速)" },
+  ];
+
   console.log(
-    `比較対象 user=${userId} / 質問 ${sets.length}問 / KO記録確認=${koSb ? "ON" : "OFF"}\n` +
-      `（get_*方式=OFF相当 / query_knowledge方式=ON相当・品質ゲート付き）\n`,
+    `比較対象 user=${userId} / 質問 ${sets.length}問 / 方式 ${methods.map((m) => m.label).join(" / ")} / KO記録確認=${koSb ? "ON" : "OFF"}` +
+      (SKIP_QK ? "（--skip-qk: query_knowledge 除外）" : "") +
+      "\n",
   );
 
   for (let i = 0; i < sets.length; i++) {
     const { id, q, intent } = sets[i];
     console.log(`\n================ ${id} [${intent}]: ${q} ================`);
 
-    // get_* 方式
-    try {
-      const g = await runOne(userId, q, intent, "get_*");
-      console.log(`── 旧[get_*]  KO ${g.koMs}ms / total ${g.totalMs}ms`);
-      console.log(`   rules: ${rulesSummary(g.ko)}`);
-      console.log(`   [薄さ] ${thinMetrics(g.reply)}`);
-      console.log(`   reply: ${g.reply}`);
-    } catch (e) {
-      console.warn(`   旧[get_*] 失敗: ${e instanceof Error ? e.message : e}`);
-    }
-
-    // query_knowledge 方式
-    try {
-      const v = await runOne(userId, q, intent, "query_knowledge");
-      console.log(`── 新[query_knowledge]  KO ${v.koMs}ms / total ${v.totalMs}ms | gate mode: ${v.mode ?? "n/a"}${v.safeMode ? " (KO取得失敗→forceSafe)" : ""}`);
-      console.log(`   rules: ${rulesSummary(v.ko)}`);
-      console.log(`   [薄さ] ${thinMetrics(v.reply)}`);
-      console.log(`   reply: ${v.reply}`);
-      console.log(`   [記録] ${await checkRuleApplications(v.requestId)}`);
-    } catch (e) {
-      console.warn(`   新[query_knowledge] 失敗: ${e instanceof Error ? e.message : e}`);
+    for (const { method, label } of methods) {
+      try {
+        const r = await runOne(userId, q, intent, method);
+        const gateInfo =
+          method === "get_*"
+            ? ""
+            : ` | gate mode: ${r.mode ?? "n/a"}${r.safeMode ? " (KO取得失敗→forceSafe)" : ""}`;
+        console.log(`── [${label}]  KO ${r.koMs}ms / total ${r.totalMs}ms${gateInfo}`);
+        console.log(`   rules: ${rulesSummary(r.ko)}`);
+        console.log(`   [薄さ] ${thinMetrics(r.reply)}`);
+        console.log(`   reply: ${r.reply}`);
+        if (method !== "get_*") {
+          console.log(`   [記録] ${await checkRuleApplications(r.requestId)}`);
+        }
+      } catch (e) {
+        console.warn(`   [${label}] 失敗: ${e instanceof Error ? e.message : e}`);
+      }
     }
   }
 
   console.log("\n========== 比較完了 ==========");
   console.log("8評価軸（直接回答/具体性/世界観色素材シルエット着方/足す避ける/KO判断軸の自然さ/長いだけで薄くない/ゴミ無し/レイテンシ）で目視採点してください。");
+  console.log("特に: query_knowledge と search_knowledge で reply 品質が同等か（合成省略で落ちないか）× KO レイテンシ差。");
 }
 
 main().catch((e) => {

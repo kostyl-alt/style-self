@@ -59,7 +59,7 @@ import {
   fetchStyleConsultContext,
   fetchBrandLearnContext,
   fetchKnowledgeOSContext,
-  fetchKnowledgeOSViaQueryKnowledge,
+  fetchKnowledgeOSViaSearchKnowledge,
   stripCanonicalSlugs,
 } from "@/lib/stylist-chat/context";
 // ★ B-2(X2): MB 経路の判別に使用。MB prompt は冒頭が MB_PROMPT_SIGNATURE で始まる。
@@ -204,10 +204,11 @@ export async function POST(request: NextRequest) {
     //    - diagnose:   worldview_profiles から jsonb 列絞り(1.5a)
     //    - closet:     wardrobe_items から category, color のみ列絞り(1.5b-i)
     //    - coordinate: worldview + body_profile + wardrobe の 3 並列 SELECT(MVP-1c)
-    // ③-c-2: KO 連携の源を分岐する。MB 経由 coordinate は従来どおり get_*（editor 経路を乱さない）。
-    //   フラグ ON かつ非 MB のときだけ query_knowledge 主素材に寄せる。OFF/MB は完全に従来（get_* 3並列）。
+    // ③-c-2 / 高速化: KO 連携の源を分岐する。MB 経由 coordinate は従来どおり get_*（editor 経路を乱さない）。
+    //   フラグ ON かつ非 MB のときだけ KO 意味検索（search_knowledge・合成なし高速版）に寄せる。
+    //   OFF/MB は完全に従来（get_* 3並列）。フラグ名は据置（意味は同じ・実装を search に差し替え）。
     const isMbCoordinate = intent === "coordinate" && text.startsWith(MB_PROMPT_SIGNATURE);
-    const useQueryKnowledge = STYLE_SELF_QUERY_KNOWLEDGE_CHAT && !isMbCoordinate;
+    const useKnowledgeSearch = STYLE_SELF_QUERY_KNOWLEDGE_CHAT && !isMbCoordinate;
 
     // A-10: 各 intent fetcher と Knowledge OS フェッチを ★ Promise.all で並列化(レイテンシ抑制)。
     //       A-6b は 5 intent 共通注入(diagnose / closet / coordinate / style-consult / brand-learn)。
@@ -217,8 +218,8 @@ export async function POST(request: NextRequest) {
       : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
       : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId)
       :                                fetchDiagnoseContext(supabase, userId),
-      useQueryKnowledge
-        ? fetchKnowledgeOSViaQueryKnowledge(text)
+      useKnowledgeSearch
+        ? fetchKnowledgeOSViaSearchKnowledge(text)
         : fetchKnowledgeOSContext(text).then((knowledgeOS) => ({
             knowledgeOS,
             requestId: null as string | null,
@@ -249,7 +250,7 @@ export async function POST(request: NextRequest) {
     //   query_knowledge 失敗時(koSafeMode)は forceSafe で安全モード固定。MB/OFF は完全不変。
     const systemPrompt = isMbCoordinate
       ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${COORDINATE_JSON_OUTPUT_INSTRUCTION}`
-      : useQueryKnowledge
+      : useKnowledgeSearch
         ? `${STYLIST_CHAT_SYSTEM_PROMPT}\n\n${buildQualityGateInstruction({ forceSafe: koSafeMode })}`
         : STYLIST_CHAT_SYSTEM_PROMPT;
     const userMessage  = buildStylistChatUserMessage({ text, intent, history, ctx });
@@ -333,7 +334,7 @@ export async function POST(request: NextRequest) {
     // ③-c-2: フラグ ON(非MB)は品質ゲートの JSON 出力をパース → mode 適用（§3.5・案C）。
     //   parse 失敗時は raw をそのまま本文扱い（退行ゼロ）。mode:safe / 薄い機械検査で安全モード文に倒す。
     //   OFF/MB は replyRaw のまま（従来不変）。
-    const replyForOutput = useQueryKnowledge ? resolveGatedReply(replyRaw) : replyRaw;
+    const replyForOutput = useKnowledgeSearch ? resolveGatedReply(replyRaw) : replyRaw;
 
     // 5) 出力フィルタ(三重防御の 3 つ目・31 語辞書で検出削除)
     const { cleaned, removed } = stripCanonicalSlugs(replyForOutput);
