@@ -14,8 +14,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { FEEDBACK_LOOP } from "@/lib/flags";
+import { FEEDBACK_LOOP, STYLE_SELF_KO_FEEDBACK } from "@/lib/flags";
 import { extractAndSaveJudgmentRules } from "@/lib/utils/judgment-rules-service";
+import { submitFeedback as submitKoFeedback, type KoFeedbackRating } from "@/lib/knowledge-os/client";
 import type { FeedbackRow } from "@/types/chat-thread";
 
 export const dynamic = "force-dynamic";
@@ -30,9 +31,19 @@ interface RouteContext {
 }
 
 interface PostFeedbackBody {
-  message_id?: unknown;
-  kind?:       unknown;
-  content?:    unknown;
+  message_id?:     unknown;
+  kind?:           unknown;
+  content?:        unknown;
+  ko_request_id?:  unknown;  // ③-c-5b: KO 書き戻し用の request_id（任意・UUID）
+}
+
+// ③-c-5b: STYLE-SELF feedback kind → KO rating。設計どおり like→good / save→save / dislike→bad。
+//   それ以外の kind（more_x 等）は KO 書き戻し対象外（null＝送らない）。
+function koRatingFromKind(kind: string): KoFeedbackRating | null {
+  if (kind === "like") return "good";
+  if (kind === "save") return "save";
+  if (kind === "dislike") return "bad";
+  return null;
 }
 
 // ====================================================================
@@ -101,6 +112,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       message_id = body.message_id;
     }
 
+    // ③-c-5b: ko_request_id 検証(任意・UUID)。学習シグナルなので不正でも 400 にせず無視(best-effort)。
+    let koRequestId: string | null = null;
+    if (typeof body.ko_request_id === "string" && UUID_RE.test(body.ko_request_id)) {
+      koRequestId = body.ko_request_id;
+    }
+
     const { data: inserted, error: insErr } = await supabase
       .from("feedback")
       .insert({
@@ -130,6 +147,24 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         await extractAndSaveJudgmentRules(supabase, user.id, params.id, kind, content);
       } catch (extractErr) {
         console.warn("[feedback POST] judgment extract failed:", extractErr instanceof Error ? extractErr.message : extractErr);
+      }
+    }
+
+    // ③-c-5b: KO 由来の返信(ko_request_id 有り)について、評価を KO へ best-effort 書き戻す。
+    //   STYLE_SELF_KO_FEEDBACK が ON のときだけ。OFF/未設定なら完全無送信＝退行ゼロ。
+    //   KO 送信失敗は feedback 保存にも会話にも一切影響させない(try/catch 握り潰し)。
+    if (STYLE_SELF_KO_FEEDBACK && koRequestId) {
+      const rating = koRatingFromKind(kind);
+      if (rating) {
+        try {
+          await submitKoFeedback({
+            request_id: koRequestId,
+            rating,
+            note: content || undefined,
+          });
+        } catch (koErr) {
+          console.warn("[feedback POST] KO submit_feedback failed:", koErr instanceof Error ? koErr.message : koErr);
+        }
       }
     }
 

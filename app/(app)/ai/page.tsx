@@ -601,10 +601,12 @@ function ChatPageInner() {
     if (!FEEDBACK_LOOP) return;
     try {
       // ③-c-4: 対象返信(KO 由来の直近 assistant)を特定し request_id / message_id を確保する。
-      //   ・_koRequestId は ③-c-5 の KO 即時送信用に確保のみ(今は送信しない)。配線B。
+      //   ・koRequestId は ③-c-5b の KO 書き戻し用。配線B。feedback route へ渡し、サーバ側で
+      //     STYLE_SELF_KO_FEEDBACK が ON のとき submit_feedback を best-effort 送信する
+      //     （KNOWLEDGE_OS_API_KEY / フラグは server 専用 env のためクライアントからは送らない）。
       //   ・targetMessageId は feedback.message_id 突合用。ephemeral 永続化ループで DB id を拾う。配線A。
       const target = findFeedbackTargetMessage(messages);
-      const _koRequestId =
+      const koRequestId =
         target && (target.content.kind === "reply" || target.content.kind === "coordinate_v2")
           ? target.content.koRequestId ?? null
           : null;
@@ -637,14 +639,15 @@ function ChatPageInner() {
       }
       // ③-c-4 配線A: message_id は解決できたときだけ送る(optional・未解決時は省略＝退行なし)。
       //   既存 thread のライブ message は DB id を state に保持しないため未解決になり得る。その場合は省略。
+      // ③-c-5b: ko_request_id も additive で渡す。サーバ(feedback route)が STYLE_SELF_KO_FEEDBACK ON の
+      //   ときだけ KO へ書き戻す。OFF/未設定なら従来どおり完全無送信＝退行ゼロ。
+      const fbBody: Record<string, unknown> = { kind, content: reason ?? "" };
+      if (targetMessageId) fbBody.message_id = targetMessageId;
+      if (koRequestId) fbBody.ko_request_id = koRequestId;
       await fetch(`/api/threads/${tid}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          targetMessageId
-            ? { kind, content: reason ?? "", message_id: targetMessageId }
-            : { kind, content: reason ?? "" },
-        ),
+        body: JSON.stringify(fbBody),
       });
     } catch {
       // best-effort: 失敗しても会話・既存挙動は不変

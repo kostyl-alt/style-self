@@ -517,3 +517,69 @@ export async function searchKnowledge(
     clearTimeout(timeout);
   }
 }
+
+// ====================================================================
+// ③-c-5b: submit_feedback（KO への返信評価の書き戻し）
+// ====================================================================
+// query_knowledge/search_knowledge と同じ JSON-RPC tools/call 形。
+// KO 側 submit_feedback は app_label をキーから解決するため、ここでは app_label を送らない。
+// best-effort: 失敗/タイムアウト/キー未設定/RPC エラーは全て握り潰し { ok:false } を返す（throw しない）。
+// 呼び出し側（ai/page.tsx の submitFeedback）は結果を待たない／無視可。会話・feedback 保存に影響させない。
+
+const SUBMIT_FEEDBACK_TIMEOUT_MS = 5000;
+
+export type KoFeedbackRating = "good" | "bad" | "save";
+
+export async function submitFeedback(args: {
+  request_id: string;
+  rating: KoFeedbackRating;
+  note?: string;
+}): Promise<{ ok: boolean }> {
+  const { url, apiKey } = getConfig();
+  if (!apiKey) return { ok: false };
+  if (!args.request_id) return { ok: false };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SUBMIT_FEEDBACK_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: {
+          name: "submit_feedback",
+          arguments: {
+            request_id: args.request_id,
+            rating: args.rating,
+            ...(args.note ? { note: args.note } : {}),
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      console.warn(`[knowledge-os] submit_feedback HTTP ${res.status}`);
+      return { ok: false };
+    }
+    const body = (await res.json()) as { error?: { message?: string } };
+    if (body.error) {
+      console.warn("[knowledge-os] submit_feedback RPC error:", body.error.message ?? body.error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[knowledge-os] submit_feedback failed:", msg);
+    return { ok: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+}

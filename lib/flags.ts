@@ -35,6 +35,12 @@ export const MB_CONTEXT_OBJECT = process.env.NEXT_PUBLIC_MB_CONTEXT_OBJECT !== "
 //   検証後に NEXT_PUBLIC_FEEDBACK_LOOP=true で有効化。UI(client) と feedback route(server) 双方で参照。
 export const FEEDBACK_LOOP = process.env.NEXT_PUBLIC_FEEDBACK_LOOP === "true";
 
+// STYLE_SELF_KO_FEEDBACK: feedback 保存成功後、KO 由来の返信(koRequestId 有り)について
+//   submit_feedback で KO に評価を best-effort 書き戻す（③-c-5b）。失敗は会話・feedback 保存に影響させない。
+//   既定 OFF（"true" のときだけ ON）。OFF（未設定）時は完全に無送信＝退行ゼロ。
+//   送信は client.ts の submitFeedback（KNOWLEDGE_OS_URL/KEY 再利用・server 経路）。NEXT_PUBLIC_ 不要。
+export const STYLE_SELF_KO_FEEDBACK = process.env.STYLE_SELF_KO_FEEDBACK === "true";
+
 // STYLE_SELF_QUERY_KNOWLEDGE_CHAT: stylist-chat の KO 連携を get_* 3並列 → query_knowledge 主素材に
 //   寄せる（③-c）。query_knowledge を待ち（通常20s/最大25s）、decision_rules/failure_patterns/
 //   related_entries を【参考】の主素材に、answer は補助に、getInfluences は併用で温存。失敗/タイムアウトや
