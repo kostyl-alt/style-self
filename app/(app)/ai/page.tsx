@@ -85,8 +85,8 @@ const STORAGE_KEY = "style-self:ai:messages:v1";
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持)
-  | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2)
+  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)
+  | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
   | { kind: "products"; candidates: ProductCandidate[]; queriesUsed: string[]; moodboardId: string; loading?: boolean; error?: string | null }  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージで関心分離・/api/products/candidates 結果)
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
   | { kind: "error";         message: string };                   // 通信 / API エラー
@@ -533,6 +533,7 @@ function ChatPageInner() {
                 sessionIntent: intentToSend,
                 moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
                 editorScore:   replyData.editorScore,
+                koRequestId:   replyData.koRequestId, // ③-c-4: feedback 突合用に state へ載せる(配線B)
               }
             : {
                 kind:          "reply" as const,
@@ -541,6 +542,7 @@ function ChatPageInner() {
                 sessionIntent: intentToSend,
                 moodboardId:   isMbCoordinate ? lastMoodboardId ?? undefined : undefined,
                 editorScore:   replyData.editorScore,
+                koRequestId:   replyData.koRequestId, // ③-c-4: feedback 突合用に state へ載せる(配線B)
               };
           replaceMessage(setMessages, loadingId, replyContent);
           // ★ H-4a: thread 選択中は assistant 応答も DB 永続化(metadata に原 Message 保持)
@@ -598,6 +600,16 @@ function ChatPageInner() {
   async function submitFeedback(kind: "like" | "dislike" | "save", reason?: string) {
     if (!FEEDBACK_LOOP) return;
     try {
+      // ③-c-4: 対象返信(KO 由来の直近 assistant)を特定し request_id / message_id を確保する。
+      //   ・_koRequestId は ③-c-5 の KO 即時送信用に確保のみ(今は送信しない)。配線B。
+      //   ・targetMessageId は feedback.message_id 突合用。ephemeral 永続化ループで DB id を拾う。配線A。
+      const target = findFeedbackTargetMessage(messages);
+      const _koRequestId =
+        target && (target.content.kind === "reply" || target.content.kind === "coordinate_v2")
+          ? target.content.koRequestId ?? null
+          : null;
+      let targetMessageId: string | null = null;
+
       let tid = currentThreadId;
       if (!tid) {
         const firstUser = messages.find((m) => m.role === "user" && m.content.kind === "text");
@@ -614,17 +626,25 @@ function ChatPageInner() {
         tid = data.thread?.id ?? null;
         if (!tid) return;
         // 現在の会話を新 thread へ永続化（best-effort・永続化可能な kind のみ）。
+        // ③-c-4 配線A: 対象 message の永続化時に返る DB id を targetMessageId へ確保する。
         for (const m of messages) {
           const dt = feedbackDisplayText(m.content);
           if (dt === null) continue;
-          await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+          const insertedId = await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+          if (target && m === target) targetMessageId = insertedId;
         }
         router.replace(`/ai?thread=${tid}`);
       }
+      // ③-c-4 配線A: message_id は解決できたときだけ送る(optional・未解決時は省略＝退行なし)。
+      //   既存 thread のライブ message は DB id を state に保持しないため未解決になり得る。その場合は省略。
       await fetch(`/api/threads/${tid}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, content: reason ?? "" }),
+        body: JSON.stringify(
+          targetMessageId
+            ? { kind, content: reason ?? "", message_id: targetMessageId }
+            : { kind, content: reason ?? "" },
+        ),
       });
     } catch {
       // best-effort: 失敗しても会話・既存挙動は不変
@@ -767,6 +787,19 @@ function ChatPageInner() {
       </div>
     </div>
   );
+}
+
+// ③-c-4: feedback の対象返信を「直近の assistant 返信のうち KO 由来(koRequestId 有り)のもの」に固定する。
+//   messages を後ろから走査し、koRequestId を持つ最初の assistant message を返す(無ければ null)。
+//   koRequestId は reply / coordinate_v2 バリアントにのみ載る(③-c-4 配線B)。
+function findFeedbackTargetMessage(msgs: Message[]): Message | null {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (m.role !== "assistant") continue;
+    const c = m.content;
+    if ((c.kind === "reply" || c.kind === "coordinate_v2") && c.koRequestId) return m;
+  }
+  return null;
 }
 
 // ★ Phase 3: thread 自動作成時の永続化用 displayText（永続化しない kind は null）。

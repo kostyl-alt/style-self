@@ -38,7 +38,8 @@ interface UseThreadMessagesResult {
   loadMessages:   (threadId: string) => Promise<PersistableMessage[]>;
   // user/assistant 1 件を DB に永続化(fire-and-forget 用途・失敗は error に積むだけ)
   // ③-c-3: koRequestId があれば metadata.ko.request_id に格納（query_knowledge 使用の突合キー・任意）。
-  persistMessage: (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null) => Promise<void>;
+  // ③-c-4: 成功時は挿入行の DB id を返す（feedback.message_id 突合用・配線A）。失敗時は null。
+  persistMessage: (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null) => Promise<string | null>;
 }
 
 // DB 行 → page Message。metadata.message があれば忠実復元、無ければ text バブルにフォールバック。
@@ -78,7 +79,7 @@ export function useThreadMessages(): UseThreadMessagesResult {
   }, []);
 
   const persistMessage = useCallback(
-    async (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null): Promise<void> => {
+    async (threadId: string, message: PersistableMessage, displayText: string, koRequestId?: string | null): Promise<string | null> => {
       try {
         // content は表示テキスト(DB の text 列)・原 Message は metadata.message に格納し H-4b で活用
         // ③-c-3: koRequestId があれば ko を additive で足す（null/undefined のときは従来どおり {message} のまま）
@@ -97,9 +98,14 @@ export function useThreadMessages(): UseThreadMessagesResult {
         if (!res.ok) {
           const data = await res.json() as { error?: string };
           setError(data.error ?? `HTTP ${res.status}`);
+          return null;
         }
+        // ③-c-4: 挿入行の DB id を返す（feedback.message_id 突合用・配線A）。形が想定外でも握り潰し null。
+        const data = await res.json() as { message?: { id?: string } };
+        return data.message?.id ?? null;
       } catch (err) {
         setError(err instanceof Error ? err.message : "通信エラー");
+        return null;
       }
     },
     [],
