@@ -381,6 +381,9 @@ export interface StylistChatContext {
     //   answerSummary: KO answer（補助文脈・本文化しない）。relatedEntries: 根拠ナレッジ。
     answerSummary?:  string;
     relatedEntries?: Array<{ title: string; summary?: string }>;
+    // (d): 本文抜粋（search_knowledge の matched_text・出典title付き）。本(全文)など ai_summary が薄い
+    //   ナレッジでも、この抜粋に基づいて深く答えるための主素材。来ないときは undefined（従来描画）。
+    passages?: Array<{ source: string; text: string }>;
     dictionaries: {
       materials:   string;
       colors:      string;
@@ -614,13 +617,21 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
   // ★ 入口 sanitize は route 側で完了済(stripCanonicalSlugs で 31 語除去)。
   // ★ undefined の場合は出力しない(KOS 接続失敗時のノイズ防止 + 段階B reply 退行ゼロ)。
   const kos = ctx.knowledgeOS;
-  if (kos && (kos.decisionRules.length > 0 || kos.failurePatterns.length > 0
+  if (kos && ((kos.passages && kos.passages.length > 0)
+              || kos.decisionRules.length > 0 || kos.failurePatterns.length > 0
               || kos.influences.length > 0
               || (kos.answerSummary && kos.answerSummary.length > 0)
               || (kos.relatedEntries && kos.relatedEntries.length > 0)
               || kos.dictionaries.materials || kos.dictionaries.colors
               || kos.dictionaries.silhouettes || kos.dictionaries.ratios)) {
     lines.push("【参考(Knowledge OS から本人 contextData として取得・★ 入口 sanitize 済)】");
+    // (d): 本文抜粋（最優先の根拠）。本など全文ナレッジはここに中身が乗る。抜粋に基づいて具体的に答える。
+    if (kos.passages && kos.passages.length > 0) {
+      lines.push("・本文抜粋(最優先の根拠。下記の抜粋に書かれている内容に基づいて具体的に答える。抜粋に無い内容は推測で補わない):");
+      for (const p of kos.passages) {
+        lines.push(`  ・[${p.source}] ${truncate(p.text, 400)}`);
+      }
+    }
     // ③-c-2: KO answer は補助文脈（軽く添えるのみ・本文化／再要約しない・主素材を上書きしない）。
     if (kos.answerSummary) {
       lines.push(`・KO 要約観点(補助・参考程度。これをそのまま本文化しない): ${truncate(kos.answerSummary, 200)}`);

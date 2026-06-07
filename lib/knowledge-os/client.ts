@@ -397,6 +397,7 @@ export interface SearchKnowledgeEntry {
   final: number;
   embedding_id: string;
   chunk_index: number;
+  matched_text?: string[]; // (d): 検索ヒット本文抜粋（KO_SK_CHUNK_CONTEXT ON時のみ・無ければ undefined）
 }
 export interface SearchKnowledgeResult {
   outcome: "ranked" | "no_relevant" | "no_embeddings";
@@ -440,6 +441,10 @@ function normalizeSearchKnowledge(raw: unknown): SearchKnowledgeResult | null {
           final: typeof r.final === "number" ? r.final : 0,
           embedding_id: typeof r.embedding_id === "string" ? r.embedding_id : "",
           chunk_index: typeof r.chunk_index === "number" ? r.chunk_index : 0,
+          // (d): matched_text（任意）。文字列配列のみ受領・無ければ undefined（後方互換）。
+          matched_text: Array.isArray(r.matched_text)
+            ? (r.matched_text as unknown[]).filter((t): t is string => typeof t === "string")
+            : undefined,
         };
       })
     : [];

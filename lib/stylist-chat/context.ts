@@ -512,6 +512,23 @@ export async function fetchKnowledgeOSViaSearchKnowledge(text: string): Promise<
 
   const matched = matchDictionaryKeys(text);
 
+  // (d): 本文抜粋（matched_text）を出典付きで収集。本(全文)など ai_summary が薄いナレッジでも、
+  //   この抜粋で Haiku が本RAGの深さを出せる。cap: 上位3 entry × 各最大2抜粋・合計2000字（軽さ維持）。
+  const passages: Array<{ source: string; text: string }> = [];
+  let passageBudget = 2000;
+  for (const e of entries.slice(0, 3)) {
+    if (passageBudget <= 0) break;
+    const src = stripCanonicalSlugs(e.title ?? "").cleaned || "(無題)";
+    for (const t of (e.matched_text ?? []).slice(0, 2)) {
+      if (passageBudget <= 0) break;
+      const clean = stripCanonicalSlugs(t).cleaned.trim();
+      if (!clean) continue;
+      const take = clean.slice(0, passageBudget);
+      passages.push({ source: src, text: take });
+      passageBudget -= take.length;
+    }
+  }
+
   return {
     knowledgeOS: {
       decisionRules,
@@ -519,6 +536,7 @@ export async function fetchKnowledgeOSViaSearchKnowledge(text: string): Promise<
       influences,
       // answerSummary: 無し（合成answer廃止・設計通り）
       relatedEntries,
+      ...(passages.length > 0 ? { passages } : {}),
       dictionaries: {
         materials:   getMaterialContext(matched.materials),
         colors:      getColorContext(matched.colors),
