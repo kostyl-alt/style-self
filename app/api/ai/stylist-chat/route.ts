@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
     //   context は search_knowledge passages のみ(worldview/wardrobe を引かない=ノイズ排除)。Haiku 合成(軽い)。
     if (intent === "general") {
       const gHistory = sanitizeHistory(body.history);
-      const ko = await fetchKnowledgeOSViaSearchKnowledge(text);
+      const ko = await fetchKnowledgeOSViaSearchKnowledge(text, true); // 修正B: 本(book_learning)だけ検索
       let gRaw: string;
       try {
         gRaw = await callClaude({

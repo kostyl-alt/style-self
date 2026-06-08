@@ -454,13 +454,18 @@ export async function fetchKnowledgeOSViaQueryKnowledge(text: string): Promise<{
 // ・relatedEntries: ranked entry → {title, summary: ai_summary}・上限5。
 // ・influences: getInfluences 併用で温存。dictionaries 不変。入口 sanitize 適用。
 // ・outcome!=="ranked"（no_relevant/no_embeddings/失敗）→ safeMode=true・knowledgeOS=undefined（get_*に落とさない）。
-export async function fetchKnowledgeOSViaSearchKnowledge(text: string): Promise<{
+export async function fetchKnowledgeOSViaSearchKnowledge(
+  text: string,
+  // 修正B: 本対話(general)は bookOnly=true で「本(book_learning)」だけ検索＋minCos 0.25緩和。
+  //   fashionモードは未指定(false)＝従来(全件・MIN_COS 0.33)＝無改修。
+  bookOnly = false,
+): Promise<{
   knowledgeOS: StylistChatContext["knowledgeOS"];
   requestId: string | null;
   safeMode: boolean;
 }> {
   const [sk, influencesRaw] = await Promise.all([
-    searchKnowledge(text),
+    bookOnly ? searchKnowledge(text, { bookOnly: true, minCos: 0.25 }) : searchKnowledge(text),
     getInfluences({ limit: KOS_INFLUENCES_LIMIT }),
   ]);
 

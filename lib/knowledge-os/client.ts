@@ -453,7 +453,7 @@ function normalizeSearchKnowledge(raw: unknown): SearchKnowledgeResult | null {
 
 export async function searchKnowledge(
   question: string,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; bookOnly?: boolean; minCos?: number },
 ): Promise<SearchKnowledgeReturn> {
   const { url, apiKey } = getConfig();
   if (!apiKey) return EMPTY_SEARCH_KNOWLEDGE_RETURN;
@@ -473,11 +473,19 @@ export async function searchKnowledge(
         Authorization: `Bearer ${apiKey}`,
       },
       // project は渡さない(query_knowledge と同じ理由)
+      // 修正B: 本対話は book_only=true + min_cos 緩和を渡す(KO側で本だけ検索)。無指定は従来(全件・0.33)。
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: Date.now(),
         method: "tools/call",
-        params: { name: "search_knowledge", arguments: { question: q } },
+        params: {
+          name: "search_knowledge",
+          arguments: {
+            question: q,
+            ...(opts?.bookOnly ? { book_only: true } : {}),
+            ...(typeof opts?.minCos === "number" ? { min_cos: opts.minCos } : {}),
+          },
+        },
       }),
       signal: controller.signal,
     });
