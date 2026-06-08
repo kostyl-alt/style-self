@@ -728,24 +728,19 @@ export function buildGeneralBrainUserMessage(opts: BuildGeneralBrainOpts): strin
   }
   lines.push(`相談: ${text}`);
 
+  // 修正A: general は passages（本文抜粋）のみを根拠にする。decisionRules は載せない
+  //   （クロスドメインで fashion ルール(3色等)が混入し本対話を汚すため・②）。出典は title のみ添える。
   const passages = kos?.passages ?? [];
-  const rules = kos?.decisionRules ?? [];
   const related = kos?.relatedEntries ?? [];
-  if (passages.length > 0 || rules.length > 0) {
+  if (passages.length > 0) {
     lines.push("", "【参考(あなたの外部脳・本/知識から取得)】");
-    if (passages.length > 0) {
-      lines.push("・本文抜粋(最優先の根拠。これに基づいて具体的に答える。抜粋に無い内容は推測で補わない):");
-      for (const p of passages) lines.push(`  ・[${p.source}] ${truncate(p.text, 400)}`);
-    }
-    if (rules.length > 0) {
-      lines.push("・関連する判断ルール:");
-      for (const r of rules.slice(0, 5)) lines.push(`  ・ ${truncate(r.rule, 200)}`);
-    }
+    lines.push("・本文抜粋(最優先かつ唯一の根拠。これに基づいてのみ具体的に答える。抜粋に無い内容は推測で補わない):");
+    for (const p of passages) lines.push(`  ・[${p.source}] ${truncate(p.text, 400)}`);
     if (related.length > 0) {
-      lines.push(`・出典(該当ナレッジ): ${related.map((e) => e.title).slice(0, 5).join(" / ")}`);
+      lines.push(`・出典(参照したナレッジ): ${related.map((e) => e.title).slice(0, 5).join(" / ")}`);
     }
   } else {
-    lines.push("", "（参考になる本/知識が手元に見つかりませんでした。確実な根拠が無い場合は、その旨を正直に伝えてください。）");
+    lines.push("", "（参考になる本/知識の本文が手元に見つかりませんでした。確実な根拠が無い旨を正直に伝え、断定は避けてください。）");
   }
   return lines.join("\n");
 }
