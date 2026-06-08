@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE } from "@/lib/flags";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
@@ -165,6 +165,8 @@ function ChatPageInner() {
   const [messages, setMessages] = useState<Message[]>([]);
   // P1-C-3: 右上メニュー [≡] Drawer の開閉
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // 方針C(案イ): 本対話モード（GENERAL_BRAIN_MODE フラグON時のみトグル表示・default OFF）。
+  const [generalModeOn, setGeneralModeOn] = useState(false);
   // A-5: クローゼットピッカーモーダルの開閉
   const [isClosetOpen, setIsClosetOpen] = useState(false);
   // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
@@ -436,8 +438,14 @@ function ChatPageInner() {
       //   ★ Phase 2: MB 添付（context object 経路）も同様に段階 A を skip して coordinate 確定。
       const isMbCoordinate = isMbCoordinatePreview || isMbContextSend;
 
+      // 方針C本体(案イ): 本対話モード ON のとき overlay/intent を skip し intent='general' を直接確定。
+      //   両ゲート(intent分類/ファッションペルソナ)を迂回・fashion 経路は一切通らない。
+      const generalMode = GENERAL_BRAIN_MODE && generalModeOn;
+
       let data: IntentResponse & { error?: string };
-      if (isMbCoordinate) {
+      if (generalMode) {
+        data = { ok: true, intent: "general", mode: "api", params: {}, confidence: 1, suggestions: [] };
+      } else if (isMbCoordinate) {
         data = {
           ok:          true,
           intent:      "coordinate",
@@ -483,7 +491,7 @@ function ChatPageInner() {
       // intent が会話AIスタイリスト対象(MVP-1 は diagnose のみ)なら
       // /api/ai/stylist-chat を呼んで自然文 reply に置換する。
       // それ以外の intent は ★1 文字も変えず★ 従来通り intent-result(NavigateConfirm 等)で表示。
-      const isStylistTarget = effectiveContinuing || (
+      const isStylistTarget = generalMode || effectiveContinuing || (
         data.ok
         && data.reason === undefined
         && typeof data.intent === "string"
@@ -493,7 +501,7 @@ function ChatPageInner() {
       if (isStylistTarget) {
         // 継続セッション時は sessionIntent を、新規時は段階A 判定 intent を API に渡す。
         // sessionIntent は MVP-1a では常に "diagnose"・API 側 STYLIST_CHAT_INTENTS にも含まれる。
-        const intentToSend = effectiveContinuing ? sessionIntent! : (data.intent as string);
+        const intentToSend = generalMode ? "general" : (effectiveContinuing ? sessionIntent! : (data.intent as string));
         // 直近 N=3 履歴を組立(client 側で slice・本体 7.4 抑制策の一段目)
         const recentHistory = isSwitchToOtherTarget ? [] : buildStylistHistory(messages);
         try {
@@ -672,16 +680,35 @@ function ChatPageInner() {
       <header className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between">
         <div>
           <p className="text-xs tracking-widest text-gray-400 uppercase">STYLE-SELF AI</p>
-          <h1 className="text-lg font-light text-gray-900 mt-0.5">何を相談しますか?</h1>
+          <h1 className="text-lg font-light text-gray-900 mt-0.5">
+            {GENERAL_BRAIN_MODE && generalModeOn ? "なんでも相談できます" : "何を相談しますか?"}
+          </h1>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsMenuOpen(true)}
-          aria-label="メニューを開く"
-          className="text-gray-500 hover:text-gray-800 text-2xl leading-none px-2 py-1 -mr-2"
-        >
-          ≡
-        </button>
+        <div className="flex items-center gap-3">
+          {/* 方針C(案イ): 本対話モードのトグル（フラグON時のみ表示・default OFF=従来ファッション） */}
+          {GENERAL_BRAIN_MODE && (
+            <button
+              type="button"
+              onClick={() => setGeneralModeOn((v) => !v)}
+              aria-pressed={generalModeOn}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                generalModeOn
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              本対話
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(true)}
+            aria-label="メニューを開く"
+            className="text-gray-500 hover:text-gray-800 text-2xl leading-none px-2 py-1 -mr-2"
+          >
+            ≡
+          </button>
+        </div>
       </header>
 
       {/* A-5 P1-D: 上部世界観カード(診断済表示・未診断 CTA・loading skeleton) */}

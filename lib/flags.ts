@@ -41,6 +41,13 @@ export const FEEDBACK_LOOP = process.env.NEXT_PUBLIC_FEEDBACK_LOOP === "true";
 //   送信は client.ts の submitFeedback（KNOWLEDGE_OS_URL/KEY 再利用・server 経路）。NEXT_PUBLIC_ 不要。
 export const STYLE_SELF_KO_FEEDBACK = process.env.STYLE_SELF_KO_FEEDBACK === "true";
 
+// GENERAL_BRAIN_MODE: 本対話モード（方針C本体・案イ）。分野横断の外部脳としてチャットさせる。
+//   既定 OFF。OFF=トグルを出さない＝従来どおりファッション専用（退行ゼロ）。
+//   ON のとき UI に「本対話モード」トグルが出て、ON 時は overlay/intent を skip して
+//   stylist-chat を intent='general' で直接呼ぶ（fashion 経路は無改修・隔離）。
+//   クライアントで参照するため NEXT_PUBLIC_*。本対話の中身が出るには KO 側 KO_SK_CHUNK_CONTEXT=1 が必要。
+export const GENERAL_BRAIN_MODE = process.env.NEXT_PUBLIC_GENERAL_BRAIN_MODE === "true";
+
 // STYLE_SELF_QUERY_KNOWLEDGE_CHAT: stylist-chat の KO 連携を get_* 3並列 → query_knowledge 主素材に
 //   寄せる（③-c）。query_knowledge を待ち（通常20s/最大25s）、decision_rules/failure_patterns/
 //   related_entries を【参考】の主素材に、answer は補助に、getInfluences は併用で温存。失敗/タイムアウトや

@@ -40,6 +40,8 @@ import {
   buildStylistChatUserMessage,
   buildMbAnalysisUserMessage,
   buildQualityGateInstruction,
+  GENERAL_BRAIN_SYSTEM_PROMPT,
+  buildGeneralBrainUserMessage,
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
@@ -144,6 +146,34 @@ export async function POST(request: NextRequest) {
       });
     }
     const intent = typeof body.intent === "string" ? body.intent : "";
+
+    // 方針C本体(案イ): 本対話モード = 分野横断の外部脳。
+    //   fashion intent/persona/context/品質ゲート/エディタAI は一切触らず、ここで隔離して早期 return。
+    //   context は search_knowledge passages のみ(worldview/wardrobe を引かない=ノイズ排除)。Haiku 合成(軽い)。
+    if (intent === "general") {
+      const gHistory = sanitizeHistory(body.history);
+      const ko = await fetchKnowledgeOSViaSearchKnowledge(text);
+      let gRaw: string;
+      try {
+        gRaw = await callClaude({
+          systemPrompt: GENERAL_BRAIN_SYSTEM_PROMPT,
+          userMessage:  buildGeneralBrainUserMessage({ text, history: gHistory, knowledgeOS: ko.knowledgeOS }),
+          model:        HAIKU_MODEL,
+          maxTokens:    MAX_REPLY_TOKENS,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("[stylist-chat] general claude failed:", message);
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+      const { cleaned } = stripCanonicalSlugs(gRaw);
+      return NextResponse.json<StylistChatResponse>({
+        ok:          true,
+        reply:       cleaned.length > 0 ? cleaned : "うまく言葉にできませんでした。もう一度教えてください。",
+        koRequestId: ko.requestId, // ③-c-4: feedback 突合（passages由来の request_id）
+      });
+    }
+
     // ★ MVP-1 スコープ厳守: 1.5a は diagnose のみ
     if (!STYLIST_CHAT_INTENTS.has(intent)) {
       return NextResponse.json<StylistChatResponse>({

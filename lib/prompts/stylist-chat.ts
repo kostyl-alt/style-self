@@ -687,3 +687,65 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n) + "…";
 }
+
+// ====================================================================
+// 方針C本体(案イ): 本対話モード = 分野横断の外部脳ペルソナ
+// ====================================================================
+// ファッション専用の STYLIST_CHAT_SYSTEM_PROMPT とは別。5テーマ限定/引き戻しの制約は入れない。
+// 本/知識(passages)に基づき、あらゆる分野(逆境・哲学・マーケ・アート・ファッション等)に応じる。
+export const GENERAL_BRAIN_SYSTEM_PROMPT = `あなたはユーザー専用の「外部脳」です。ユーザーが蓄積した本・知識をもとに、分野を横断して深く相談に乗ります。ファッションも数ある分野の一つに過ぎません。逆境・哲学・マーケティング・アート・仕事の悩みなど、どんな相談でも受け止めます。
+
+【人格・返答構成】
+1. ユーザーの相談を素直に受け止め、自然な日本語で落ち着いて答える
+2. 与えられた【本文抜粋】があれば、それを最優先の根拠にして具体的に答える。どの本/知識に基づくか出典を簡潔に添える
+3. 抜粋に書かれていない内容を、さも事実のように推測で補わない。確実な根拠が無いときは「手元の知識では確証がない」と正直に述べた上で、一般的な見解は控えめに添える程度にする
+4. 長い逐語引用は避け、要点を自分の言葉で噛み砕く（必要なら短い引用に留める）
+5. 文体は丁寧・落ち着いた・短文中心。1 返答 = 3〜6 文程度。最後に必要なら一歩踏み込む短い問いを添える
+
+【禁止】
+・内部フィールド名(passages / knowledge_base / matched_text 等)・内部ID・jsonbキー名を出力に書かない
+・他のユーザーの情報を出さない
+・URL・外部リンクを出力しない
+
+【ファッションの話題が来た場合】
+・この外部脳としても答えてよい（ただし診断/クローゼット等のアプリ機能誘導はしない・知識として答える）`;
+
+interface BuildGeneralBrainOpts {
+  text: string;
+  history: StylistChatHistoryItem[];
+  knowledgeOS: StylistChatContext["knowledgeOS"];
+}
+
+// 本対話モードの user message。passages(本文抜粋)を主根拠に、判断ルール/出典を添える。
+// fashion 文脈(worldview/wardrobe)は一切入れない（context=passagesのみ・ノイズ排除）。
+export function buildGeneralBrainUserMessage(opts: BuildGeneralBrainOpts): string {
+  const { text, history, knowledgeOS: kos } = opts;
+  const lines: string[] = [];
+  if (history.length > 0) {
+    lines.push("【これまでの会話】");
+    for (const h of history) lines.push(`${h.role === "user" ? "ユーザー" : "あなた"}: ${truncate(h.text, 200)}`);
+    lines.push("");
+  }
+  lines.push(`相談: ${text}`);
+
+  const passages = kos?.passages ?? [];
+  const rules = kos?.decisionRules ?? [];
+  const related = kos?.relatedEntries ?? [];
+  if (passages.length > 0 || rules.length > 0) {
+    lines.push("", "【参考(あなたの外部脳・本/知識から取得)】");
+    if (passages.length > 0) {
+      lines.push("・本文抜粋(最優先の根拠。これに基づいて具体的に答える。抜粋に無い内容は推測で補わない):");
+      for (const p of passages) lines.push(`  ・[${p.source}] ${truncate(p.text, 400)}`);
+    }
+    if (rules.length > 0) {
+      lines.push("・関連する判断ルール:");
+      for (const r of rules.slice(0, 5)) lines.push(`  ・ ${truncate(r.rule, 200)}`);
+    }
+    if (related.length > 0) {
+      lines.push(`・出典(該当ナレッジ): ${related.map((e) => e.title).slice(0, 5).join(" / ")}`);
+    }
+  } else {
+    lines.push("", "（参考になる本/知識が手元に見つかりませんでした。確実な根拠が無い場合は、その旨を正直に伝えてください。）");
+  }
+  return lines.join("\n");
+}
