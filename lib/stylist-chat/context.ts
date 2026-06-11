@@ -97,8 +97,9 @@ export async function fetchCoordinateContext(
   supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<StylistChatContext> {
-  const [diagCtx, closetCtx, bodyRow] = await Promise.all([
-    fetchDiagnoseContext(supabase, userId),
+  // 診断撤廃(あ): worldview_profiles(診断ポエム)の注入を停止。育成方針＝勝手に世界観を断定しない。
+  //   body_profile / クローゼット集計(事実ベース)のみ注入。worldview フィールドは null/[] で返す。
+  const [closetCtx, bodyRow] = await Promise.all([
     fetchClosetContext(supabase, userId),
     supabase
       .from("users")
@@ -108,11 +109,11 @@ export async function fetchCoordinateContext(
   ]);
 
   return {
-    // diagnose 由来(worldview)
-    worldviewName:     diagCtx.worldviewName,
-    worldviewKeywords: diagCtx.worldviewKeywords,
-    coreIdentity:      diagCtx.coreIdentity,
-    idealSelf:         diagCtx.idealSelf,
+    // 診断 worldview は注入しない(育成方針)
+    worldviewName:     null,
+    worldviewKeywords: [],
+    coreIdentity:      null,
+    idealSelf:         null,
     // closet 由来(集計サマリ)
     closetSummary:     closetCtx.closetSummary,
     // body_profile 由来(日本語サマリ化)
@@ -128,31 +129,30 @@ export async function fetchStyleConsultContext(
   supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<StylistChatContext> {
-  const [diagCtx, userRow] = await Promise.all([
-    fetchDiagnoseContext(supabase, userId),
-    supabase
-      .from("users")
-      .select("body_profile, style_preference, avoid_items")
-      .eq("id", userId)
-      .maybeSingle() as unknown as Promise<{ data: {
-        body_profile:     unknown;
-        style_preference: unknown;
-        avoid_items:      unknown;
-      } | null }>,
-  ]);
+  // 診断撤廃(あ): worldview_profiles(診断ポエム)の注入を停止。育成方針＝勝手に世界観を断定しない。
+  //   体型 / 好み / 避けたい(事実ベース)のみ注入。worldview フィールドは null/[] で返す。
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("body_profile, style_preference, avoid_items")
+    .eq("id", userId)
+    .maybeSingle() as unknown as { data: {
+      body_profile:     unknown;
+      style_preference: unknown;
+      avoid_items:      unknown;
+    } | null };
 
   return {
-    // diagnose 由来(worldview)
-    worldviewName:     diagCtx.worldviewName,
-    worldviewKeywords: diagCtx.worldviewKeywords,
-    coreIdentity:      diagCtx.coreIdentity,
-    idealSelf:         diagCtx.idealSelf,
+    // 診断 worldview は注入しない(育成方針)
+    worldviewName:     null,
+    worldviewKeywords: [],
+    coreIdentity:      null,
+    idealSelf:         null,
     // body_profile 由来(coordinate と同形 extractor 流用)
-    bodyProfile:       extractBodyProfile(userRow?.data?.body_profile),
+    bodyProfile:       extractBodyProfile(userRow?.body_profile),
     // style_preference 由来(★ A-6 新規 extractor)
-    stylePreference:   extractStylePreference(userRow?.data?.style_preference),
+    stylePreference:   extractStylePreference(userRow?.style_preference),
     // avoid_items 由来(Sprint 47 text[]・★ A-6 新規 extractor)
-    avoidItems:        extractAvoidItems(userRow?.data?.avoid_items),
+    avoidItems:        extractAvoidItems(userRow?.avoid_items),
   };
 }
 
@@ -168,8 +168,9 @@ export async function fetchBrandLearnContext(
   supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<StylistChatContext> {
-  const [diagCtx, brandsRow, prefRow] = await Promise.all([
-    fetchDiagnoseContext(supabase, userId),
+  // 診断撤廃(あ): worldview_profiles(診断ポエム)の注入を停止。育成方針＝勝手に世界観を断定しない。
+  //   好み(事実) + curated brands のみ注入。worldview フィールドは null/[] で返す。
+  const [brandsRow, prefRow] = await Promise.all([
     supabase
       .from("brands")
       .select("name, name_ja, country, description, worldview_tags, era_tags, maniac_level, price_range")
@@ -192,10 +193,11 @@ export async function fetchBrandLearnContext(
   ]);
 
   return {
-    worldviewName:     diagCtx.worldviewName,
-    worldviewKeywords: diagCtx.worldviewKeywords,
-    coreIdentity:      diagCtx.coreIdentity,
-    idealSelf:         diagCtx.idealSelf,
+    // 診断 worldview は注入しない(育成方針)
+    worldviewName:     null,
+    worldviewKeywords: [],
+    coreIdentity:      null,
+    idealSelf:         null,
     stylePreference:   extractStylePreference(prefRow?.data?.style_preference),
     brandsCurated:     summarizeBrands(brandsRow?.data ?? []),
   };
