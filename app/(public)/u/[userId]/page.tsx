@@ -150,11 +150,12 @@ function PrivateOrNotFound() {
           非公開、または存在しないページです。
         </p>
         <div className="flex flex-col gap-2 pt-4">
+          {/* 診断撤廃 第3段: 診断導線を育成体験(signup)に差し替え。 */}
           <Link
-            href="/onboarding"
+            href="/signup"
             className="inline-block px-5 py-2.5 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
           >
-            診断を始める →
+            STYLE-SELFを始める →
           </Link>
           <Link
             href="/"

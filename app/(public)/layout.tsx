@@ -27,17 +27,17 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       {/* ページ本体 */}
       <main className="flex-1">{children}</main>
 
-      {/* フッター: anon を診断に誘導する控えめな CTA */}
+      {/* フッター: anon を育成体験(signup)に誘導する控えめな CTA（診断撤廃 第3段） */}
       <footer className="border-t border-gray-100 mt-12">
         <div className="max-w-lg mx-auto px-4 py-8 text-center space-y-3">
           <p className="text-xs text-gray-500 leading-relaxed">
-            あなたの世界観も、診断で言語化できます
+            好きな写真から、あなたのスタイルを育てていけます。
           </p>
           <Link
-            href="/onboarding"
+            href="/signup"
             className="inline-block px-5 py-2.5 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
           >
-            診断を始める →
+            STYLE-SELFを始める →
           </Link>
         </div>
       </footer>
