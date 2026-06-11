@@ -7,19 +7,18 @@
 // 振る舞い:
 //   ・チップタップ → 親側 onSelect(text) 経由で textarea に挿入(直接送信しない)
 //   ・履歴 0 件時のみ表示(連続発話時はノイズ防止)
-//   ・5 タップで 5 intent 五角(diagnose/closet/coordinate/style-consult/brand-learn)全体験
+//   ・4 タップで 4 intent(closet/coordinate/style-consult/brand-learn)全体験（診断撤廃 第4段Bで diagnose 撤去）
 
 interface SuggestionChipsProps {
   onSelect: (text: string) => void;
 }
 
-// ★ 5 intent 各 1 つ・ビジョン df36d82 直対応文言
+// ★ 4 intent 各 1 つ・ビジョン df36d82 直対応文言
 const CHIPS: ReadonlyArray<{ label: string; intent: string }> = [
   { label: "黒い服のコーデが見たい",                 intent: "coordinate" },
   { label: "自分の世界観に合うブランドを知りたい",   intent: "brand-learn" },
   { label: "低身長だけどロングコートを着たい",       intent: "style-consult" },
   { label: "クローゼットを見せて",                   intent: "closet" },
-  { label: "診断したい",                             intent: "diagnose" },
 ];
 
 export default function SuggestionChips({ onSelect }: SuggestionChipsProps) {

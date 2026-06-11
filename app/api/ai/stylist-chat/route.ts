@@ -74,7 +74,7 @@ export const dynamic = "force-dynamic";
 // MVP-1 P1-C-1.5a + 1.5b-i + MVP-1c + A-6 + A-6b 対応 intent(段階B を通す対象)
 // ★ ここを広げる前に system prompt の対応領域 + 出力フィルタの再点検が必要
 // ★ UI 側 `app/(app)/ai/page.tsx` の同名 Set と完全一致させる(両側同期)
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]);
+const STYLIST_CHAT_INTENTS = new Set<string>(["closet", "coordinate", "style-consult", "brand-learn"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
 // C-2: 3→8 に拡張（client 側 STYLIST_CHAT_HISTORY_MAX と同値に揃える。二重抑制なので両方上げる）。
@@ -436,9 +436,7 @@ function sanitizeHistory(raw: unknown): StylistChatHistoryItem[] {
 // navigate-map 既存 entries のラベルと整合させる(ChatPage 側で resolveNavigateTarget で
 // URL 解決するため、本ルートは intent / label の組だけを返す)。
 function buildActions(intent: string): StylistChatActionItem[] {
-  if (intent === "diagnose") {
-    return [{ intent: "diagnose", label: "診断を始める →" }];
-  }
+  // 診断撤廃 第4段B: diagnose intent 撤去（診断系入力は style-consult にフォールバック）。
   if (intent === "closet") {
     return [{ intent: "closet", label: "一覧で見る →" }];
   }

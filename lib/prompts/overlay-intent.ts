@@ -17,7 +17,6 @@ export const OVERLAY_INTENT_PROMPT = `
 ユーザーの自然言語入力を以下の intent のいずれかに分類し、JSON で返してください。
 
 [intent 一覧と説明]
-- diagnose            : 世界観診断を始めたい・再診断したい
 - worldview-profile   : 自分の世界観プロフィールを見たい・公開設定を変えたい
 - coordinate          : 日常コーデ提案全般(具体的な条件・色・雰囲気・テイスト指定を含む)
                         例:「コーデ提案して」「コーデを組んで」「黒系で印象に残るコーデにしたい」「服の組み合わせを教えて」
@@ -64,7 +63,7 @@ export const OVERLAY_INTENT_PROMPT = `
 [mode の付与ルール]
 intent ごとに以下を返す:
 - api      : coordinate / style-consult / match-users / match-posts / inspiration / brand-learn / culture
-- navigate : diagnose / worldview-profile / create-post / my-posts / closet / saved / history / body-edit / preference-edit
+- navigate : worldview-profile / create-post / my-posts / closet / saved / history / body-edit / preference-edit
 - hybrid   : virtual-coordinate / product-match
 - none     : unknown / moodboard / tryon(現時点で配線されていない)
 

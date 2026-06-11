@@ -96,7 +96,7 @@ type MessageContent =
 // ★ ここに無い intent は従来通り intent-result(NavigateConfirm 等)で表示する。
 // ★ API 側 `app/api/ai/stylist-chat/route.ts` の同名 Set と完全一致させる(両側同期)
 // ★ L4-A 切替検出は 1.5b-ii で投入済(SWITCH_THRESHOLD=0.85・別 target 高信頼で新セッション切替・A-6b で 5 intent 五角に自動拡張)
-const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]);
+const STYLIST_CHAT_INTENTS = new Set<string>(["closet", "coordinate", "style-consult", "brand-learn"]);
 
 // P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
 // ★ C-2c-1: MB 経由 coordinate のみ editorScore が付く(エディタ AI 評価結果)
@@ -1576,7 +1576,6 @@ function NavigateConfirm({
   // resolveNavigateTarget 相当の description を表示するため動的 import を避けるべく
   // 短いラベルだけ ここで持つ(navigate-map と整合させる)
   const labels: Record<string, string> = {
-    "diagnose":          "世界観診断を始めます",
     "worldview-profile": "あなたの世界観プロフィールを開きます",
     "create-post":       "投稿作成画面を開きます",
     "my-posts":          "あなたの投稿一覧を開きます",
@@ -1635,10 +1634,12 @@ function NoneNotice({ intent }: { intent: string }) {
       <p className="text-xs text-gray-500 leading-relaxed">
         別の言い方で書いてもらえますか?
       </p>
+      {/* 診断撤廃 第4段B(A最小修正): 本番(SIMPLE_MODE)で unknown/未配線に落ちる stale 例
+          (再診断したい/世界観の近い人/クローゼットを開きたい)を、自然応答する生きた例に差し替え。 */}
       <ul className="text-xs text-gray-500 space-y-1 pl-4 list-disc">
-        <li>「世界観の近い人を見たい」</li>
-        <li>「クローゼットを開きたい」</li>
-        <li>「再診断したい」</li>
+        <li>「黒い服のコーデが見たい」</li>
+        <li>「低身長だけどロングコートを着たい」</li>
+        <li>「自分の世界観に合うブランドを知りたい」</li>
       </ul>
     </div>
   );

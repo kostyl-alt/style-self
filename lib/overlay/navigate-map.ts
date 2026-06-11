@@ -19,10 +19,7 @@ export interface NavigateTarget {
 }
 
 export const NAVIGATE_MAP: Record<string, NavigateTarget> = {
-  diagnose: {
-    url:         "/onboarding",
-    description: "世界観診断を始めます",
-  },
+  // 診断撤廃 第4段B: diagnose エントリ削除（/onboarding は第4段Cで物理削除・dangling 防止）。
 
   // ★ タブ命名トリック: value="diagnosis"(label「世界観」)に寄せる
   "worldview-profile": {

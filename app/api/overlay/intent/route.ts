@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 // 設計書 4.2 の intent 列挙 + 将来 2 つ + unknown(辞書外フィルタに使う)
 const ALLOWED_INTENTS = new Set<string>([
-  "diagnose", "worldview-profile", "coordinate", "style-consult",
+  "worldview-profile", "coordinate", "style-consult",
   "virtual-coordinate", "product-match", "match-users", "match-posts",
   "create-post", "my-posts", "closet", "inspiration", "brand-learn",
   "culture", "saved", "history", "body-edit", "preference-edit",
