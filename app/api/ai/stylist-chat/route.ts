@@ -77,7 +77,9 @@ export const dynamic = "force-dynamic";
 const STYLIST_CHAT_INTENTS = new Set<string>(["diagnose", "closet", "coordinate", "style-consult", "brand-learn"]);
 
 // history 抑制(設計書 7.4 抑制策・client 過剰送信に対する二重防御)
-const MAX_HISTORY = 3;
+// C-2: 3→8 に拡張（client 側 STYLIST_CHAT_HISTORY_MAX と同値に揃える。二重抑制なので両方上げる）。
+//   Haiku のためトークン微増は許容。「4件以上前を覚えてない・同じ質問を繰り返す」を解消する。
+const MAX_HISTORY = 8;
 
 // ★ C-2c-1: MB 経由 coordinate は ★ Haiku 生成 + Sonnet 評価 + 場合により再生成・再評価で
 //   最大 4 回 Claude 呼出になる(最悪 ~80 秒)。ローカル開発は無制限・Vercel hobby/Pro は 60/300 秒。

@@ -97,6 +97,42 @@ export async function callClaudeJSON<T>(
 
 export type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
+// 憧れ写真分析（aspiration-photo）用: 画像 + テキストを送り、生テキスト返答を受ける。
+// callClaudeWithImage<T> は JSON 抽出を強制するが、こちらは「自然な会話」を返したいので
+// JSON parse せずそのまま返す（裏で6段の構造を持つが出力は自然文）。画像メッセージ構築は同型。
+export async function callClaudeWithImageText(
+  systemPrompt: string,
+  base64: string,
+  mediaType: ImageMediaType,
+  userMessage: string,
+  maxTokens = 1536,
+): Promise<string> {
+  const message = await getAnthropic().messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [{
+      role: "user",
+      content: [
+        {
+          type: "image",
+          source: { type: "base64", media_type: mediaType, data: base64 },
+        },
+        {
+          type: "text",
+          text: userMessage,
+        },
+      ],
+    }],
+  });
+
+  const content = message.content[0];
+  if (content.type !== "text") {
+    throw new Error("Unexpected response type from Claude API");
+  }
+  return content.text;
+}
+
 export async function callClaudeWithImage<T>(
   systemPrompt: string,
   base64: string,

@@ -28,7 +28,8 @@ type Notice = { id: number; text: string };
 export default function InputAttachments({
   onClosetOpen,
   onMbOpen,
-  // onUrlSubmit, onPhotoSelect は今回未使用(将来 Phase 3 / Sprint C で実装)
+  onPhotoSelect,
+  // onUrlSubmit は今回未使用(将来 Sprint C で実装)
 }: InputAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -50,8 +51,12 @@ export default function InputAttachments({
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
     if (!file) return;
-    // ★ 骨格のみ: 選択ファイルは notice 表示後に破棄(Phase 3 で本実装)
-    showNotice(`✅ 画像「${file.name}」を選択しました(Sprint E リアル試着で本実装予定)`);
+    // 憧れ写真分析モード(親が onPhotoSelect を渡す)なら実送信。未配線なら従来どおり notice のみ。
+    if (onPhotoSelect) {
+      onPhotoSelect(file);
+    } else {
+      showNotice(`✅ 画像「${file.name}」を選択しました(Sprint E リアル試着で本実装予定)`);
+    }
     // input をリセット(同じファイルを再選択できるように)
     e.target.value = "";
   }

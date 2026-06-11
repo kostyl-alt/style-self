@@ -37,7 +37,8 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO } from "@/lib/flags";
+import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
@@ -84,6 +85,7 @@ const STORAGE_KEY = "style-self:ai:messages:v1";
 // P1-C-1.5a 追加: kind:"reply"(会話 AI スタイリスト・自然文 + 補助 actions)
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
+  | { kind: "image";         dataUrl: string; caption?: string }  // 憧れ写真分析: user がアップした写真を表示(dataUrl 空=localStorage 軽量化後の reload・テキストfallback)
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
   | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)
   | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
@@ -123,8 +125,9 @@ interface StylistChatResponse {
   koRequestId?: string | null;  // ③-c-3: query_knowledge 使用の突合キー（フラグON・非MB時のみ・null可）
 }
 
-// P1-C-1.5a: 段階B に渡す history(直近 N=3・本体 7.4 抑制策)
-const STYLIST_CHAT_HISTORY_MAX = 3;
+// P1-C-1.5a: 段階B に渡す history。C-2: 3→8 に拡張（直近3件だと「過去を覚えてない・同じ質問を繰り返す」
+//   ため。route 側 MAX_HISTORY も同値に揃える＝client/server 二重抑制の両方を上げないと効かない）。
+const STYLIST_CHAT_HISTORY_MAX = 8;
 // P1-C-1.5b-ii L4-A: 切替検出の信頼度しきい値(保守設定・1.5a 実測 75% 誤判定例を踏まえ)
 const SWITCH_THRESHOLD = 0.85;
 
@@ -167,6 +170,8 @@ function ChatPageInner() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 方針C(案イ): 本対話モード（GENERAL_BRAIN_MODE フラグON時のみトグル表示・default OFF）。
   const [generalModeOn, setGeneralModeOn] = useState(false);
+  // 憧れ写真分析（ASPIRATION_PHOTO フラグON時のみ）。トグルは廃止し、写真添付を検出して自動で
+  //   /api/ai/aspiration-photo へ振り分ける（テキストだけ=通常チャット）。状態は持たない。
   // A-5: クローゼットピッカーモーダルの開閉
   const [isClosetOpen, setIsClosetOpen] = useState(false);
   // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
@@ -271,7 +276,9 @@ function ChatPageInner() {
     // ★ 空配列で上書きしない(多層防御・将来クリア機能の地雷予防)
     if (messages.length === 0) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      // 憧れ写真分析の image バブルは base64(重い)を含むため localStorage には載せない（軽量化）。
+      //   reload 後は dataUrl 空 → テキスト fallback 表示。quota 超過で全履歴を失う事故を防ぐ。
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.map(lightenMessageForStorage)));
     } catch { /* quota 超過等は無視(永続化失敗してもセッション内は動く) */ }
   }, [messages, hydrated, currentThreadId]);
 
@@ -662,22 +669,103 @@ function ChatPageInner() {
     }
   }
 
+  // 憧れ写真分析: 写真添付を検出して自動でこの経路へ（トグル不要・テキストだけ=通常チャット）。
+  //   📎写真選択 → 圧縮 → base64 → 画像バブル表示 → /api/ai/aspiration-photo → 自然文の分解。
+  //   既存 handleSubmit と同型（user + loading append → API → replaceMessage → thread 永続化）。
+  //   ⚠️ 商品検索・段階A/B は通らない（隔離・additive）。失敗時は error バブルにフォールバック。
+  //   ⚠️ DB/localStorage には base64 を載せない（軽量化）。reload 後は画像非表示・テキスト fallback（保存は P2）。
+  async function handleAspirationPhoto(file: File) {
+    if (loading) return;
+    const note = text.trim() || undefined;  // textarea の任意補足（「この〇〇が好き」）を添える
+    let processed: File;
+    let base64: string;
+    let mediaType: string;
+    try {
+      processed = await processImageForUpload(file);
+      ({ base64, mediaType } = await fileToBase64(processed));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "写真の処理に失敗しました";
+      setMessages((prev) => trimByMax([...prev, {
+        id: newMessageId(), role: "assistant", content: { kind: "error", message }, createdAt: Date.now(),
+      }]));
+      return;
+    }
+    const dataUrl = `data:${mediaType};base64,${base64}`;
+    const userMsg: Message = {
+      id:        newMessageId(),
+      role:      "user",
+      content:   { kind: "image", dataUrl, caption: note },
+      createdAt: Date.now(),
+    };
+    const loadingId = newMessageId();
+    const loadingMsg: Message = {
+      id:        loadingId,
+      role:      "assistant",
+      content:   { kind: "loading" },
+      createdAt: Date.now(),
+    };
+    setMessages((prev) => trimByMax([...prev, userMsg, loadingMsg]));
+    setText("");
+    setLoading(true);
+    // thread 永続化は軽量テキストで（base64 を DB に載せない）。reload 後は「📷 憧れ写真」表示。
+    if (currentThreadId) {
+      const marker = note ? `📷 憧れ写真（${note}）` : "📷 憧れ写真";
+      void threadMessages.persistMessage(
+        currentThreadId,
+        { id: userMsg.id, role: "user", content: { kind: "text", text: marker }, createdAt: userMsg.createdAt } as unknown as PersistableMessage,
+        marker,
+      );
+    }
+    try {
+      const res = await fetch("/api/ai/aspiration-photo", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ base64, mediaType, note }),
+      });
+      const data = await res.json() as { ok?: boolean; reply?: string; reason?: string; error?: string };
+      if (!res.ok || !data.ok || !data.reply) {
+        replaceMessage(setMessages, loadingId, {
+          kind:    "error",
+          message: data.error ?? (data.reason === "auth_required" ? "ログインが必要です" : "写真の分析に失敗しました"),
+        });
+        return;
+      }
+      const replyContent: MessageContent = { kind: "reply", text: data.reply };
+      replaceMessage(setMessages, loadingId, replyContent);
+      if (currentThreadId) {
+        void threadMessages.persistMessage(
+          currentThreadId,
+          { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
+          data.reply,
+        );
+      }
+    } catch (err) {
+      replaceMessage(setMessages, loadingId, {
+        kind:    "error",
+        message: err instanceof Error ? err.message : "写真の処理に失敗しました",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    // ★ H-3: 2 ペイン化(左: スレッド履歴 / 中央: 既存チャットを ★ 中身ゼロ変更で内包)。
-    //   左ペインは /ai/page.tsx 内で完結((app)/layout.tsx は最小 pass-through)。
-    <div className="flex">
+    // ★ H-3: 2 ペイン化(左: スレッド履歴 / 中央: 既存チャットを内包)。左ペインは /ai/page.tsx 内で完結。
+    // C-L: 3層 viewport 固定。外側を h-[100dvh] overflow-hidden にしてページ全体スクロールを止め、
+    //   ヘッダー/入力欄を固定し中央メッセージだけスクロールさせる（KO /chat と同じ思想）。
+    //   ⚠️ dvh でモバイルのアドレスバー伸縮に追従（h-screen=100vh だとモバイルで崩れる）。
+    //   ⚠️ calc は使わない（KO で calc(100dvh-5rem) の空白欠落で height 破棄の罠があったため・ここは単位のみ）。
+    //   左サイドバー(lg のみ)は flex 兄弟として温存。fixed モーダル群は overflow-hidden では clip されない。
+    <div className="flex h-[100dvh] overflow-hidden">
       <ThreadsSidebar
         currentThreadId={currentThreadId}
         onSelectThread={handleSelectThread}
       />
-      <div className="flex-1 min-w-0">
-    {/* ★ P1-C-1: 常時表示メイン画面構造(min-h-screen + flex-col の 3 段)。
-              (app)/layout.tsx の pb-20(BottomNav 分の余白)は P1-C-1 では残置・
-              BottomNav / OverlayFab 廃止は P1-C-2 で実施(C-1 では二重化を許容)。
-        ★ H-3: 以下の <div> 〜 </div> は既存 1051 行を ★ 中身ゼロ変更でそのまま内包 */}
-    <div className="min-h-screen bg-white flex flex-col">
+      <div className="flex-1 min-w-0 h-full">
+    {/* ★ H-3: 以下は既存チャット本体を内包。C-L で min-h-screen → h-full（viewport 高に固定）に変更。*/}
+    <div className="h-full bg-white flex flex-col">
       {/* ヘッダ(P1-C-3: 右上 [≡] メニュー追加済・案 A 補助機能集約点)*/}
-      <header className="px-5 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between">
+      <header className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between">
         <div>
           <p className="text-xs tracking-widest text-gray-400 uppercase">STYLE-SELF AI</p>
           <h1 className="text-lg font-light text-gray-900 mt-0.5">
@@ -711,11 +799,12 @@ function ChatPageInner() {
         </div>
       </header>
 
-      {/* A-5 P1-D: 上部世界観カード(診断済表示・未診断 CTA・loading skeleton) */}
-      <WorldviewCard />
-
-      {/* 履歴エリア(スクロール) */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+      {/* 履歴エリア(スクロール・C-L: 中央のみスクロール。min-h-0 で flex-1 のスクロールを有効化、
+            overscroll-contain でモバイルのスクロール連鎖を抑止) */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
+        {/* A-5 P1-D: 上部世界観カード(診断済表示・未診断 CTA・loading skeleton)。
+              C-L: 3層化のためヘッダー直下から中央スクロール領域の先頭へ移動(会話が伸びると一緒にスクロール)。*/}
+        <WorldviewCard />
         {messages.length === 0 ? (
           // A-5 P1-D: 提案チップ 5(5 intent 各 1 つ・textarea 挿入動作)
           <SuggestionChips onSelect={(t) => setText(t)} />
@@ -730,7 +819,7 @@ function ChatPageInner() {
       </div>
 
       {/* 下部固定入力(D1-2b' と同等・連続発話可能) */}
-      <form onSubmit={handleSubmit} className="border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
+      <form onSubmit={handleSubmit} className="flex-shrink-0 border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
         {/* ★ Phase 2: MB 添付チップ（添付中はコーデを analysis 駆動の短文応答で返す）*/}
         {MB_CONTEXT_OBJECT && attachedMb && (
           <div className="flex items-center gap-2 text-xs">
@@ -748,15 +837,24 @@ function ChatPageInner() {
             </span>
           </div>
         )}
-        {/* A-5 P1-D: 入力欄近接 4 ボタン(写真 / URL / クローゼット / MB) */}
+        {/* 憧れ写真分析のヒント（フラグON時のみ・トグルは廃止＝写真を送れば自動でこの経路） */}
+        {ASPIRATION_PHOTO && (
+          <p className="text-[11px] text-gray-500">
+            📎写真で憧れの1枚を送ると、何が良いかを分解してあなたに合う形に落とし込みます（任意で「この〇〇が好き」と補足可）
+          </p>
+        )}
+        {/* A-5 P1-D: 入力欄近接ボタン(写真 / URL / クローゼット / MB)。
+              ASPIRATION_PHOTO ON のとき 📎写真選択を実送信に配線（onPhotoSelect）＝写真添付で自動振り分け。
+              OFF時は従来どおり notice（退行ゼロ）。テキストだけの送信は従来の通常チャット（段階A/B）のまま。 */}
         <InputAttachments
           onClosetOpen={() => setIsClosetOpen(true)}
           onMbOpen={() => setIsMbOpen(true)}
+          onPhotoSelect={ASPIRATION_PHOTO ? handleAspirationPhoto : undefined}
         />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="例: 黒系の服が好きで似た人を探したい"
+          placeholder="例: 黒系の服が好き / 📎で憧れの写真を送ってもOK"
           rows={2}
           autoFocus
           disabled={loading}
@@ -856,6 +954,30 @@ function replaceMessage(
   setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)));
 }
 
+// 憧れ写真分析: localStorage 保存時に image バブルの dataUrl(base64・重い)を空にする。
+//   reload 後は画像非表示・テキスト fallback。テキスト履歴を quota 超過から守る（保存は P2）。
+function lightenMessageForStorage(m: Message): Message {
+  if (m.content.kind === "image" && m.content.dataUrl) {
+    return { ...m, content: { ...m.content, dataUrl: "" } };
+  }
+  return m;
+}
+
+// 憧れ写真分析: File → { base64(prefix除去), mediaType }（client 側で Vision 送信用に変換）。
+function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const match = /^data:([^;]+);base64,(.*)$/.exec(result);
+      if (!match) { reject(new Error("画像の読み込みに失敗しました")); return; }
+      resolve({ mediaType: match[1], base64: match[2] });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("画像の読み込みに失敗しました"));
+    reader.readAsDataURL(file);
+  });
+}
+
 // P1-C-1.5a 会話連続性(L3): 直前の assistant reply が保持する sessionIntent を取り出す。
 // 末尾から逆順走査し、reply に当たれば sessionIntent を返す。
 // reply 以外(user / intent-result / loading / error)に当たった時点でセッション切断 = null。
@@ -914,6 +1036,25 @@ function Bubble({
   onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }) {
   if (msg.role === "user") {
+    // 憧れ写真分析: 画像バブル（送った写真を表示して分析結果と見比べられるように）。
+    if (msg.content.kind === "image") {
+      const { dataUrl, caption } = msg.content;
+      return (
+        <div className="flex justify-end">
+          <div className="max-w-[85%] flex flex-col items-end gap-1">
+            {dataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={dataUrl} alt="憧れの写真" className="rounded-2xl rounded-br-md max-h-72 w-auto object-cover border border-gray-200" />
+            ) : (
+              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2">📷 憧れ写真</div>
+            )}
+            {caption && (
+              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2 whitespace-pre-wrap break-words">{caption}</div>
+            )}
+          </div>
+        </div>
+      );
+    }
     // user 吹き出し:右寄り
     const text = msg.content.kind === "text" ? msg.content.text : "";
     return (
@@ -1050,6 +1191,8 @@ function AssistantContent({
       </div>
     );
   }
+  // image は user 専用 kind（assistant では発生しない）。型の網羅性のためガード。
+  if (content.kind !== "intent-result") return null;
   // 既存 intent-result : D1-2a 既存 ResultView を ★シグネチャ無変更で★ 再利用
   // (MVP-1 範囲外 intent では P1-C-1 挙動を 1 文字も変えない)
   return (

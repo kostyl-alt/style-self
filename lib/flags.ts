@@ -57,6 +57,13 @@ export const GENERAL_BRAIN_MODE = process.env.NEXT_PUBLIC_GENERAL_BRAIN_MODE ===
 export const STYLE_SELF_QUERY_KNOWLEDGE_CHAT =
   process.env.STYLE_SELF_QUERY_KNOWLEDGE_CHAT === "true";
 
+// ASPIRATION_PHOTO: 「憧れ写真分析」新モード（この雰囲気に近づく）。憧れ写真1枚をアップ→
+//   AIが構造分析→ユーザーに合う形に変換して自然に会話する（商品検索なし・分析体験の検証が目的）。
+//   既定 OFF。OFF=モードトグルを出さない＝従来チャットのみ（退行ゼロ・additive）。
+//   ON のとき UI に「この雰囲気に近づく」トグルが出て、写真選択で /api/ai/aspiration-photo を叩く。
+//   診断は消さず変換先の補助データに使う（未診断でも写真分析単体で成立）。client 参照のため NEXT_PUBLIC_*。
+export const ASPIRATION_PHOTO = process.env.NEXT_PUBLIC_ASPIRATION_PHOTO === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。
