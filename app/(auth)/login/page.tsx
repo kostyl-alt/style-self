@@ -31,7 +31,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/onboarding");
+    // 診断撤廃 第1段: 着地ロジックは app/page.tsx に一元委譲（"/" → 認証済は /ai へ）。
+    router.push("/");
     router.refresh();
   }
 

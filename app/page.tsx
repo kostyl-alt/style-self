@@ -7,15 +7,10 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
-    const { data } = await supabase
-      .from("users")
-      .select("onboarding_completed")
-      .eq("id", user.id)
-      .single() as unknown as { data: { onboarding_completed: boolean } | null };
-    // P1-A: 判断 3(チャット主役型)/home → /ai に切替。
-    // 認証済 + onboarding 完了ユーザーは起動時にチャットメイン画面へ。
-    // ★ 未認証 / onboarding 未完了の既存分岐は変更なし(/login や /onboarding はそのまま)。
-    redirect(data?.onboarding_completed ? "/ai" : "/onboarding");
+    // 診断撤廃 第1段: onboarding_completed ゲートを撤去。診断を必須にせず認証済は常にチャットへ。
+    //   ★ onboarding_completed カラムは無害な死蔵として残置（読まないだけ・DROP しない）。
+    //   ★ 診断機能本体（16問・analyze-v2・/onboarding）は無改修＝直アクセス/残存CTAから到達可能。
+    redirect("/ai");
   }
 
   return (
