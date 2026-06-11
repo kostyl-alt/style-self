@@ -22,8 +22,35 @@ import {
   type AspirationPhotoContext,
 } from "@/lib/prompts/aspiration-photo";
 import { fetchStyleConsultContext, stripCanonicalSlugs } from "@/lib/stylist-chat/context";
+import { STYLE_SIGNALS } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
+
+// Phase A: [[SECTION:signals]] ブロックを {colors,silhouettes,genres,eras,moods} にパース（保存用）。
+//   日本語ラベル行「ラベル: 値, 値」のみ拾う。各値に stripCanonicalSlugs を通して英語スラッグ二重防御。
+//   signals が無い/空なら null。
+function parseStyleSignals(raw: string): Record<string, string[]> | null {
+  const block = raw.match(/\[\[SECTION:signals\]\]([\s\S]*?)(?:\[\[SECTION:|$)/i);
+  if (!block) return null;
+  const labelMap: Record<string, string> = {
+    "色": "colors", "シルエット": "silhouettes",
+    "ジャンル候補": "genres", "ジャンル": "genres",
+    "年代": "eras", "ムード": "moods",
+  };
+  const out: Record<string, string[]> = {};
+  for (const line of block[1].split("\n")) {
+    const m = line.match(/^\s*([^:：]+)[:：]\s*(.+)$/);
+    if (!m) continue;
+    const key = labelMap[m[1].trim()];
+    if (!key) continue;
+    const vals = m[2]
+      .split(/[,、，]/)
+      .map((s) => stripCanonicalSlugs(s.trim()).cleaned.trim())
+      .filter(Boolean);
+    if (vals.length > 0) out[key] = vals;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
 // Vision(Sonnet)1 回呼び出し。analyze 系と同等の余裕を持たせる。
 export const maxDuration = 60;
 
@@ -109,6 +136,23 @@ export async function POST(request: NextRequest) {
     const reply = cleaned.trim().length > 0
       ? cleaned
       : "うまく言葉にできませんでした。もう一度、別の写真で試してもらえますか。";
+
+    // Phase A: 事実属性を style_signals に保存（フラグON時・ベストエフォート）。
+    //   ⚠️ 保存の成否に関わらず分析の返答は必ず返す（保存は分析を邪魔しない）。OFF/失敗時は何もしない＝退行ゼロ。
+    if (STYLE_SIGNALS) {
+      try {
+        const attributes = parseStyleSignals(raw);
+        if (attributes) {
+          await supabase.from("style_signals").insert({
+            user_id: userId,
+            source:  "aspiration",
+            attributes,
+          } as never);
+        }
+      } catch (e) {
+        console.warn("[aspiration-photo] style_signals insert skipped:", e instanceof Error ? e.message : e);
+      }
+    }
 
     return NextResponse.json<AspirationPhotoResponse>({ ok: true, reply });
   } catch (err) {

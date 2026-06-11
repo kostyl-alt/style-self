@@ -64,6 +64,11 @@ export const STYLE_SELF_QUERY_KNOWLEDGE_CHAT =
 //   診断は消さず変換先の補助データに使う（未診断でも写真分析単体で成立）。client 参照のため NEXT_PUBLIC_*。
 export const ASPIRATION_PHOTO = process.env.NEXT_PUBLIC_ASPIRATION_PHOTO === "true";
 
+// STYLE_SIGNALS: 世界観育成 Phase A。憧れ写真分析のたびに事実属性（色/シルエット/ジャンル候補/年代/ムード）を
+//   style_signals テーブルへ保存する（裏で蓄積・Phase B で集計→/self に可視化）。既定 OFF（"true" でON）。
+//   保存は server 側完結のため NEXT_PUBLIC_ 不要。OFF時は保存しない＝見た目もDBも変化ゼロ（退行ゼロ）。
+export const STYLE_SIGNALS = process.env.STYLE_SIGNALS === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

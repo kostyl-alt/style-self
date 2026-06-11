@@ -1021,6 +1021,7 @@ function parseAspirationReply(reply: string): { summary: string; sections: { lab
     const content = (parts[i + 1] ?? "").trim();
     if (!content) continue;
     if (key === "summary") { summary = summary ? `${summary}\n${content}` : content; continue; }
+    if (key === "signals") continue; // Phase A: 保存用の機械可読タグ・UIには出さない
     sections.push({ label: ASPIRATION_SECTION_LABELS[key] ?? key, content });
   }
   return { summary: summary.trim() || reply.trim(), sections };
