@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Music, Film, Sparkles } from "lucide-react";
 import type {
   StyleDiagnosisResult,
@@ -125,14 +124,8 @@ export default function CultureView({ analysis }: { analysis: StyleDiagnosisResu
   // 未診断 or culturalAffinities なし
   if (!hasCultural) {
     return (
+      // 診断撤廃 第2段: 診断CTAカードを撤去（育成方針）。機能デモ(DemoSection)は無改修で残置。
       <div className="space-y-6">
-        <div className="bg-gray-50 rounded-2xl p-6 text-center">
-          <p className="text-sm text-gray-700 mb-2">診断を受けると、あなたの世界観に合う音楽・映画・香水が表示されます</p>
-          <p className="text-xs text-gray-400 mb-4">それぞれに「なぜあなたに合うのか」の解説付き</p>
-          <Link href="/onboarding" className="inline-block px-5 py-2.5 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors">
-            診断を始める →
-          </Link>
-        </div>
         <DemoSection />
       </div>
     );

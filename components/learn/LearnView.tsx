@@ -165,10 +165,8 @@ export default function LearnView({ embedded = false }: { embedded?: boolean }) 
             <div className="h-3 bg-gray-100 rounded w-1/2" />
           </div>
         ) : insightUnavailable ? (
-          <div className="border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-            <p className="text-sm text-gray-400">世界観診断を完了すると気づきが届きます。</p>
-            <a href="/onboarding" className="inline-block mt-3 text-xs text-gray-600 underline underline-offset-2">診断を始める →</a>
-          </div>
+          // 診断撤廃 第2段: 「診断を完了すると気づきが届きます」+診断CTAを撤去（育成方針）。空状態は何も出さない。
+          null
         ) : insight ? (
           <div className="border border-gray-100 rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">

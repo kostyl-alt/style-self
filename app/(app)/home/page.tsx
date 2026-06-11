@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { buildZozoSearchUrl } from "@/lib/utils/zozo-link";
-import { MessageCircle, RefreshCw, Music, Film, Sparkles, ExternalLink } from "lucide-react";
+import { MessageCircle, Music, Film, Sparkles, ExternalLink } from "lucide-react";
 import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
 import { PRODUCTS_ENABLED } from "@/lib/flags";
 import type { StyleDiagnosisResult, CoordinateGenerateResponse } from "@/types/index";
@@ -107,12 +107,8 @@ export default function HomePage() {
             </Link>
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-2xl p-6 text-center">
-            <p className="text-sm text-gray-700 mb-3">まず世界観診断から始めましょう</p>
-            <Link href="/onboarding" className="inline-block px-5 py-2.5 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors">
-              診断を始める →
-            </Link>
-          </div>
+          // 診断撤廃 第2段: 未診断時の診断CTAを撤去（育成方針）。空状態は何も出さない。
+          null
         )}
 
         {/* 2. 今日のコーデ */}
@@ -221,17 +217,7 @@ export default function HomePage() {
             </div>
             <span className="text-gray-300">→</span>
           </Link>
-
-          {analysis?.worldviewName && (
-            <Link href="/onboarding" className="flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors">
-              <RefreshCw size={20} className="text-gray-500" strokeWidth={1.6} />
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">再診断する</p>
-                <p className="text-xs text-gray-500">世界観をアップデート</p>
-              </div>
-              <span className="text-gray-300">→</span>
-            </Link>
-          )}
+          {/* 診断撤廃 第2段: 「再診断する」CTAを撤去（育成に再診断概念なし）。 */}
         </div>
       </div>
     </div>
