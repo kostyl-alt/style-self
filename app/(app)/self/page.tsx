@@ -5,17 +5,14 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
-import { DiagnosisDisplay } from "@/components/DiagnosisDisplay";
-import WorldviewProductsSection from "@/components/products/WorldviewProductsSection";
 import {
-  PRODUCTS_ENABLED, ENABLE_BODY, ENABLE_PREFERENCE, ENABLE_HISTORY, ENABLE_POSTS,
+  ENABLE_BODY, ENABLE_PREFERENCE, ENABLE_HISTORY, ENABLE_POSTS,
 } from "@/lib/flags";
-import WorldviewPublicityPanel from "@/components/worldview/WorldviewPublicityPanel";
 import MyPostsTab from "@/components/posts/MyPostsTab";
 import type {
   BodyInfo, BodyType, BodyTendency, WeightCenter, ShoulderWidth,
   UpperBodyThickness, MuscleType, LegLength, PreferredFit, StyleImpression, BodyPart,
-  StyleDiagnosisResult, StylePreference, BodyProfile, BodyConcern,
+  StylePreference, BodyProfile, BodyConcern,
 } from "@/types/index";
 import { describeBodyShape, recommendSilhouette } from "@/lib/utils/body-rules";
 
@@ -197,9 +194,24 @@ function StyleTrendSection() {
     });
   }, []);
 
-  if (rows === null) return null;     // 読み込み中は何も出さない（既存表示を邪魔しない）
+  if (rows === null) return null;     // 読み込み中は何も出さない
   const photoCount = rows.length;
-  if (photoCount === 0) return null;  // データ無し（保存フラグ OFF 含む）はセクションごと非表示＝誤誘導しない
+  if (photoCount === 0) {
+    // Phase C: データ無しは「まだ育っていない」＋育成CTA（診断でなく写真相談へ誘導）。
+    return (
+      <div className="border border-gray-200 rounded-2xl px-5 py-10 bg-white text-center space-y-3">
+        <p className="text-4xl">🪞</p>
+        <p className="text-sm font-medium text-gray-700">まだ世界観が育っていません</p>
+        <p className="text-xs text-gray-500 leading-relaxed">好きな写真を相談するほど、ここに「今のあなたの傾向」が育ちます。</p>
+        <Link
+          href="/ai"
+          className="inline-block mt-1 px-6 py-3 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
+        >
+          好きな写真を相談する →
+        </Link>
+      </div>
+    );
+  }
 
   if (photoCount < STYLE_TREND_MIN_PHOTOS) {
     return (
@@ -242,84 +254,17 @@ function StyleTrendSection() {
 // ---- 世界観診断タブ ----
 
 function DiagnosisTab() {
-  const [analysis, setAnalysis] = useState<StyleDiagnosisResult | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  // M2-4: 公開設定パネル用の状態。worldview_profiles 行の有無 + is_public を本人クエリで取得。
-  const [hasDiagnosisRow, setHasDiagnosisRow] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { setLoading(false); return; }
-      setUserId(data.user.id);
-
-      // M2-4: users.style_analysis と worldview_profiles を並列取得
-      // (両方とも本人限定 RLS で読める・service_role 不使用)
-      const [userRes, profileRes] = await Promise.all([
-        supabase.from("users").select("style_analysis").eq("id", data.user.id).single() as unknown as Promise<{ data: { style_analysis: unknown } | null }>,
-        supabase.from("worldview_profiles").select("is_public").eq("user_id", data.user.id).maybeSingle() as unknown as Promise<{ data: { is_public: boolean } | null }>,
-      ]);
-
-      if (userRes.data?.style_analysis) {
-        setAnalysis(userRes.data.style_analysis as StyleDiagnosisResult);
-      }
-      if (profileRes.data) {
-        setHasDiagnosisRow(true);
-        setIsPublic(Boolean(profileRes.data.is_public));
-      }
-      setLoading(false);
-    });
-  }, []);
-
-  if (loading) return <div className="py-20 text-center text-gray-300 text-sm">読み込み中...</div>;
-
-  if (!analysis) {
-    return (
-      <div className="py-16 text-center space-y-4">
-        <p className="text-4xl">🌐</p>
-        <p className="text-sm font-medium text-gray-700">まだ世界観診断を行っていません</p>
-        <p className="text-xs text-gray-400">9つの質問に答えて、あなただけのスタイル軸を言語化しましょう</p>
-        <Link
-          href="/onboarding"
-          className="inline-block mt-2 px-6 py-3 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
-        >
-          診断をはじめる →
-        </Link>
-      </div>
-    );
-  }
-
+  // Phase C: 育成一本に整理。診断ベースの固定表示（DiagnosisDisplay のポエム名/#タグ/Inner Voice/
+  //   Fashion・Culture Translation/Kindred Spirits/First Piece/Aspirations）と WorldviewPublicityPanel・
+  //   WorldviewProductsSection を /self から撤去。主役は Your Taste（写真相談で育つ傾向）。
+  //   ⚠️ 共有コンポーネント本体は無改修＝onboarding / 公開プロフィール(/u/[userId]) / dev は無傷。
+  //   診断機能本体（analyze-v2/diagnosis_sessions/worldview_profiles）も無改修（/self での表示を外すだけ）。
+  // Phase C: New Post(投稿導線)も撤去し育成一本に。posts 機能本体・投稿API・posts タブのコンポーネントは
+  //   無改修（/self での入口表示を外すだけ・将来「③つながる」で使う余地は残す）。
   return (
     <div className="space-y-5 py-4">
-      {/* M2-4: 公開設定パネル(DiagnosisDisplay 直上) */}
-      {userId && (
-        <WorldviewPublicityPanel
-          userId={userId}
-          hasDiagnosis={hasDiagnosisRow}
-          initialIsPublic={isPublic}
-          worldviewName={analysis.worldviewName ?? null}
-        />
-      )}
-      {/* M3-3: 投稿作成ページへの導線。診断有無に依存せずログインユーザーには常時表示
-          (worldview_profiles が無くても投稿可・案 a)。 */}
-      <Link
-        href="/self/new-post"
-        className="flex items-center justify-between px-5 py-4 border border-gray-200 rounded-2xl bg-white hover:bg-gray-50 transition-colors"
-      >
-        <div>
-          <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-0.5">New Post</p>
-          <p className="text-sm text-gray-800">投稿を作る</p>
-          <p className="text-xs text-gray-500 mt-0.5">画像 + キャプションで世界観を投稿</p>
-        </div>
-        <span className="text-gray-300">→</span>
-      </Link>
-      {/* Phase B: 写真相談で育つ「今の好みの傾向」（追加のみ・診断ポエム名は Phase C まで残す過渡期） */}
+      {/* Phase B: 写真相談で育つ「今の好みの傾向」（主役・0枚なら育成CTA・1-2枚育ち始め・3+傾向） */}
       <StyleTrendSection />
-      <DiagnosisDisplay analysis={analysis} showShare />
-      {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
-      {PRODUCTS_ENABLED && <WorldviewProductsSection analysis={analysis} variant="self" />}
     </div>
   );
 }
@@ -1063,6 +1008,10 @@ function SelfInner() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto px-4 py-8">
         <div className="mb-6">
+          {/* Phase C: チャットに戻る導線（/ai へ）*/}
+          <Link href="/ai" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 mb-3">
+            ← チャットに戻る
+          </Link>
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-1">Self</p>
           <h1 className="text-2xl font-light text-gray-900">あなたの世界観</h1>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { SavedTab } from "@/components/style/StyleTabs";
 import SavedProductsList from "@/components/saved/SavedProductsList";
 import { PRODUCTS_ENABLED, ENABLE_SAVED } from "@/lib/flags";
@@ -22,6 +23,10 @@ export default function SavedPage() {
     <div className="min-h-screen bg-white pb-24">
       <div className="max-w-lg mx-auto px-4 py-12 space-y-10">
         <div>
+          {/* Phase C: チャットに戻る導線（/ai へ・/self と同スタイル） */}
+          <Link href="/ai" className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 mb-3">
+            ← チャットに戻る
+          </Link>
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-1">Saved</p>
           <h1 className="text-2xl font-light text-gray-900 flex items-center gap-2">
             <Bookmark size={22} strokeWidth={1.6} className="text-gray-700" />
