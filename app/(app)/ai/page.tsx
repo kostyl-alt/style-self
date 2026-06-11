@@ -701,7 +701,7 @@ function ChatPageInner() {
     setLoading(true);
     // thread 永続化は軽量テキストで（base64 を DB に載せない）。reload 後は「📷 憧れ写真」表示。
     if (currentThreadId) {
-      const marker = note ? `📷 憧れ写真（${note}）` : "📷 憧れ写真";
+      const marker = note ? `📷 好きな写真（${note}）` : "📷 好きな写真";
       void threadMessages.persistMessage(
         currentThreadId,
         { id: userMsg.id, role: "user", content: { kind: "text", text: marker }, createdAt: userMsg.createdAt } as unknown as PersistableMessage,
@@ -886,7 +886,7 @@ function ChatPageInner() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={pendingPhoto ? "この写真について補足できます（任意）" : "例: 黒系の服が好き / 📎で憧れの写真を送ってもOK"}
+            placeholder={pendingPhoto ? "この写真について補足できます（任意）" : "例: 黒系の服が好き / 📎で好きな写真を送ってもOK"}
             rows={2}
             autoFocus
             disabled={loading}
@@ -1122,9 +1122,9 @@ function Bubble({
           <div className="max-w-[85%] flex flex-col items-end gap-1">
             {dataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={dataUrl} alt="憧れの写真" className="rounded-2xl rounded-br-md max-h-72 w-auto object-cover border border-gray-200" />
+              <img src={dataUrl} alt="好きな写真" className="rounded-2xl rounded-br-md max-h-72 w-auto object-cover border border-gray-200" />
             ) : (
-              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2">📷 憧れ写真</div>
+              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2">📷 好きな写真</div>
             )}
             {caption && (
               <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2 whitespace-pre-wrap break-words">{caption}</div>

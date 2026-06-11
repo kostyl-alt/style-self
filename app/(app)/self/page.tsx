@@ -150,6 +150,95 @@ function PillButton({ selected, onClick, children, className = "" }: { selected:
   );
 }
 
+// ---- Phase B: 今の好みの傾向（style_signals を集計して可視化・育成）----
+// client 読取 + JS 集計（(a)案）。日本語の事実タグのみ表示（英語スラッグは保存時に排除済み）。
+//   ポエム断定でなく頻度上位タグを事実で出す。ポエム名(診断)は Phase C まで残す（本セクションは追加のみ）。
+const STYLE_TREND_MIN_PHOTOS = 3; // これ未満は「育ち始め」表示・閾値は調整可
+
+type SignalAttributes = {
+  colors?: string[]; silhouettes?: string[]; genres?: string[]; eras?: string[]; moods?: string[];
+};
+const STYLE_TREND_AXES: { key: keyof SignalAttributes; label: string; top: number }[] = [
+  { key: "colors",      label: "色",           top: 3 },
+  { key: "silhouettes", label: "シルエット",   top: 3 },
+  { key: "genres",      label: "ジャンル候補", top: 3 },
+  { key: "eras",        label: "年代",         top: 2 },
+  { key: "moods",       label: "ムード",       top: 3 },
+];
+
+function aggregateAxis(rows: SignalAttributes[], key: keyof SignalAttributes, top: number): { tag: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const arr = r[key];
+    if (!Array.isArray(arr)) continue;
+    for (const raw of arr) {
+      const t = typeof raw === "string" ? raw.trim() : "";
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, top);
+}
+
+function StyleTrendSection() {
+  const [rows, setRows] = useState<SignalAttributes[] | null>(null);
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { setRows([]); return; }
+      const res = await supabase
+        .from("style_signals")
+        .select("attributes")
+        .eq("user_id", data.user.id)
+        .order("created_at", { ascending: false }) as unknown as { data: { attributes: SignalAttributes }[] | null };
+      setRows((res.data ?? []).map((r) => r.attributes ?? {}));
+    });
+  }, []);
+
+  if (rows === null) return null;     // 読み込み中は何も出さない（既存表示を邪魔しない）
+  const photoCount = rows.length;
+  if (photoCount === 0) return null;  // データ無し（保存フラグ OFF 含む）はセクションごと非表示＝誤誘導しない
+
+  if (photoCount < STYLE_TREND_MIN_PHOTOS) {
+    return (
+      <div className="border border-gray-200 rounded-2xl px-5 py-4 bg-white">
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-1">Your Taste</p>
+        <p className="text-sm text-gray-700">好きな写真 {photoCount} 枚から育ち始めています。</p>
+        <p className="text-xs text-gray-500 mt-1">あと数枚 相談すると、好みの傾向がここに見えてきます。</p>
+      </div>
+    );
+  }
+
+  const axes = STYLE_TREND_AXES
+    .map((a) => ({ ...a, items: aggregateAxis(rows, a.key, a.top) }))
+    .filter((a) => a.items.length > 0);
+
+  return (
+    <div className="border border-gray-200 rounded-2xl px-5 py-4 bg-white space-y-3">
+      <div>
+        <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-0.5">Your Taste</p>
+        <p className="text-sm text-gray-800">好きな写真 {photoCount} 枚から育った、今のあなたの傾向です。相談するほど更新されます。</p>
+      </div>
+      <div className="space-y-2">
+        {axes.map((a) => (
+          <div key={a.key} className="flex items-baseline gap-2">
+            <span className="text-xs text-gray-400 w-20 shrink-0">{a.label}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {a.items.map((it) => (
+                <span key={it.tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                  {it.tag}<span className="text-gray-400">×{it.count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---- 世界観診断タブ ----
 
 function DiagnosisTab() {
@@ -226,6 +315,8 @@ function DiagnosisTab() {
         </div>
         <span className="text-gray-300">→</span>
       </Link>
+      {/* Phase B: 写真相談で育つ「今の好みの傾向」（追加のみ・診断ポエム名は Phase C まで残す過渡期） */}
+      <StyleTrendSection />
       <DiagnosisDisplay analysis={analysis} showShare />
       {/* フェーズB Step 4: 世界観の直後に商品セクション(per-category 表示) */}
       {PRODUCTS_ENABLED && <WorldviewProductsSection analysis={analysis} variant="self" />}

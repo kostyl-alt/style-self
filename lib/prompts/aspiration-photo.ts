@@ -15,7 +15,7 @@
 
 import { buildStyleTaxonomyBlock } from "@/lib/style-taxonomy";
 
-export const ASPIRATION_PHOTO_SYSTEM_PROMPT = `あなたは STYLE-SELF の「AI スタイリスト」です。憧れ写真を長く分析するのが仕事ではありません。その写真を再現するために「何を残し、何を探せばいいか」を抜き出します。
+export const ASPIRATION_PHOTO_SYSTEM_PROMPT = `あなたは STYLE-SELF の「AI スタイリスト」です。好きな写真を長く分析するのが仕事ではありません。その写真を再現するために「何を残し、何を探せばいいか」を抜き出します。
 
 【出力は必ず次の9マーカーで区切る（フロントが分割・マーカーは画面に出ない）】
 各セクションを、その内容の直前に下のマーカーを置いて出力する。マーカーは半角で正確に [[SECTION:key]] の形・各セクションの先頭に1回。マーカー以外の装飾（**や見出し記号や ===）は付けない。
@@ -144,7 +144,7 @@ export function buildAspirationPhotoUserMessage(
   }
 
   lines.push("");
-  lines.push("この憧れ写真を、9マーカー [[SECTION:summary]] [[SECTION:visible_facts]] [[SECTION:roles]] [[SECTION:recreate]] [[SECTION:shopping]] [[SECTION:materials]] [[SECTION:reference]] [[SECTION:keywords]] [[SECTION:signals]] の順で、各セクション先頭にマーカーを置いて返してください（マーカーは半角で正確に・本文に装飾や === は付けない）。summary は自然な文章で核を役割で2〜4文＋何を再現すれば近づくか＋まず試すもの。素材・カルチャー・年代は断定せず『写真上では/弱めの推定/検索の近い候補』と明示。ムードは事実タグ（色数少なめ等）。⚠️ポエム・抽象（感情の重力/余白感/小さい光の点/静けさ/最大化 等）は完全禁止、事実で言う。首元など見えない所は『ジップまたは細い金属』と断定しない。同じ理屈の言い換え連発も禁止。体型名・体の特徴・減点語・世界観は出さず色/素材/丈/幅/小物に落とす。最後の signals は『ラベル: 値, 値』形式（色/シルエット/ジャンル候補/年代/ムードの5行・日本語タグのみ・上の分析と整合）で出す。");
+  lines.push("この好きな写真を、9マーカー [[SECTION:summary]] [[SECTION:visible_facts]] [[SECTION:roles]] [[SECTION:recreate]] [[SECTION:shopping]] [[SECTION:materials]] [[SECTION:reference]] [[SECTION:keywords]] [[SECTION:signals]] の順で、各セクション先頭にマーカーを置いて返してください（マーカーは半角で正確に・本文に装飾や === は付けない）。summary は自然な文章で核を役割で2〜4文＋何を再現すれば近づくか＋まず試すもの。素材・カルチャー・年代は断定せず『写真上では/弱めの推定/検索の近い候補』と明示。ムードは事実タグ（色数少なめ等）。⚠️ポエム・抽象（感情の重力/余白感/小さい光の点/静けさ/最大化 等）は完全禁止、事実で言う。首元など見えない所は『ジップまたは細い金属』と断定しない。同じ理屈の言い換え連発も禁止。体型名・体の特徴・減点語・世界観は出さず色/素材/丈/幅/小物に落とす。最後の signals は『ラベル: 値, 値』形式（色/シルエット/ジャンル候補/年代/ムードの5行・日本語タグのみ・上の分析と整合）で出す。");
 
   return lines.join("\n");
 }
