@@ -45,8 +45,6 @@ import ProductCardList from "@/components/chat/ProductCardList";
 import SearchProductsButton from "@/components/chat/SearchProductsButton";
 import type { ProductCandidate, CandidatesResponse } from "@/types/product-candidate";
 import MenuDrawer from "@/components/chat/MenuDrawer";
-import WorldviewCard from "@/components/chat/WorldviewCard";
-import SuggestionChips from "@/components/chat/SuggestionChips";
 import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
@@ -171,8 +169,9 @@ function ChatPageInner() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 方針C(案イ): 本対話モード（GENERAL_BRAIN_MODE フラグON時のみトグル表示・default OFF）。
   const [generalModeOn, setGeneralModeOn] = useState(false);
-  // 憧れ写真分析（ASPIRATION_PHOTO フラグON時のみ）。トグルは廃止し、写真添付を検出して自動で
-  //   /api/ai/aspiration-photo へ振り分ける（テキストだけ=通常チャット）。状態は持たない。
+  // 憧れ写真分析（ASPIRATION_PHOTO フラグON時のみ）。写真添付=自動で aspiration 経路・テキストのみ=通常チャット。
+  //   段階2: 写真選択は即送信せず pendingPhoto に保持しプレビュー→送信ボタンで送る。previewUrl は objectURL。
+  const [pendingPhoto, setPendingPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   // A-5: クローゼットピッカーモーダルの開閉
   const [isClosetOpen, setIsClosetOpen] = useState(false);
   // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
@@ -232,20 +231,12 @@ function ChatPageInner() {
   // P1-C-1.5b-i+ fix v2: hydrate 完了フラグ(useState 化で再render 経由・persist の stale [] 上書き race を防止)
   const [hydrated, setHydrated] = useState(false);
 
-  // P1-C-1.5b-i+: 履歴永続化 hydrate(初回 mount 時 localStorage から復元)
-  // SSR セーフ: useEffect 内のみで localStorage 参照・初期 state は [] で SSR と一致。
-  // ★ H-4a: thread 選択中(?thread=id)は DB messages が真実源 → localStorage hydrate を skip。
+  // 段階2-#1: /ai を開いたら常に新規チャット状態で始める（前回会話を中央に復元しない）。
+  //   時間が経って開く人がほとんどなので、デフォルトを新規に。前回会話は migrateLocalstorageIfNeeded が
+  //   DB thread へ退避するので左の履歴(ThreadsSidebar)から開ける。?thread=id 指定時は下の load effect が復元。
+  //   ※ localStorage 復元(旧 hydrate)は廃止。persist は継続(セッションは保存→次回は履歴から)。
   useEffect(() => {
-    if (currentThreadId) { setHydrated(true); return; }
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed as Message[]);
-      }
-    } catch { /* corrupt JSON 等は無視(空配列のまま続行) */ }
     setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ★ H-4a: thread 選択(?thread=id)で DB から messages をロード(単一真実源 = messages state)。
@@ -675,9 +666,9 @@ function ChatPageInner() {
   //   既存 handleSubmit と同型（user + loading append → API → replaceMessage → thread 永続化）。
   //   ⚠️ 商品検索・段階A/B は通らない（隔離・additive）。失敗時は error バブルにフォールバック。
   //   ⚠️ DB/localStorage には base64 を載せない（軽量化）。reload 後は画像非表示・テキスト fallback（保存は P2）。
-  async function handleAspirationPhoto(file: File) {
+  async function handleAspirationPhoto(file: File, noteText?: string) {
     if (loading) return;
-    const note = text.trim() || undefined;  // textarea の任意補足（「この〇〇が好き」）を添える
+    const note = (noteText ?? text).trim() || undefined;  // 送信時の補足（「この〇〇が好き」）を添える
     let processed: File;
     let base64: string;
     let mediaType: string;
@@ -752,6 +743,36 @@ function ChatPageInner() {
     }
   }
 
+  // 段階2: 写真選択は即送信せずプレビューに保持（送信は送信ボタンで）。写真選択時は MB を解除（写真優先）。
+  function handlePhotoPick(file: File) {
+    setPendingPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+    setAttachedMb(null);
+  }
+  function clearPendingPhoto() {
+    setPendingPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
+  // 送信ディスパッチャ: 写真があれば aspiration（補足テキストを note で渡す）、無ければ従来の通常チャット。
+  function handleComposerSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (loading) return;
+    if (pendingPhoto) {
+      const { file, previewUrl } = pendingPhoto;
+      void handleAspirationPhoto(file, text);
+      URL.revokeObjectURL(previewUrl);
+      setPendingPhoto(null);
+      return;
+    }
+    handleSubmit(e);
+  }
+  // unmount 時に objectURL を解放（リーク防止）。
+  useEffect(() => () => { if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.previewUrl); }, [pendingPhoto]);
+
   return (
     // ★ H-3: 2 ペイン化(左: スレッド履歴 / 中央: 既存チャットを内包)。左ペインは /ai/page.tsx 内で完結。
     // C-L: 3層 viewport 固定。外側を h-[100dvh] overflow-hidden にしてページ全体スクロールを止め、
@@ -805,26 +826,20 @@ function ChatPageInner() {
       {/* 履歴エリア(スクロール・C-L: 中央のみスクロール。min-h-0 で flex-1 のスクロールを有効化、
             overscroll-contain でモバイルのスクロール連鎖を抑止) */}
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-3">
-        {/* A-5 P1-D: 上部世界観カード(診断済表示・未診断 CTA・loading skeleton)。
-              C-L: 3層化のためヘッダー直下から中央スクロール領域の先頭へ移動(会話が伸びると一緒にスクロール)。*/}
-        <WorldviewCard />
-        {messages.length === 0 ? (
-          // A-5 P1-D: 提案チップ 5(5 intent 各 1 つ・textarea 挿入動作)
-          <SuggestionChips onSelect={(t) => setText(t)} />
-        ) : (
-          <>
-            {messages.map((m) => (
-              <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={submitFeedback} />
-            ))}
-            <div ref={endRef} />
-          </>
-        )}
+        {/* 段階2-#2/#3: 上部世界観カード(古い診断断定)・提案チップ/案内文は撤去しシンプルに。
+              世界観は写真の相談で育てる方針のため、勝手な世界観断定をトップに出さない。
+              空状態は何も出さない(入力欄から始める)。WorldviewCard / SuggestionChips のコンポーネント本体・
+              診断機能・/api/worldview-card は無改修(ここで描画しないだけ)。*/}
+        {messages.map((m) => (
+          <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={submitFeedback} />
+        ))}
+        <div ref={endRef} />
       </div>
 
-      {/* 下部固定入力(D1-2b' と同等・連続発話可能) */}
-      <form onSubmit={handleSubmit} className="flex-shrink-0 border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
-        {/* ★ Phase 2: MB 添付チップ（添付中はコーデを analysis 駆動の短文応答で返す）*/}
-        {MB_CONTEXT_OBJECT && attachedMb && (
+      {/* 下部固定入力(D1-2b' と同等・連続発話可能)。段階2: 写真はプレビュー→送信ボタンで送る(即送信しない) */}
+      <form onSubmit={handleComposerSubmit} className="flex-shrink-0 border-t border-gray-100 px-5 py-3 space-y-2 bg-white">
+        {/* ★ Phase 2: MB 添付チップ。段階2-#4: 写真選択中(pendingPhoto)は写真優先で確実に隠す（状態タイミング非依存）*/}
+        {MB_CONTEXT_OBJECT && attachedMb && !pendingPhoto && (
           <div className="flex items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full">
               🎨 {attachedMb.name}
@@ -840,40 +855,53 @@ function ChatPageInner() {
             </span>
           </div>
         )}
-        {/* 憧れ写真分析のヒント（フラグON時のみ・トグルは廃止＝写真を送れば自動でこの経路） */}
-        {ASPIRATION_PHOTO && (
-          <p className="text-[11px] text-gray-500">
-            📎写真で憧れの1枚を送ると、何が良いかを分解してあなたに合う形に落とし込みます（任意で「この〇〇が好き」と補足可）
-          </p>
-        )}
         {/* A-5 P1-D: 入力欄近接ボタン(写真 / URL / クローゼット / MB)。
-              ASPIRATION_PHOTO ON のとき 📎写真選択を実送信に配線（onPhotoSelect）＝写真添付で自動振り分け。
+              ASPIRATION_PHOTO ON のとき 📎写真選択を pendingPhoto セットに配線（onPhotoSelect）。即送信せずプレビュー。
               OFF時は従来どおり notice（退行ゼロ）。テキストだけの送信は従来の通常チャット（段階A/B）のまま。 */}
         <InputAttachments
           onClosetOpen={() => setIsClosetOpen(true)}
           onMbOpen={() => setIsMbOpen(true)}
-          onPhotoSelect={ASPIRATION_PHOTO ? handleAspirationPhoto : undefined}
+          onPhotoSelect={ASPIRATION_PHOTO ? handlePhotoPick : undefined}
         />
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="例: 黒系の服が好き / 📎で憧れの写真を送ってもOK"
-          rows={2}
-          autoFocus
-          disabled={loading}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400 resize-none disabled:bg-gray-50"
-          onKeyDown={(e) => {
-            // Cmd/Ctrl + Enter で送信(任意)
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-              handleSubmit(e as unknown as React.FormEvent);
-            }
-          }}
-        />
-        <div className="flex justify-end">
+        {/* 段階2: 選択した写真のプレビュー（サムネイル＋取り消し）。送信は送信ボタンで。*/}
+        {pendingPhoto && (
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={pendingPhoto.previewUrl} alt="選択した写真" className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+              <button
+                type="button"
+                onClick={clearPendingPhoto}
+                aria-label="写真を取り消す"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-gray-800 text-white text-xs leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-500">この写真で送ります（補足を書ける）</span>
+          </div>
+        )}
+        {/* 入力欄: textarea + 送信ボタンを1枠の flex 行に（Claude/ChatGPT型・ボタンは右 inline）*/}
+        <div className="flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-gray-400">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={pendingPhoto ? "この写真について補足できます（任意）" : "例: 黒系の服が好き / 📎で憧れの写真を送ってもOK"}
+            rows={2}
+            autoFocus
+            disabled={loading}
+            className="flex-1 min-w-0 text-sm text-gray-800 placeholder-gray-300 focus:outline-none resize-none bg-transparent disabled:opacity-50"
+            onKeyDown={(e) => {
+              // Cmd/Ctrl + Enter で送信(据置)
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                handleComposerSubmit(e as unknown as React.FormEvent);
+              }
+            }}
+          />
           <button
             type="submit"
-            disabled={loading || !text.trim()}
-            className="px-5 py-2 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            disabled={loading || (!text.trim() && !pendingPhoto)}
+            className="shrink-0 px-4 py-1.5 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 disabled:opacity-40 transition-colors"
           >
             {loading ? "判定中…" : "送信 →"}
           </button>
