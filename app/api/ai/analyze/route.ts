@@ -104,18 +104,20 @@ export async function POST(request: NextRequest) {
 
       // diagnosis_sessions / worldview_profiles はマイグレーション適用前でも
       // レスポンスを返せるよう、失敗してもユーザー体験を止めない（fire-and-forget）
-      try {
-        await supabase.from("diagnosis_sessions").insert({
-          user_id:         userId,
-          answers:         answers as unknown as Json,
-          matched_pattern: pattern.id,
-          scores:          match.scores as unknown as Json,
-          result:          result as unknown as Json,
-          completed:       true,
-        } as never);
-      } catch (e) {
-        console.warn("[diagnosis_sessions] insert skipped:", e instanceof Error ? e.message : e);
-      }
+      // 診断撤廃 第0段: diagnosis_sessions への書き込みを停止（読み取りゼロの死蔵ログ・影響ゼロ）。
+      //   テーブルは残置（DROP しない）。本ルートは現役未使用だが analyze-v2 と整合のため停止。
+      // try {
+      //   await supabase.from("diagnosis_sessions").insert({
+      //     user_id:         userId,
+      //     answers:         answers as unknown as Json,
+      //     matched_pattern: pattern.id,
+      //     scores:          match.scores as unknown as Json,
+      //     result:          result as unknown as Json,
+      //     completed:       true,
+      //   } as never);
+      // } catch (e) {
+      //   console.warn("[diagnosis_sessions] insert skipped:", e instanceof Error ? e.message : e);
+      // }
 
       try {
         await supabase.from("worldview_profiles").upsert({

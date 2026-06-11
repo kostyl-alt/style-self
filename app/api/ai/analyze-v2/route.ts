@@ -318,21 +318,24 @@ export async function POST(request: NextRequest) {
         console.warn("[analyze-v2 users.update] error:", usersRes.error.message);
       }
 
-      try {
-        const sessionRes = await supabase.from("diagnosis_sessions").insert({
-          user_id:         userId,
-          answers:         answers as unknown as Json,
-          matched_pattern: null,
-          scores:          {} as unknown as Json,
-          result:          validated as unknown as Json,
-          completed:       true,
-        } as never);
-        if (sessionRes.error) {
-          console.warn("[analyze-v2 diagnosis_sessions.insert] error:", sessionRes.error.message);
-        }
-      } catch (e) {
-        console.warn("[analyze-v2 diagnosis_sessions] exception:", e instanceof Error ? e.message : e);
-      }
+      // 診断撤廃 第0段: diagnosis_sessions への書き込みを停止（読み取りゼロの死蔵ログ・影響ゼロ）。
+      //   テーブルは残置（DROP しない・型/データ温存）。診断機能の他処理（users.style_analysis /
+      //   onboarding_completed / worldview_profiles）は無改修で従来どおり動く。
+      // try {
+      //   const sessionRes = await supabase.from("diagnosis_sessions").insert({
+      //     user_id:         userId,
+      //     answers:         answers as unknown as Json,
+      //     matched_pattern: null,
+      //     scores:          {} as unknown as Json,
+      //     result:          validated as unknown as Json,
+      //     completed:       true,
+      //   } as never);
+      //   if (sessionRes.error) {
+      //     console.warn("[analyze-v2 diagnosis_sessions.insert] error:", sessionRes.error.message);
+      //   }
+      // } catch (e) {
+      //   console.warn("[analyze-v2 diagnosis_sessions] exception:", e instanceof Error ? e.message : e);
+      // }
 
       try {
         const profileRes = await supabase.from("worldview_profiles").upsert({
