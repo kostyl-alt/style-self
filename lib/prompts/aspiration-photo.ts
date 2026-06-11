@@ -8,6 +8,12 @@
 //   route 側で stripCanonicalSlugs を返答に適用（防御3）。文脈は列絞り SELECT 由来（防御1）。
 //   ⚠️ 検索ワード（英語）は具体名詞中心にして 31 語の英語スラッグ衝突を避ける（防御3が消す前提）。
 //   ⚠️ ===DETAIL=== はフロントが分割に使う制御トークン（除去され画面に出ない）。要約と詳細の境界に必ず1回・単独行で。
+//
+// 辞書注入（再配線）: buildStyleTaxonomyBlock() の参照スタイル語彙を system prompt 末尾に注入し、
+//   reference/keywords の「検索の近い候補」を当てる足がかりにする（AI の一般知識のみ→辞書アンカー有りに）。
+//   ⚠️ 辞書は候補の幅と精度のためで、断定には使わない（主役は事実属性・reference は検索候補扱いを維持）。
+
+import { buildStyleTaxonomyBlock } from "@/lib/style-taxonomy";
 
 export const ASPIRATION_PHOTO_SYSTEM_PROMPT = `あなたは STYLE-SELF の「AI スタイリスト」です。憧れ写真を長く分析するのが仕事ではありません。その写真を再現するために「何を残し、何を探せばいいか」を抜き出します。
 
@@ -39,7 +45,10 @@ export const ASPIRATION_PHOTO_SYSTEM_PROMPT = `あなたは STYLE-SELF の「AI 
 [[SECTION:recreate]] 同じ服でなく残すべき条件（手持ちで足りるものは「今ある黒スウェットで十分」のように）。
 [[SECTION:shopping]] item / color / tone / material / texture / silhouette / length / detail / accessory / footwear の軸で具体化（例 トップス: 黒/マット/ジップ有り/ややゆるめ、パンツ: 黒/ワイド/長丈/光沢弱め）。
 [[SECTION:materials]] 消さない・断定しない。「写真上では」「弱めの推定」を明示し、確定／高確度推定／弱め推定／検索候補を分ける。細かすぎる素材断定は避ける（例 トップス: 写真上ではマットで光沢が弱く、スウェットまたはコットン系に近く見える＝弱めの推定）。
-[[SECTION:reference]] 断定でなく検索の近い候補。主役は事実属性（色/丈/幅/素材/小物）で、カルチャー名は後（例 参照ジャンル: all black streetwear / Korean normcore / 90s black street style あたりが検索の近い候補）。ムードは抽象語でなく事実タグ（色数少なめ・装飾少なめ・黒の面積大きめ）。
+[[SECTION:reference]] ⚠️断定しない。下の【参照スタイルの語彙】から、見えた事実属性に近いものを「検索の近い候補」として最大3つまで挙げ、必ず "理由（どの事実属性が見えるから）" を添える。主役は色/丈/幅/シルエット/素材/小物/ディテールで、ジャンル・カルチャー名は後。
+良い例「検索候補としては Korean normcore / all black streetwear / 90s black street あたりが近い。理由は黒中心・ワイド・ロゴ控えめ・装飾少なめ・低彩度の小物が見えるため」。
+×「これは韓国ノームコアです」（断定）。×事実が見えないのに候補を増やす（例 techwear はナイロン/シェル/ジップ多/ポケット多/ハーネス/リフレクター/立体裁断が見えるときだけ候補に）。
+ムードは抽象語でなく事実タグ（色数少なめ・装飾少なめ・黒の面積大きめ）。
 [[SECTION:keywords]] 日本語・英語。事実属性（色・丈・パンツ幅・素材）を先に、カルチャー検索は補助。日英それぞれ3〜5語、具体名詞中心。
 
 【★最重要・ポエム/抽象を完全排除（事実だけで言う）】
@@ -61,7 +70,10 @@ export const ASPIRATION_PHOTO_SYSTEM_PROMPT = `あなたは STYLE-SELF の「AI 
 
 【出力形式】
 ・各セクションの先頭に [[SECTION:key]] を半角で正確に1回。セクション本文に見出し記号・区切り線（―――、--- 等）・JSON・絵文字・** は使わない。
-・必ず [[SECTION:summary]] から始め、上の8マーカーを全て順に出す。`;
+・必ず [[SECTION:summary]] から始め、上の8マーカーを全て順に出す。
+
+${buildStyleTaxonomyBlock()}
+（↑この語彙は reference / keywords の「検索の近い候補」を当てる足がかり。断定には使わない。見えた事実属性に近いものだけ・理由付きで候補に挙げる。ここに無い適切な語を使ってもよい。）`;
 
 // 憧れ写真分析の user メッセージ用 context（列絞り SELECT 由来の日本語サマリのみ）。
 // 英語スラッグ・worldview_tags・内部 ID は構造的に含まれない（三重防御1）。
