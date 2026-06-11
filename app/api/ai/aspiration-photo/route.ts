@@ -28,8 +28,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const VALID_MEDIA_TYPES = new Set<ImageMediaType>(["image/jpeg", "image/png", "image/gif", "image/webp"]);
-// 8軸分解の「整理ブロック」+核+素材推定で出力が増えるため 1536→2048（整理ブロック途中切れ防止）。
-const MAX_REPLY_TOKENS = 2048;
+// 要約 ＋ ===DETAIL=== ＋ 詳細7セクションで出力が増えるため 2048→3072（詳細の途中切れ防止）。
+const MAX_REPLY_TOKENS = 3072;
 
 interface AspirationPhotoRequest {
   base64?:    unknown;

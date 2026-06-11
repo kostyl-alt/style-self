@@ -86,6 +86,7 @@ const STORAGE_KEY = "style-self:ai:messages:v1";
 type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
   | { kind: "image";         dataUrl: string; caption?: string }  // 憧れ写真分析: user がアップした写真を表示(dataUrl 空=localStorage 軽量化後の reload・テキストfallback)
+  | { kind: "aspiration";    summary: string; sections?: { label: string; content: string }[] }   // 憧れ写真分析(要約常時表示 + 詳細セクションを「詳しく見る」で折り畳み・[[SECTION:key]] で分割済)
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
   | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)
   | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
@@ -730,13 +731,15 @@ function ChatPageInner() {
         });
         return;
       }
-      const replyContent: MessageContent = { kind: "reply", text: data.reply };
+      // [[SECTION:key]] で要約/詳細セクションに分割（マーカーは除去）。無しは全文=要約（graceful）。
+      const { summary, sections } = parseAspirationReply(data.reply);
+      const replyContent: MessageContent = { kind: "aspiration", summary, sections: sections.length ? sections : undefined };
       replaceMessage(setMessages, loadingId, replyContent);
       if (currentThreadId) {
         void threadMessages.persistMessage(
           currentThreadId,
           { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
-          data.reply,
+          summary,
         );
       }
     } catch (err) {
@@ -933,10 +936,11 @@ function findFeedbackTargetMessage(msgs: Message[]): Message | null {
 // ★ Phase 3: thread 自動作成時の永続化用 displayText（永続化しない kind は null）。
 function feedbackDisplayText(content: MessageContent): string | null {
   if (content.kind === "text" || content.kind === "reply") return content.text;
+  if (content.kind === "aspiration") return content.summary;
   if (content.kind === "coordinate_v2") {
     return content.coordinate.summary || content.coordinate.direction || "(コーデ提案)";
   }
-  return null; // loading / intent-result / error / products は永続化しない
+  return null; // loading / intent-result / error / products / image は永続化しない
 }
 
 // ---- 履歴ヘルパ ----
@@ -961,6 +965,51 @@ function lightenMessageForStorage(m: Message): Message {
     return { ...m, content: { ...m.content, dataUrl: "" } };
   }
   return m;
+}
+
+// 憧れ写真分析: [[SECTION:key]] → 日本語見出しの単一の真実源。
+const ASPIRATION_SECTION_LABELS: Record<string, string> = {
+  summary:       "要約",
+  visible_facts: "見えている事実",
+  roles:         "構造の役割",
+  recreate:      "再現する条件",
+  shopping:      "探すときの商品条件",
+  materials:     "素材・質感の推定",
+  reference:     "参照スタイル・年代・カルチャー",
+  keywords:      "検索ワード",
+};
+
+// 憧れ写真分析: AI 返答を [[SECTION:key]] で分割（マーカーは除去・画面に出さない）。
+//   summary を常時表示、残りを順序付きセクション配列に。マーカー無しは全文 summary（graceful）。
+function parseAspirationReply(reply: string): { summary: string; sections: { label: string; content: string }[] } {
+  const parts = reply.split(/\[\[SECTION:([a-z_]+)\]\]/i);
+  // parts = [before, key1, content1, key2, content2, ...]
+  const before = parts[0]?.trim() ?? "";
+  if (parts.length < 3) return { summary: reply.trim(), sections: [] }; // マーカー無し
+  let summary = before;
+  const sections: { label: string; content: string }[] = [];
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    const key = (parts[i] ?? "").toLowerCase();
+    const content = (parts[i + 1] ?? "").trim();
+    if (!content) continue;
+    if (key === "summary") { summary = summary ? `${summary}\n${content}` : content; continue; }
+    sections.push({ label: ASPIRATION_SECTION_LABELS[key] ?? key, content });
+  }
+  return { summary: summary.trim() || reply.trim(), sections };
+}
+
+// 憧れ写真分析: セクション本文。行頭が ・/- の行があれば箇条書き、それ以外は段落で描画。
+function AspirationSectionBody({ content }: { content: string }) {
+  const rawLines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+  const isList = rawLines.length > 0 && rawLines.every((l) => /^[・\-•]/.test(l));
+  if (isList) {
+    return (
+      <ul className="list-disc pl-4 space-y-0.5 text-sm text-gray-800 leading-relaxed">
+        {rawLines.map((l, i) => <li key={i}>{l.replace(/^[・\-•]\s*/, "")}</li>)}
+      </ul>
+    );
+  }
+  return <p className="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{content}</p>;
 }
 
 // 憧れ写真分析: File → { base64(prefix除去), mediaType }（client 側で Vision 送信用に変換）。
@@ -1187,6 +1236,29 @@ function AssistantContent({
         {/* C-2a: coordinate intent の reply 直下に「ビジュアルで見る」ボタン(MB / 直接両対応) */}
         {ENABLE_VISUALIZE && content.sessionIntent === "coordinate" && (
           <VisualizeButton coordinateText={content.text} moodboardId={content.moodboardId} />
+        )}
+      </div>
+    );
+  }
+  // 憧れ写真分析: 要約を常時表示し、詳細セクションを「詳しく見る」で折り畳み（見出し＋改行整形・aspiration のみ）。
+  if (content.kind === "aspiration") {
+    return (
+      <div className="space-y-2">
+        <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 whitespace-pre-wrap break-words leading-relaxed">
+          {content.summary}
+        </div>
+        {content.sections && content.sections.length > 0 && (
+          <details className="bg-gray-50 rounded-2xl px-4 py-2">
+            <summary className="cursor-pointer text-xs text-gray-500 select-none">詳しく見る</summary>
+            <div className="mt-2 space-y-3">
+              {content.sections.map((s, i) => (
+                <div key={i}>
+                  <p className="text-xs font-semibold text-gray-900 mb-1">{s.label}</p>
+                  <AspirationSectionBody content={s.content} />
+                </div>
+              ))}
+            </div>
+          </details>
         )}
       </div>
     );
