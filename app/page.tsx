@@ -17,25 +17,22 @@ export default async function HomePage() {
     <div className="min-h-screen bg-white flex flex-col">
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
         <p className="text-xs tracking-widest text-gray-300 uppercase mb-4">Style Self</p>
-        <h1 className="text-4xl font-light text-gray-900 leading-snug mb-4">
-          あなただけの<br />ファッション世界観を
+        <h1 className="text-3xl sm:text-4xl font-light text-gray-900 leading-snug mb-4 max-w-md sm:max-w-xl">
+          好きな写真を集めるほど、<br />自分だけのスタイルが育っていく。
         </h1>
-        <p className="text-sm text-gray-400 leading-relaxed max-w-xs mb-10">
-          素材・色・余白・信念軸から、<br />
-          自分らしいコーデを設計する。
+        <p className="text-sm text-gray-500 leading-relaxed max-w-sm mb-10">
+          なんとなく保存した写真にも、惹かれた理由があります。STYLE-SELFは、その「好き」を色・形・素材・雰囲気の視点から整理して、あなたらしい服選びにつなげていきます。
         </p>
 
         {/* できること */}
-        <div className="w-full max-w-md mb-10">
+        <div className="w-full max-w-md sm:max-w-3xl mb-10">
           <p className="text-xs tracking-widest text-gray-400 uppercase mb-4">できること</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {FEATURES.map((f) => (
-              <div key={f.title} className="flex items-start gap-3 text-left bg-gray-50 rounded-xl px-4 py-3">
-                <span className="text-2xl leading-none mt-0.5">{f.icon}</span>
-                <div>
-                  <p className="text-sm text-gray-900 font-medium leading-tight">{f.title}</p>
-                  <p className="text-xs text-gray-500 leading-snug mt-1">{f.description}</p>
-                </div>
+              <div key={f.title} className="flex flex-col gap-2 text-left bg-gray-50 rounded-2xl px-5 py-5">
+                <span className="text-2xl leading-none">{f.icon}</span>
+                <p className="text-sm text-gray-900 font-medium leading-snug">{f.title}</p>
+                <p className="text-xs text-gray-500 leading-relaxed">{f.description}</p>
               </div>
             ))}
           </div>
@@ -46,7 +43,7 @@ export default async function HomePage() {
             href="/signup"
             className="w-full py-3.5 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
           >
-            はじめる
+            STYLE-SELFを始める
           </Link>
           <Link
             href="/login"
@@ -58,15 +55,14 @@ export default async function HomePage() {
       </main>
 
       <footer className="py-8 text-center">
-        <p className="text-xs text-gray-200">© 2024 Style Self</p>
+        <p className="text-xs text-gray-200">© 2026 Style Self</p>
       </footer>
     </div>
   );
 }
 
 const FEATURES = [
-  { icon: "📊", title: "スタイル診断",   description: "質問に答えて好み・体型を可視化" },
-  { icon: "💡", title: "コーデ提案",     description: "季節とシーンから今日の一着を設計" },
-  { icon: "🛍",  title: "商品マッチング", description: "提案コーデに合う実物を一発で検索" },
-  { icon: "📚", title: "履歴管理",       description: "診断・相談・コーデを振り返れる" },
+  { icon: "🪞", title: "好きな写真を相談",       description: "言葉にできない「なんか好き」を、色・形・素材・小物から整理します。" },
+  { icon: "🌱", title: "自分らしさが見えてくる", description: "相談するほど、惹かれる雰囲気や似合う方向が見えてきます。" },
+  { icon: "💬", title: "服選びが楽しくなる",     description: "好きなものを、自分に取り入れる方法を一緒に考えます。" },
 ];
