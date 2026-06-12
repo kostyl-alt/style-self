@@ -29,7 +29,8 @@ export interface IntentResponse {
 // P1-C-1.5a 追加: kind:"reply"(会話 AI スタイリスト・自然文 + 補助 actions)
 export type MessageContent =
   | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
-  | { kind: "image";         dataUrl: string; caption?: string }  // 憧れ写真分析: user がアップした写真を表示(dataUrl 空=localStorage 軽量化後の reload・テキストfallback)
+  | { kind: "image";         dataUrl?: string; storagePath?: string; caption?: string }  // 憧れ写真分析: user がアップした写真。dataUrl=ライブ表示の base64 or 解決済み署名URL(一時)・storagePath=private バケットの永続キー(Step3 で署名URL解決)。両方無し=テキスト fallback
+
   | { kind: "aspiration";    summary: string; sections?: { label: string; content: string }[] }   // 憧れ写真分析(要約常時表示 + 詳細セクションを「詳しく見る」で折り畳み・[[SECTION:key]] で分割済)
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
   | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)

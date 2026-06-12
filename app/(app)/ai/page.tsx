@@ -53,6 +53,8 @@ import type { MoodboardWithItems } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
 import { useChatSession } from "@/components/chat/ChatSessionProvider";
+import { uploadAspirationImage } from "@/lib/storage";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 // D1-2a: confidence の閾値(これ未満なら suggestions を提示)
 const CONFIDENCE_THRESHOLD = 0.7;
@@ -666,12 +668,31 @@ function ChatPageInner() {
     setMessages((prev) => trimByMax([...prev, userMsg, loadingMsg]));
     setText("");
     setLoading(true);
-    // thread 永続化は軽量テキストで（base64 を DB に載せない）。reload 後は「📷 憧れ写真」表示。
+
+    // 写真 Storage Step2: private バケットへ upload し storage path を取得(graceful・失敗時は従来挙動)。
+    //   ライブ表示は base64 のまま即時。path を得たらライブ message にも補完し localStorage persist が path を保持。
+    let storagePath: string | undefined;
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        storagePath = await uploadAspirationImage(user.id, file);
+        replaceMessage(setMessages, userMsg.id, { kind: "image", dataUrl, storagePath, caption: note });
+      }
+    } catch (e) {
+      console.warn("[aspiration-photo] image upload skipped:", e instanceof Error ? e.message : e);
+    }
+
+    // thread 永続化: path があれば image kind(metadata.message で忠実復元・Step3 で署名URL表示)、
+    //   無ければ従来の text marker にフォールバック。いずれも DB content 列は marker(base64 は載せない)。
     if (currentThreadId) {
       const marker = note ? `📷 好きな写真（${note}）` : "📷 好きな写真";
+      const persistContent: MessageContent = storagePath
+        ? { kind: "image", storagePath, caption: note }
+        : { kind: "text", text: marker };
       void threadMessages.persistMessage(
         currentThreadId,
-        { id: userMsg.id, role: "user", content: { kind: "text", text: marker }, createdAt: userMsg.createdAt } as unknown as PersistableMessage,
+        { id: userMsg.id, role: "user", content: persistContent, createdAt: userMsg.createdAt } as unknown as PersistableMessage,
         marker,
       );
     }
@@ -953,10 +974,11 @@ function replaceMessage(
   setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: newContent } : m)));
 }
 
-// 憧れ写真分析: localStorage 保存時に image バブルの dataUrl(base64・重い)を空にする。
-//   reload 後は画像非表示・テキスト fallback。テキスト履歴を quota 超過から守る（保存は P2）。
+// 憧れ写真分析: localStorage 保存時に image バブルの base64(data:) dataUrl だけを空にする(quota 対策)。
+//   storagePath(private バケットの永続キー)は残す → reload 後も Step3 で path から署名URL を解決し画像表示。
+//   ※ https/署名URL を dataUrl に持つケースは空化しない(data: のみが重い base64)。
 function lightenMessageForStorage(m: Message): Message {
-  if (m.content.kind === "image" && m.content.dataUrl) {
+  if (m.content.kind === "image" && m.content.dataUrl && m.content.dataUrl.startsWith("data:")) {
     return { ...m, content: { ...m.content, dataUrl: "" } };
   }
   return m;

@@ -140,3 +140,29 @@ export async function deleteMoodboardImage(publicUrl: string): Promise<void> {
 
   await supabase.storage.from(MOODBOARD_BUCKET).remove([pathParts[1]]);
 }
+
+// ---- 写真相談(憧れ写真分析)の画像 ----
+//
+// private バケット。M3/MB と異なり公開URLは使わず、保存するのは storage path。
+// 見返し表示は Step3 で path → 署名URL(createSignedUrl・own folder RLS)に解決する。
+// upload は uploadPostImage と同型(EXIF 除去 + 圧縮 + JPEG 統一・foldername[1]=auth.uid())。
+
+export const ASPIRATION_BUCKET = "aspiration-images";
+
+export async function uploadAspirationImage(userId: string, rawFile: File): Promise<string> {
+  // 1) ★ EXIF 除去(processImageForUpload・M3 同型・位置バレ防止) + 長辺 1920px + 5MB 以下
+  const processed = await processImageForUpload(rawFile);
+
+  // 2) Storage RLS が foldername[1]=auth.uid() を要求するため {userId}/{ts}.jpg 命名
+  const supabase = createSupabaseBrowserClient();
+  const path = `${userId}/${Date.now()}.jpg`;
+
+  const { error } = await supabase.storage
+    .from(ASPIRATION_BUCKET)
+    .upload(path, processed, { upsert: false, contentType: "image/jpeg" });
+
+  if (error) throw new Error("画像のアップロードに失敗しました");
+
+  // private バケットのため公開URLでなく storage path を返す(表示は Step3 で署名URL化)。
+  return path;
+}
