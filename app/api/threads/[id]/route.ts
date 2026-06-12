@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import type { ChatThreadRow, MessageRow, ChatThreadWithMessages } from "@/types/chat-thread";
+import { ASPIRATION_BUCKET } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +179,23 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
     }
 
+    // ★ Storage 削除連動: 削除前に この thread の image message から aspiration 画像の storagePath を収集
+    //   (CASCADE で messages が消える前に取得)。多層防御: thread_id scope + kind==="image" +
+    //   storagePath 文字列 + ${user.id}/ 始まり(own folder)。upload 失敗の text message は storagePath
+    //   無しでスキップ(誤検出なし)。RLS(messages 本人 via thread)で本人 thread のみ読める。
+    const { data: msgRows } = await supabase
+      .from("messages")
+      .select("metadata")
+      .eq("thread_id", params.id) as unknown as { data: { metadata: unknown }[] | null };
+
+    const imagePaths = (msgRows ?? [])
+      .map((r) => {
+        const content = (r.metadata as { message?: { content?: { kind?: string; storagePath?: unknown } } } | null)
+          ?.message?.content;
+        return content?.kind === "image" && typeof content.storagePath === "string" ? content.storagePath : null;
+      })
+      .filter((p): p is string => p !== null && p.startsWith(`${user.id}/`));
+
     const { data: deleted, error: delErr } = await supabase
       .from("chat_threads")
       .delete()
@@ -194,6 +212,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     }
     if (!deleted) {
       return NextResponse.json({ error: "見つかりません" }, { status: 404 });
+    }
+
+    // ★ best-effort: aspiration 画像を Storage から削除(moodboards/[id] DELETE 同型・失敗は warn・graceful)。
+    //   own-folder delete RLS が DB 層の最終防御。失敗してもオーファンが残るだけで thread 削除は成功扱い。
+    if (imagePaths.length > 0) {
+      console.warn(`[threads/[id] DELETE] removing ${imagePaths.length} aspiration image(s):`, imagePaths);
+      const { error: stErr } = await supabase.storage.from(ASPIRATION_BUCKET).remove(imagePaths);
+      if (stErr) {
+        console.warn("[threads/[id] DELETE] storage cleanup error(orphan):", stErr.message);
+      }
     }
 
     return NextResponse.json({ ok: true, deletedId: params.id });
