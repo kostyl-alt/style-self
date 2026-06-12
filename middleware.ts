@@ -37,7 +37,6 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     const appRoutes = [
-      "/onboarding",
       "/ai",  // P1-A: チャット主役型 メイン画面(判断 1=URL /ai)
       "/home", "/discover", "/saved", "/outfit", "/self",
       // 旧ルート（redirect shim 経由でも認証ガードを保つ）

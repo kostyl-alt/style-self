@@ -116,12 +116,12 @@ export default function WorldviewMatchView() {
   }
 
   // ===== 診断未完了 =====
+  // 診断撤廃 第4段C: /onboarding への「診断する→」CTA を撤去(リンク先削除のため)。メッセージのみ残す。
   if (reason === "diagnosis_required") {
     return (
       <EmptyState
         title="世界観を診断するとマッチが見えます"
         body="あなたの世界観タグを基準に、近い世界観の人・投稿を集めます"
-        cta={{ href: "/onboarding", label: "診断する →" }}
       />
     );
   }
@@ -208,19 +208,21 @@ function EmptyState({
 }: {
   title: string;
   body:  string;
-  cta:   { href: string; label: string };
+  cta?:  { href: string; label: string };
 }) {
   return (
     <div className="py-16 text-center space-y-4">
       <p className="text-4xl">🌐</p>
       <p className="text-sm font-medium text-gray-700">{title}</p>
       <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">{body}</p>
-      <Link
-        href={cta.href}
-        className="inline-block mt-2 px-6 py-3 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
-      >
-        {cta.label}
-      </Link>
+      {cta && (
+        <Link
+          href={cta.href}
+          className="inline-block mt-2 px-6 py-3 bg-gray-800 text-white rounded-xl text-sm hover:bg-gray-700 transition-colors"
+        >
+          {cta.label}
+        </Link>
+      )}
     </div>
   );
 }
