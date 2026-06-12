@@ -537,11 +537,15 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
       lines.push("・推薦ブランド候補(curated・maniac 高い順):");
       for (const b of ctx.brandsCurated) {
         const nameDisp = b.nameJa ? `${b.name}(${b.nameJa})` : b.name;
-        const tags = b.worldviewTags.length > 0 ? ` [${b.worldviewTags.slice(0, 5).join("・")}]` : "";
+        // 診断撤廃: brands.worldview_tags(退廃/詩情/哲学/解体/反抗 等のポエムタグ)は注入停止＝LLM が反響しない。
+        // name/国/価格帯/maniac/era(事実の時代)/description でブランドは十分識別できる。
         const era  = b.eraTags.length > 0 ? ` 時代:${b.eraTags.slice(0, 3).join("・")}` : "";
-        lines.push(`  ・${nameDisp} (${b.country ?? "?"}/maniac:${b.maniacLevel}/${b.priceRange})${tags}${era}`);
+        lines.push(`  ・${nameDisp} (${b.country ?? "?"}/maniac:${b.maniacLevel}/${b.priceRange})${era}`);
         lines.push(`     ${b.description}`);
       }
+      // 診断撤廃: ブランド説明文には詩的・抽象的な紹介語(「哲学として纏う」「詩人の服」等)が混在する。
+      // そのまま反響させず、色・素材・シルエット・丈・価格帯など確かめられる言葉に言い換えて伝える。
+      lines.push("※ ブランド説明の詩的・抽象的な言い回しはそのまま使わず、色・素材・シルエット・丈・価格帯に言い換えて話す。");
     } else {
       lines.push("・推薦ブランド候補: (curated データなし)");
     }
