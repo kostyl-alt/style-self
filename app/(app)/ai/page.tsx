@@ -52,6 +52,7 @@ import { buildMoodboardPrompt, MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboa
 import type { MoodboardWithItems } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
+import { useChatSession } from "@/components/chat/ChatSessionProvider";
 
 // D1-2a: confidence の閾値(これ未満なら suggestions を提示)
 const CONFIDENCE_THRESHOLD = 0.7;
@@ -117,7 +118,10 @@ function ChatPageInner() {
 
   const [text, setText]         = useState("");
   const [loading, setLoading]   = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 会話消失修正 (ii): messages は (app)/layout の ChatSessionProvider に持ち上げ済み。
+  //   /ai↔/self 往復(layout 非再マウント)で会話が生存。cold open/reload は Provider 初期化で空=新規。
+  //   ★ hydrate は足さない・persist(下の localStorage 書込)は温存。
+  const { messages, setMessages } = useChatSession();
   // P1-C-3: 右上メニュー [≡] Drawer の開閉
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 方針C(案イ): 本対話モード（GENERAL_BRAIN_MODE フラグON時のみトグル表示・default OFF）。
