@@ -43,7 +43,7 @@ import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 import ProductCardList from "@/components/chat/ProductCardList";
 import SearchProductsButton from "@/components/chat/SearchProductsButton";
-import type { ProductCandidate, CandidatesResponse } from "@/types/product-candidate";
+import type { CandidatesResponse } from "@/types/product-candidate";
 import MenuDrawer from "@/components/chat/MenuDrawer";
 import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
@@ -51,21 +51,7 @@ import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
 import { buildMoodboardPrompt, MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboard-prompt";
 import type { MoodboardWithItems } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
-
-interface SuggestionItem {
-  intent: string;
-  label:  string;
-}
-
-interface IntentResponse {
-  ok:           boolean;
-  intent?:      string;
-  mode?:        string;
-  params?:      Record<string, unknown>;
-  confidence?:  number;
-  suggestions?: SuggestionItem[];
-  reason?:      "auth_required" | "empty_input";
-}
+import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
 
 // D1-2a: confidence の閾値(これ未満なら suggestions を提示)
 const CONFIDENCE_THRESHOLD = 0.7;
@@ -79,19 +65,6 @@ const MAX_MESSAGES = 30;
 // v1 サフィックスは将来 Message 型変更時のスキーマ migration 用。
 const STORAGE_KEY = "style-self:ai:messages:v1";
 
-// D1-2b': メッセージ型(設計案 B2.2)
-// P1-C-1.5a 追加: kind:"reply"(会話 AI スタイリスト・自然文 + 補助 actions)
-type MessageContent =
-  | { kind: "text";          text: string }                       // user 入力 or 簡素な assistant 応答
-  | { kind: "image";         dataUrl: string; caption?: string }  // 憧れ写真分析: user がアップした写真を表示(dataUrl 空=localStorage 軽量化後の reload・テキストfallback)
-  | { kind: "aspiration";    summary: string; sections?: { label: string; content: string }[] }   // 憧れ写真分析(要約常時表示 + 詳細セクションを「詳しく見る」で折り畳み・[[SECTION:key]] で分割済)
-  | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)
-  | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
-  | { kind: "products"; candidates: ProductCandidate[]; queriesUsed: string[]; moodboardId: string; loading?: boolean; error?: string | null }  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージで関心分離・/api/products/candidates 結果)
-  | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
-  | { kind: "error";         message: string };                   // 通信 / API エラー
-
 // P1-C-1.5a / 1.5b-i / MVP-1c / A-6 / A-6b: 段階B 対象 intent(A-6b は 5 intent)
 // ★ ここに無い intent は従来通り intent-result(NavigateConfirm 等)で表示する。
 // ★ API 側 `app/api/ai/stylist-chat/route.ts` の同名 Set と完全一致させる(両側同期)
@@ -100,19 +73,6 @@ const STYLIST_CHAT_INTENTS = new Set<string>(["closet", "coordinate", "style-con
 
 // P1-C-1.5a: 会話 AI 応答の API レスポンス型(/api/ai/stylist-chat と同形)
 // ★ C-2c-1: MB 経由 coordinate のみ editorScore が付く(エディタ AI 評価結果)
-interface EditorScorePayload {
-  scores: {
-    novelty: number; rarity: number; mb_translation: number; daily_use: number;
-    photogenic: number; post_worthy: number; searchable: number; personal: number;
-    whitespace: number; signature_anomaly: number;
-  };
-  total: number;
-  checks: Record<string, "ok" | "ng">;
-  verdict: "pass" | "compromise" | "fail";
-  reasonShort: string;
-  improvementHints: string;
-  attempts: 1 | 2;
-}
 interface StylistChatResponse {
   ok:           boolean;
   reply?:       string;
@@ -129,13 +89,6 @@ interface StylistChatResponse {
 const STYLIST_CHAT_HISTORY_MAX = 8;
 // P1-C-1.5b-ii L4-A: 切替検出の信頼度しきい値(保守設定・1.5a 実測 75% 誤判定例を踏まえ)
 const SWITCH_THRESHOLD = 0.85;
-
-interface Message {
-  id:        string;
-  role:      "user" | "assistant";
-  content:   MessageContent;
-  createdAt: number;
-}
 
 function newMessageId(): string {
   // crypto.randomUUID は dev/prod とも利用可(Next.js)
