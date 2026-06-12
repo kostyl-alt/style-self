@@ -166,3 +166,20 @@ export async function uploadAspirationImage(userId: string, rawFile: File): Prom
   // private バケットのため公開URLでなく storage path を返す(表示は Step3 で署名URL化)。
   return path;
 }
+
+// 見返し表示用: private バケットの storage path → 期限付き署名URL(~1h)に解決。
+//   own folder の select RLS を尊重(クライアント実行・本人の path のみ生成可)。
+//   失敗(未ログイン/RLS不可/path不正)は null を返す → 呼び出し側はテキスト fallback(graceful)。
+export async function getAspirationSignedUrl(path: string): Promise<string | null> {
+  if (!path) return null;
+  try {
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase.storage
+      .from(ASPIRATION_BUCKET)
+      .createSignedUrl(path, 3600);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
+}

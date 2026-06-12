@@ -53,7 +53,7 @@ import type { MoodboardWithItems } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
 import { useChatSession } from "@/components/chat/ChatSessionProvider";
-import { uploadAspirationImage } from "@/lib/storage";
+import { uploadAspirationImage, getAspirationSignedUrl } from "@/lib/storage";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 // D1-2a: confidence の閾値(これ未満なら suggestions を提示)
@@ -984,6 +984,47 @@ function lightenMessageForStorage(m: Message): Message {
   return m;
 }
 
+// 写真 Storage Step3: storage path → 署名URL を path 単位でキャッシュ(毎レンダー生成しない)。
+//   署名URLは ~1h で失効する想定だが、page の生存中はキャッシュ流用。フルリロードで cache クリア → 再生成。
+const signedUrlCache = new Map<string, string>();
+
+// 憧れ写真分析の画像バブル: ライブは base64(dataUrl)優先で即表示、見返しは storagePath を署名URLに解決。
+//   解決中/解決失敗/path 無しは従来の「📷 好きな写真」テキスト fallback(graceful)。
+function AspirationImageBubble({ dataUrl, storagePath, caption }: { dataUrl?: string; storagePath?: string; caption?: string }) {
+  const [resolved, setResolved] = useState<string | null>(
+    dataUrl ?? (storagePath ? signedUrlCache.get(storagePath) ?? null : null),
+  );
+  useEffect(() => {
+    if (dataUrl) { setResolved(dataUrl); return; }                 // ライブ base64 優先
+    if (!storagePath) { setResolved(null); return; }
+    const cached = signedUrlCache.get(storagePath);
+    if (cached) { setResolved(cached); return; }
+    let cancelled = false;
+    void getAspirationSignedUrl(storagePath).then((url) => {
+      if (cancelled) return;
+      if (url) { signedUrlCache.set(storagePath, url); setResolved(url); }
+      else setResolved(null);                                      // graceful: テキスト fallback
+    });
+    return () => { cancelled = true; };
+  }, [dataUrl, storagePath]);
+
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] flex flex-col items-end gap-1">
+        {resolved ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={resolved} alt="好きな写真" className="rounded-2xl rounded-br-md max-h-72 w-auto object-cover border border-gray-200" />
+        ) : (
+          <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2">📷 好きな写真</div>
+        )}
+        {caption && (
+          <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2 whitespace-pre-wrap break-words">{caption}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // 憧れ写真分析: [[SECTION:key]] → 日本語見出しの単一の真実源。
 const ASPIRATION_SECTION_LABELS: Record<string, string> = {
   summary:       "要約",
@@ -1104,23 +1145,10 @@ function Bubble({
 }) {
   if (msg.role === "user") {
     // 憧れ写真分析: 画像バブル（送った写真を表示して分析結果と見比べられるように）。
+    //   ライブは base64 即表示・見返しは storagePath→署名URL 解決(キャッシュ・graceful)。
     if (msg.content.kind === "image") {
-      const { dataUrl, caption } = msg.content;
-      return (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] flex flex-col items-end gap-1">
-            {dataUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={dataUrl} alt="好きな写真" className="rounded-2xl rounded-br-md max-h-72 w-auto object-cover border border-gray-200" />
-            ) : (
-              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2">📷 好きな写真</div>
-            )}
-            {caption && (
-              <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2 whitespace-pre-wrap break-words">{caption}</div>
-            )}
-          </div>
-        </div>
-      );
+      const { dataUrl, storagePath, caption } = msg.content;
+      return <AspirationImageBubble dataUrl={dataUrl} storagePath={storagePath} caption={caption} />;
     }
     // user 吹き出し:右寄り
     const text = msg.content.kind === "text" ? msg.content.text : "";
