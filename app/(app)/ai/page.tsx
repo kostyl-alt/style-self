@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
@@ -123,7 +123,7 @@ function ChatPageInner() {
   // 会話消失修正 (ii): messages は (app)/layout の ChatSessionProvider に持ち上げ済み。
   //   /ai↔/self 往復(layout 非再マウント)で会話が生存。cold open/reload は Provider 初期化で空=新規。
   //   ★ hydrate は足さない・persist(下の localStorage 書込)は温存。
-  const { messages, setMessages } = useChatSession();
+  const { messages, setMessages, temporaryMode, setTemporaryMode } = useChatSession();
   // P1-C-3: 右上メニュー [≡] Drawer の開閉
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // 方針C(案イ): 本対話モード（GENERAL_BRAIN_MODE フラグON時のみトグル表示・default OFF）。
@@ -798,6 +798,22 @@ function ChatPageInner() {
               }`}
             >
               本対話
+            </button>
+          )}
+          {/* 一時チャット（TEMPORARY_CHAT_MODE フラグON時のみ表示・default OFF）。
+              ★ 2段目: トグルで temporaryMode state を切り替えるだけ。保存停止/切替=新規/読込skip/送信伝達は次段以降で接続。 */}
+          {TEMPORARY_CHAT_MODE && (
+            <button
+              type="button"
+              onClick={() => setTemporaryMode((v) => !v)}
+              aria-pressed={temporaryMode}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                temporaryMode
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}
+            >
+              一時チャット
             </button>
           )}
           <button

@@ -10,13 +10,21 @@ import type { Message } from "@/types/chat-ui";
 interface ChatSessionValue {
   messages:    Message[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
+  // 一時チャット(TEMPORARY_CHAT_MODE)の ON/OFF。★ messages と同じ Provider に置くことで
+  //   /ai↔/self 往復で生存・フルリロードで初期化(=痕跡ゼロ)のライフサイクルを messages と揃える。
+  temporaryMode:    boolean;
+  setTemporaryMode: Dispatch<SetStateAction<boolean>>;
 }
 
 const ChatSessionContext = createContext<ChatSessionValue | null>(null);
 
 export function ChatSessionProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const value = useMemo<ChatSessionValue>(() => ({ messages, setMessages }), [messages]);
+  const [temporaryMode, setTemporaryMode] = useState(false);
+  const value = useMemo<ChatSessionValue>(
+    () => ({ messages, setMessages, temporaryMode, setTemporaryMode }),
+    [messages, temporaryMode],
+  );
   return <ChatSessionContext.Provider value={value}>{children}</ChatSessionContext.Provider>;
 }
 
