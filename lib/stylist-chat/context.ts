@@ -15,6 +15,7 @@ import {
 import { MATERIAL_DICT, COLOR_DICT, LINE_DICT, RATIO_DICT } from "@/lib/dictionaries";
 import { normalizeColor } from "@/lib/knowledge/wardrobe-color-systems";
 import { PRODUCT_WORLDVIEW_TAGS } from "@/lib/knowledge/product-worldview-tags";
+import { computeBrandMatches, type SignalAttributes } from "@/lib/knowledge/brand-facts";
 
 // diagnose: worldview_profiles から jsonb 列絞り SELECT(1.5a 既存ロジック)。
 // ★ worldview_tags(英語スラッグ)は SELECT 句に書かない → 取得経路無し(三重防御 1)
@@ -167,10 +168,11 @@ const BRAND_DESC_TRUNCATE_LEN   = 80;
 export async function fetchBrandLearnContext(
   supabase: SupabaseClient<Database>,
   userId: string,
+  text?: string, // Step4-a: 明示条件の発言キーワードマップ用(optional・既存呼び出し無破壊)
 ): Promise<StylistChatContext> {
   // 診断撤廃(あ): worldview_profiles(診断ポエム)の注入を停止。育成方針＝勝手に世界観を断定しない。
   //   好み(事実) + curated brands のみ注入。worldview フィールドは null/[] で返す。
-  const [brandsRow, prefRow] = await Promise.all([
+  const [brandsRow, prefRow, signalRows] = await Promise.all([
     supabase
       .from("brands")
       .select("name, name_ja, country, description, worldview_tags, era_tags, maniac_level, price_range")
@@ -190,7 +192,18 @@ export async function fetchBrandLearnContext(
       .select("style_preference")
       .eq("id", userId)
       .maybeSingle() as unknown as Promise<{ data: { style_preference: unknown } | null }>,
+    // Step4-a: 育成 style_signals(主 facts ソース)。best-effort・失敗/空でも [] で壊さない。
+    fetchStyleSignals(supabase, userId),
   ]);
+
+  const stylePreference = extractStylePreference(prefRow?.data?.style_preference);
+
+  // Step4-a: facts 組み立て → 決定的 matchBrands(裏で算出・プロンプト未注入＝出力不変)。
+  const { matches } = computeBrandMatches({
+    signals:    signalRows,
+    preference: stylePreference,
+    text,
+  });
 
   return {
     // 診断 worldview は注入しない(育成方針)
@@ -198,9 +211,27 @@ export async function fetchBrandLearnContext(
     worldviewKeywords: [],
     coreIdentity:      null,
     idealSelf:         null,
-    stylePreference:   extractStylePreference(prefRow?.data?.style_preference),
+    stylePreference,
     brandsCurated:     summarizeBrands(brandsRow?.data ?? []),
+    brandMatches:      matches,
   };
+}
+
+// Step4-a: style_signals を best-effort で読む(RLS 本人・列絞り)。失敗/空は [] を返し brand-learn を壊さない。
+async function fetchStyleSignals(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<SignalAttributes[]> {
+  try {
+    const res = await (supabase
+      .from("style_signals")
+      .select("attributes")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }) as unknown as Promise<{ data: { attributes: SignalAttributes }[] | null }>);
+    return (res.data ?? []).map((r) => r.attributes ?? {});
+  } catch {
+    return [];
+  }
 }
 
 // A-6b: brands 配列を ctx.brandsCurated 形式に簡略化(LLM トークン抑制・上位 N 件 + description truncate)。

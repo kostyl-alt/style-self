@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
       intent === "closet"          ? fetchClosetContext(supabase, userId)
       : intent === "coordinate"     ? fetchCoordinateContext(supabase, userId)
       : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
-      : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId)
+      : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId, text)
       :                                fetchDiagnoseContext(supabase, userId),
       useKnowledgeSearch
         ? fetchKnowledgeOSViaSearchKnowledge(text)

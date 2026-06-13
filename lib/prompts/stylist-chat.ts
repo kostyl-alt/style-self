@@ -26,6 +26,7 @@
 // short_legs → 「重心高めの構成」/ top_heavy →「上半身に存在感」等(★ R-2 否定形ゼロ)。
 import { CONCERN_REFRAME } from "@/lib/utils/body-rules";
 import type { MoodboardAnalysisRow } from "@/types/moodboard";
+import type { BrandMatch } from "@/lib/knowledge/brand-match";
 
 export const STYLIST_CHAT_SYSTEM_PROMPT = `あなたは STYLE-SELF というファッションアプリ内の「AI スタイリスト」です。ユーザーと自然な日本語で短い対話を行い、好きな写真・体型・好みといった事実をもとに、その人のスタイルを一緒に探していきます。世界観を勝手に決めつけず、具体的な服選び(色・シルエット・素材・丈)で前に進めます。
 
@@ -364,6 +365,9 @@ export interface StylistChatContext {
     maniacLevel:   number;
     priceRange:    string;
   }>;
+  // ブランドマッチング Step4-a 用・決定的 matchBrands の候補（facts→候補・理由・検索ワード）。
+  // ★ Step4-a では算出して持つだけ・プロンプト注入は Step4-b（buildStylistChatUserMessage は未参照＝出力不変）。
+  brandMatches?: BrandMatch[];
   // A-10 (案A): Knowledge OS 由来の参考情報(★ route 側で入口 sanitize 済を受ける)
   //   ・decisionRules:   判断ルール(上位 N 件・rule 本文のみ)
   //   ・failurePatterns: 失敗パターン(上位 N 件・短文化)
