@@ -25,6 +25,7 @@ export type CultureTag = string; // STYLE_AXES key="culture"
 export type ColorTag = string; // STYLE_AXES key="color"
 export type SilhouetteTag = string; // STYLE_AXES key="silhouette"
 export type MaterialTag = string; // STYLE_AXES key="material"
+export type EraTag = string; // STYLE_AXES key="era"
 
 export type BrandPriceTier = "low" | "mid" | "high" | "luxury";
 
@@ -45,37 +46,80 @@ export interface BrandTaxonomyEntry {
   colorSignals: ColorTag[];
   /** STYLE_AXES key="silhouette" のタグ名 */
   silhouetteSignals: SilhouetteTag[];
+  /** STYLE_AXES key="era" のタグ名（写真から参照されやすい年代感・ブランド創業年ではない） */
+  eraSignals: EraTag[];
   /** 価格帯 */
   priceTier: BrandPriceTier;
   /** 商品検索（楽天/ZOZO 等）に流す検索ワード候補 */
   searchKeywords: string[];
 }
 
-// 本格 seed（黒/モード/ミニマル/ストリート系 15〜30 件）は Step2 で投入する。
-// ここでは型を検証するためのサンプルのみ（すべて STYLE_AXES 実在タグで構成）。
+// 黒/モード/ミニマル/ストリート系の最初の 5 件（すべて STYLE_AXES 実在タグで構成）。
+// 本格 seed（15〜30 件）は後続で追加。matcher・brand-learn 接続は Step3/4。
 export const BRAND_TAXONOMY: BrandTaxonomyEntry[] = [
   {
     name: "Yohji Yamamoto",
-    styleTags: ["黒", "ドレープ", "アヴァンギャルド"],
+    styleTags: ["黒一色", "ドレープ", "アヴァンギャルド", "ロング丈"],
     genreCandidates: ["モード", "ダーク/ブラックモード", "アヴァンギャルド/脱構築"],
-    cultureCandidates: ["アーティスト/クリエイター", "パリ"],
+    cultureCandidates: ["アーティスト/クリエイター", "パリ", "東京/原宿"],
     itemStrengths: ["ロングコート", "テーラードジャケット", "ワイドパンツ"],
-    materialSignals: ["ウール", "レザー"],
-    colorSignals: ["オールブラック", "モノトーン"],
-    silhouetteSignals: ["ドレープ", "ワイド", "Iライン"],
+    materialSignals: ["ウール", "コットン", "レザー"],
+    colorSignals: ["オールブラック", "モノトーン", "ダークトーン"],
+    silhouetteSignals: ["ドレープ", "ワイド", "オーバーサイズ", "Iライン"],
+    eraSignals: ["1980s", "1990s"],
     priceTier: "luxury",
-    searchKeywords: ["Yohji Yamamoto", "ヨウジヤマモト", "黒 モード コート"],
+    searchKeywords: ["Yohji Yamamoto", "ヨウジヤマモト", "黒 モード コート", "Yohji Yamamoto wide pants"],
   },
   {
-    name: "STUDIOUS",
-    styleTags: ["ミニマル", "モノトーン", "きれいめ"],
-    genreCandidates: ["ミニマルモード", "ミニマル", "ブラックストリート"],
-    cultureCandidates: ["中目黒/青山", "モデル私服(オフデューティ)"],
-    itemStrengths: ["セットアップ", "ニット", "ワイドパンツ"],
-    materialSignals: ["ウール", "ニット"],
-    colorSignals: ["モノトーン", "低彩度", "オールブラック"],
-    silhouetteSignals: ["ワイド", "Iライン", "オーバーサイズ"],
+    name: "COMME des GARÇONS",
+    styleTags: ["脱構築", "黒基調", "前衛的", "ボックスシルエット"],
+    genreCandidates: ["アヴァンギャルド/脱構築", "モード", "ダーク/ブラックモード"],
+    cultureCandidates: ["東京/原宿", "アーティスト/クリエイター", "パリ"],
+    itemStrengths: ["変形ジャケット", "ニット", "アウター"],
+    materialSignals: ["ウール", "コットン", "ナイロン"],
+    colorSignals: ["オールブラック", "モノトーン", "ダークトーン"],
+    silhouetteSignals: ["ボックス", "オーバーサイズ", "ドレープ"],
+    eraSignals: ["1980s", "1990s"],
+    priceTier: "luxury",
+    searchKeywords: ["COMME des GARCONS", "コムデギャルソン", "黒 モード", "COMME des GARCONS jacket"],
+  },
+  {
+    name: "stein",
+    styleTags: ["ミニマルモード", "低彩度", "クリーン", "ワイドシルエット"],
+    genreCandidates: ["ミニマルモード", "モード", "ミニマル"],
+    cultureCandidates: ["中目黒/青山", "アーティスト/クリエイター", "編集者/スタイリスト"],
+    itemStrengths: ["スラックス", "シャツ", "コート"],
+    materialSignals: ["ウール", "コットン", "ナイロン"],
+    colorSignals: ["モノトーン", "低彩度", "ニュートラル"],
+    silhouetteSignals: ["ワイド", "ドレープ", "オーバーサイズ", "Iライン"],
+    eraSignals: ["2010s", "2020s"],
+    priceTier: "high",
+    searchKeywords: ["stein", "シュタイン", "stein coat", "stein wide pants", "ミニマル モード"],
+  },
+  {
+    name: "COMOLI",
+    styleTags: ["上質ベーシック", "ニュートラル", "力の抜けたきれいめ", "ナチュラル"],
+    genreCandidates: ["ミニマル", "エフォートレス", "ノームコア"],
+    cultureCandidates: ["中目黒/青山", "編集者/スタイリスト", "モデル私服(オフデューティ)"],
+    itemStrengths: ["シャツ", "スラックス", "アウター"],
+    materialSignals: ["コットン", "ウール", "リネン"],
+    colorSignals: ["ニュートラル", "低彩度", "アースカラー", "ネイビー基調"],
+    silhouetteSignals: ["ワイド", "オーバーサイズ", "ドレープ", "Iライン"],
+    eraSignals: ["2010s", "2020s"],
+    priceTier: "high",
+    searchKeywords: ["COMOLI", "コモリ", "COMOLI shirt", "COMOLI pants", "ミニマル きれいめ"],
+  },
+  {
+    name: "LIDNM",
+    styleTags: ["黒ベース", "きれいめストリート", "モノトーン", "ワイド"],
+    genreCandidates: ["ミニマルストリート", "ブラックストリート", "ミニマル"],
+    cultureCandidates: ["東京/原宿", "ソウル/弘大/江南"],
+    itemStrengths: ["セットアップ", "アウター", "スラックス"],
+    materialSignals: ["ウール", "ナイロン", "コットン"],
+    colorSignals: ["オールブラック", "モノトーン", "低彩度"],
+    silhouetteSignals: ["ワイド", "オーバーサイズ", "Iライン"],
+    eraSignals: ["2020s"],
     priceTier: "mid",
-    searchKeywords: ["STUDIOUS", "ステュディオス", "ミニマル モノトーン"],
+    searchKeywords: ["LIDNM", "リドム", "黒 ストリート きれいめ", "LIDNM wide pants"],
   },
 ];
