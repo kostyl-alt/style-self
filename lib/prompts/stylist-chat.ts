@@ -27,6 +27,7 @@
 import { CONCERN_REFRAME } from "@/lib/utils/body-rules";
 import type { MoodboardAnalysisRow } from "@/types/moodboard";
 import type { BrandMatch } from "@/lib/knowledge/brand-match";
+import { renderBrandMatchCards } from "@/lib/knowledge/brand-render";
 
 export const STYLIST_CHAT_SYSTEM_PROMPT = `あなたは STYLE-SELF というファッションアプリ内の「AI スタイリスト」です。ユーザーと自然な日本語で短い対話を行い、好きな写真・体型・好みといった事実をもとに、その人のスタイルを一緒に探していきます。世界観を勝手に決めつけず、具体的な服選び(色・シルエット・素材・丈)で前に進めます。
 
@@ -366,8 +367,10 @@ export interface StylistChatContext {
     priceRange:    string;
   }>;
   // ブランドマッチング Step4-a 用・決定的 matchBrands の候補（facts→候補・理由・検索ワード）。
-  // ★ Step4-a では算出して持つだけ・プロンプト注入は Step4-b（buildStylistChatUserMessage は未参照＝出力不変）。
   brandMatches?: BrandMatch[];
+  // 明示条件フィルタ Step B 用・狭い軸(韓国/Y2K等)の明示指定でハードフィルタが効いたか。
+  // ★ matches 空のとき「facts薄(false)」と「条件が辞書範囲外(true)」で graceful を分岐する。
+  brandMatchConstrained?: boolean;
   // A-10 (案A): Knowledge OS 由来の参考情報(★ route 側で入口 sanitize 済を受ける)
   //   ・decisionRules:   判断ルール(上位 N 件・rule 本文のみ)
   //   ・failurePatterns: 失敗パターン(上位 N 件・短文化)
@@ -523,12 +526,12 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
     }
     lines.push(`・段階A 判定 intent: ${intent}(${MVP1C_LABEL})`);
   } else if (intent === "brand-learn") {
-    // ★ 好み + curated brands(12件) + KOS influences(15件) 統合(A-6b)
-    // 診断撤廃(あ): 診断 worldview(世界観名/キーワード/核となる方向性)の注入は停止＝勝手に断定しない。
-    // wardrobe_items / body_profile は読まない(コスト削減・brand-learn は手持ち服や体型依存ではない)
-    // brands.worldview_tags は日本語タグ(PRODUCT_WORLDVIEW_TAGS とは別語彙)・構造的安全
-    lines.push("【文脈(本人のみ・ブランド学習・好み + curated brands + KOS influences・日本語サマリ)】");
-    // 好み(任意・brand 相性提案精度向上のため)
+    // Step4-b: ブランド候補はコード側の決定的 matcher(ctx.brandMatches)を唯一の出所にする。
+    //   ・matches あり → その候補のみ注入(curated は出さない＝候補外創作の余地を断つ)。
+    //   ・matches 空(facts 薄) → curated fallback せず育成誘導(「分かりません」にしない・次に何を渡せば候補が出るか案内)。
+    // 診断撤廃(あ): 診断 worldview の注入は停止＝勝手に断定しない。wardrobe/body は読まない。
+    lines.push("【文脈(本人のみ・ブランド学習・好み + 決定的マッチ候補・日本語サマリ)】");
+    // 好み(任意・候補の言い換え精度向上のため)
     if (ctx.stylePreference) {
       const p = ctx.stylePreference;
       if (p.likedColors.length > 0)       lines.push(`・好きな色: ${p.likedColors.slice(0, 5).join("、")}`);
@@ -536,22 +539,37 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
       if (p.targetImpressions.length > 0) lines.push(`・なりたい印象: ${p.targetImpressions.slice(0, 4).join("、")}`);
       if (p.avoidImpressions.length > 0)  lines.push(`・避けたい印象: ${p.avoidImpressions.slice(0, 4).join("、")}`);
     }
-    // curated brands(maniac_level 順 上位 12 件)
-    if (ctx.brandsCurated && ctx.brandsCurated.length > 0) {
-      lines.push("・推薦ブランド候補(curated・maniac 高い順):");
-      for (const b of ctx.brandsCurated) {
-        const nameDisp = b.nameJa ? `${b.name}(${b.nameJa})` : b.name;
-        // 診断撤廃: brands.worldview_tags(退廃/詩情/哲学/解体/反抗 等のポエムタグ)は注入停止＝LLM が反響しない。
-        // name/国/価格帯/maniac/era(事実の時代)/description でブランドは十分識別できる。
-        const era  = b.eraTags.length > 0 ? ` 時代:${b.eraTags.slice(0, 3).join("・")}` : "";
-        lines.push(`  ・${nameDisp} (${b.country ?? "?"}/maniac:${b.maniacLevel}/${b.priceRange})${era}`);
-        lines.push(`     ${b.description}`);
-      }
-      // 診断撤廃: ブランド説明文には詩的・抽象的な紹介語(「哲学として纏う」「詩人の服」等)が混在する。
-      // そのまま反響させず、色・素材・シルエット・丈・価格帯など確かめられる言葉に言い換えて伝える。
-      lines.push("※ ブランド説明の詩的・抽象的な言い回しはそのまま使わず、色・素材・シルエット・丈・価格帯に言い換えて話す。");
+    // ★ 最優先(退行防止): 候補があるなら必ず挙げる。下の補助ルールは「候補を出した上で」効くもので、候補を出さない・質問返しで逃げる理由にしてはいけない。
+    if (ctx.brandMatches && ctx.brandMatches.length > 0) {
+      lines.push("★最優先: 近いブランド候補が下に算出されている。質問返しだけで終わらせず、必ずその候補から2〜3件を挙げる。各ブランドに検索ワードを1〜2個添える。候補リスト外のブランド名は創作しない。確認したいことがあれば、候補を挙げた後に質問を1つだけ添える。");
+    }
+    // 補助ルール(表現の質を保つためのもの・★ 候補提示や具体回答を妨げない範囲で適用する)。
+    lines.push("※ 以下は表現の質の補助ルール。候補を出さない・質問返しで逃げる理由にはしない:");
+    lines.push("  - 「黒が語る」「世界観が一気に開く」のような抽象・ポエム表現は使わない。丈・素材・シルエット・形・ロゴ感の違いなど、確かめられる事実で説明する。");
+    lines.push("  - ブランドの国・発祥・文化背景を、候補理由や辞書に根拠なく断定しない(「韓国発祥」「日本ブランド」等は辞書または候補理由に根拠がある時だけ)。候補理由にない文化背景を勝手に補完しない。");
+    lines.push("  - 根拠のないユーザー情報を断定しない。実際に登録データがある場合以外、「あなたのクローゼット」「今のクローゼット」「手持ち」「普段着ている服」「持っている服」「ワードローブ」は使わない。質問するときも「クローゼット」「手持ち」と言わず、「好きな色」「使いたい色」「合わせたい服があるなら」のような任意表現にする。根拠が弱いときは「今の情報だけだと」「写真から見える範囲では」「蓄積されている好みの傾向では」のように限定する。");
+    lines.push("  - ジャンルを説明するときは思い込みで細部を盛らない。STYLE_AXES の識別子・brand taxonomy のタグ・候補の一致理由にある表現を優先し、代表的で確かな特徴だけを短く。辞書や候補理由にない細部や、固有の製品名・技術名を勝手に足さない。");
+    if (ctx.brandMatches && ctx.brandMatches.length > 0) {
+      // ★ ブランド説明はコード側で決定的に組み立て済み（renderBrandMatchCards）。LLM に自由生成させない＝固有名の盛り/捏造が構造的に出ない。
+      lines.push("・あなたの傾向から、探す入口として近いブランド候補(コード側で生成済みの紹介文・断定でなく検索の足がかり):");
+      lines.push(renderBrandMatchCards(ctx.brandMatches));
+      lines.push("※ 上のブランド候補文はコード側で生成済み。"
+        + "★ ブランド名・一致している点・検索ワードは変更しない・そのまま使う・順番も維持する・候補文の外からブランド名や説明を足さない。"
+        + "あなたの役割は、短い前置きを置いてこの候補文をそのまま示し、最後に確認質問を1つだけ添えるか添えないか。"
+        + "候補文の中身(説明・固有名)は創作しない。買える店や購入は案内しない。");
+    } else if (ctx.brandMatchConstrained) {
+      // graceful(条件あり0件): ジャンル定義を自由生成させず固定文に寄せる（固有名の盛り防止）。
+      lines.push("・近いブランド候補: 指定の系統に、今のブランド辞書では強く一致する候補がまだ少ない状態。");
+      lines.push("※ 次の固定文の主旨をそのまま伝える(ジャンルの定義や具体例を自由生成しない・固有名を足さない):");
+      lines.push("『今のブランド辞書では、この系統に強く一致する候補がまだ少ないです。気になった写真があれば、色・素材・シルエットに分解して近い方向を探せます。』");
     } else {
-      lines.push("・推薦ブランド候補: (curated データなし)");
+      // graceful(facts薄0件): まだ蓄積が少ない。羅列も断定もせず、次に何を渡せば候補が出せるかを自然に促す(「分かりません」にしない)。
+      lines.push("・近いブランド候補: まだ写真や好みの情報が少なく、確かな候補を絞り込めない状態。");
+      lines.push("※ ブランド名を当てずっぽうで挙げない。"
+        + "「まだ写真や好みの情報が少ないので、今はブランドを絞りすぎない方がいい」と正直に伝えたうえで、"
+        + "好きな写真を1〜2枚見せてもらうか、主役にしたい色・避けたい印象・好きな系統を1つ教えてもらえれば、"
+        + "色・形・ジャンルから近いブランドを具体的に出せる——と自然に促す。使うほど精度が上がる前提で前向きに案内する。"
+        + "ユーザーの過去傾向・性格・似合う/似合わない理由は断定しない。");
     }
     lines.push(`・段階A 判定 intent: ${intent}(${MVP1C_LABEL})`);
   } else {

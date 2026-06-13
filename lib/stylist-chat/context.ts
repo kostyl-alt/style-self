@@ -198,8 +198,8 @@ export async function fetchBrandLearnContext(
 
   const stylePreference = extractStylePreference(prefRow?.data?.style_preference);
 
-  // Step4-a: facts 組み立て → 決定的 matchBrands(裏で算出・プロンプト未注入＝出力不変)。
-  const { matches } = computeBrandMatches({
+  // Step4-a/B: facts 組み立て → 決定的 matchBrands。constraintsActive は明示条件フィルタが効いたか(会話層 graceful 3分岐用)。
+  const { matches, constraintsActive } = computeBrandMatches({
     signals:    signalRows,
     preference: stylePreference,
     text,
@@ -214,6 +214,7 @@ export async function fetchBrandLearnContext(
     stylePreference,
     brandsCurated:     summarizeBrands(brandsRow?.data ?? []),
     brandMatches:      matches,
+    brandMatchConstrained: constraintsActive,
   };
 }
 
