@@ -111,11 +111,19 @@ const UTTERANCE_RULES: UtteranceRule[] = [
   { kw: "プレッピー",     genres: ["プレッピー"], hard: { requiredGenres: ["プレッピー"] } },
   // ⚠️ 「ドレス」単体は kw にしない（ワンピース/ドレス文脈で誤爆回避）。kw は「クラシック」のみ。
   { kw: "クラシック",     genres: ["クラシック/ドレス"], hard: { requiredGenres: ["クラシック/ドレス"] } },
+  // ↓ 狭い軸（追加・70→85拡張）：soft genres は hard と同じタグでミラー。
+  { kw: "クワイエットラグジュアリー", genres: ["クワイエットラグジュアリー"], hard: { requiredGenres: ["クワイエットラグジュアリー"] } },
+  // ⚠️ 「ラグジュアリー」単体は kw にしない（「クワイエットラグジュアリー」「ラグジュアリーストリート」に部分一致して暴発するため）。kw は「富裕層」で hard を効かせる。
+  { kw: "富裕層",         genres: ["ラグジュアリー/富裕層"], hard: { requiredGenres: ["ラグジュアリー/富裕層"] } },
+  { kw: "ブロークコア",   genres: ["ブロークコア"], hard: { requiredGenres: ["ブロークコア"] } },
+  { kw: "バレエコア",     genres: ["バレエコア"], hard: { requiredGenres: ["バレエコア"] } },
+  { kw: "コケット",       genres: ["コケット"], hard: { requiredGenres: ["コケット"] } },
   // ↓ 広い軸：加点のみ（hard なし）。フェミニン/ガーリーは広い傘なので絞りすぎ回避で soft 据え置き。
   { kw: "ストリート",     genres: ["ストリート"] },
   { kw: "テック",         genres: ["テックウェア"] },
   { kw: "フェミニン",     genres: ["フェミニン/ガーリー"] },
   { kw: "ガーリー",       genres: ["フェミニン/ガーリー"] },
+  { kw: "ラグジュアリー", genres: ["ラグジュアリー/富裕層"] },
 ];
 
 function factsFromUtterance(text: string): { colors: string[]; silhouettes: string[]; genres: string[] } {
