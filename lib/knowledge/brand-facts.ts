@@ -105,6 +105,12 @@ const UTTERANCE_RULES: UtteranceRule[] = [
   { kw: "ヴィジュアル系", genres: ["ヴィジュアル系"], hard: { requiredGenres: ["ヴィジュアル系"] } },
   { kw: "ロリータ",       genres: ["ロリータ"], hard: { requiredGenres: ["ロリータ"] } },
   { kw: "ゴシックロリータ", genres: ["ゴシックロリータ"], hard: { requiredGenres: ["ゴシックロリータ"] } },
+  // ↓ 狭い軸（追加・55→70拡張）：soft genres は hard と同じタグでミラー。
+  { kw: "ギャル",         genres: ["ギャル"], hard: { requiredGenres: ["ギャル"] } },
+  { kw: "オールドマネー", genres: ["オールドマネー"], hard: { requiredGenres: ["オールドマネー"] } },
+  { kw: "プレッピー",     genres: ["プレッピー"], hard: { requiredGenres: ["プレッピー"] } },
+  // ⚠️ 「ドレス」単体は kw にしない（ワンピース/ドレス文脈で誤爆回避）。kw は「クラシック」のみ。
+  { kw: "クラシック",     genres: ["クラシック/ドレス"], hard: { requiredGenres: ["クラシック/ドレス"] } },
   // ↓ 広い軸：加点のみ（hard なし）。フェミニン/ガーリーは広い傘なので絞りすぎ回避で soft 据え置き。
   { kw: "ストリート",     genres: ["ストリート"] },
   { kw: "テック",         genres: ["テックウェア"] },
