@@ -80,6 +80,16 @@ const UTTERANCE_RULES: UtteranceRule[] = [
   { kw: "Y2K",            genres: ["Y2K/McBling"], hard: { requiredGenres: ["Y2K/McBling", "Y2K/00sストリート"] } },
   { kw: "ゴープコア",     genres: ["ゴープコア"], hard: { requiredGenres: ["ゴープコア", "アウトドア", "アーバンアウトドア"] } },
   { kw: "テックウェア",   genres: ["テックウェア"], hard: { requiredGenres: ["テックウェア"] } },
+  // ↓ 狭い軸（追加）：soft genres は hard と同じタグでミラー（hard だけだと facts.genres 空→0件になる）
+  { kw: "地雷",           genres: ["地雷系"], hard: { requiredGenres: ["地雷系"] } },
+  { kw: "量産",           genres: ["量産型"], hard: { requiredGenres: ["量産型"] } },
+  { kw: "サブカル",       genres: ["サブカル/病みかわ"], hard: { requiredGenres: ["サブカル/病みかわ"] } },
+  { kw: "病みかわ",       genres: ["サブカル/病みかわ"], hard: { requiredGenres: ["サブカル/病みかわ"] } },
+  { kw: "テックストリート", genres: ["テックストリート"], hard: { requiredGenres: ["テックストリート"] } },
+  { kw: "近未来",         genres: ["サイバーパンク/近未来"], hard: { requiredGenres: ["サイバーパンク/近未来"] } },
+  { kw: "サイバーパンク", genres: ["サイバーパンク/近未来"], hard: { requiredGenres: ["サイバーパンク/近未来"] } },
+  { kw: "アメカジ",       genres: ["アメカジ"], hard: { requiredGenres: ["アメカジ"] } },
+  { kw: "ミリタリー",     genres: ["ミリタリー"], hard: { requiredGenres: ["ミリタリー"] } },
   // ↓ 広い軸：加点のみ（hard なし）
   { kw: "ストリート",     genres: ["ストリート"] },
   { kw: "テック",         genres: ["テックウェア"] },
