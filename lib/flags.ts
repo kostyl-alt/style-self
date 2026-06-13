@@ -69,6 +69,13 @@ export const ASPIRATION_PHOTO = process.env.NEXT_PUBLIC_ASPIRATION_PHOTO === "tr
 //   保存は server 側完結のため NEXT_PUBLIC_ 不要。OFF時は保存しない＝見た目もDBも変化ゼロ（退行ゼロ）。
 export const STYLE_SIGNALS = process.env.STYLE_SIGNALS === "true";
 
+// TEMPORARY_CHAT_MODE: 一時チャット（ChatGPT同等のまっさらモード）。ONのとき UI に「一時チャット」トグルが出て、
+//   ON 中は (a)会話をDB保存しない+localStorageにも残さない (b)style_signals に書かない (c)brand-learn で
+//   style_signals/stylePreference を読まず発話のみで facts を作る、の3点で痕跡ゼロ・育成非反映にする。
+//   既定 OFF。OFF=トグルを出さない＝従来どおり（退行ゼロ）。temporary=false の経路は一切変えない（隔離）。
+//   client 参照のため NEXT_PUBLIC_*。matcher/render/辞書/brand-facts は無改修・DBスキーマ変更なし。
+export const TEMPORARY_CHAT_MODE = process.env.NEXT_PUBLIC_TEMPORARY_CHAT_MODE === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。
