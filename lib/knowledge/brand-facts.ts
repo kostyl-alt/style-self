@@ -118,12 +118,24 @@ const UTTERANCE_RULES: UtteranceRule[] = [
   { kw: "ブロークコア",   genres: ["ブロークコア"], hard: { requiredGenres: ["ブロークコア"] } },
   { kw: "バレエコア",     genres: ["バレエコア"], hard: { requiredGenres: ["バレエコア"] } },
   { kw: "コケット",       genres: ["コケット"], hard: { requiredGenres: ["コケット"] } },
+  // ↓ 狭い軸（追加・85→100拡張 最終周）：soft genres は hard と同じタグでミラー。
+  { kw: "グランジ",       genres: ["グランジ"], hard: { requiredGenres: ["グランジ"] } },
+  { kw: "ロック",         genres: ["ロック"], hard: { requiredGenres: ["ロック"] } },
+  { kw: "スケーター",     genres: ["スケータースタイル"], hard: { requiredGenres: ["スケータースタイル"] } },
+  { kw: "スケート",       genres: ["スケータースタイル"], hard: { requiredGenres: ["スケータースタイル"] } },
+  // ⚠️ 「ナチュラル」単体は kw にしない（会話頻出語で暴発するため）。kw は明確に狭い「森ガール」のみ hard。
+  { kw: "森ガール",       genres: ["ナチュラル/森ガール"], hard: { requiredGenres: ["ナチュラル/森ガール"] } },
+  { kw: "リゾート",       genres: ["リゾート/クルーズ"], hard: { requiredGenres: ["リゾート/クルーズ"] } },
+  { kw: "クルーズ",       genres: ["リゾート/クルーズ"], hard: { requiredGenres: ["リゾート/クルーズ"] } },
+  { kw: "和モード",       genres: ["和モード/和洋折衷"], hard: { requiredGenres: ["和モード/和洋折衷"] } },
+  { kw: "和洋折衷",       genres: ["和モード/和洋折衷"], hard: { requiredGenres: ["和モード/和洋折衷"] } },
   // ↓ 広い軸：加点のみ（hard なし）。フェミニン/ガーリーは広い傘なので絞りすぎ回避で soft 据え置き。
   { kw: "ストリート",     genres: ["ストリート"] },
   { kw: "テック",         genres: ["テックウェア"] },
   { kw: "フェミニン",     genres: ["フェミニン/ガーリー"] },
   { kw: "ガーリー",       genres: ["フェミニン/ガーリー"] },
   { kw: "ラグジュアリー", genres: ["ラグジュアリー/富裕層"] },
+  { kw: "ナチュラル",     genres: ["ナチュラル/森ガール"] },
 ];
 
 function factsFromUtterance(text: string): { colors: string[]; silhouettes: string[]; genres: string[] } {
