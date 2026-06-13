@@ -113,7 +113,7 @@ export const BRAND_TAXONOMY: BrandTaxonomyEntry[] = [
     name: "LIDNM",
     styleTags: ["黒ベース", "きれいめストリート", "モノトーン", "ワイド"],
     genreCandidates: ["ミニマルストリート", "ブラックストリート", "ミニマル"],
-    cultureCandidates: ["東京/原宿", "ソウル/弘大/江南"],
+    cultureCandidates: ["東京/原宿", "モデル私服(オフデューティ)", "編集者/スタイリスト"],
     itemStrengths: ["セットアップ", "アウター", "スラックス"],
     materialSignals: ["ウール", "ナイロン", "コットン"],
     colorSignals: ["オールブラック", "モノトーン", "低彩度"],

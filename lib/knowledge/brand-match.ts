@@ -31,6 +31,13 @@ export interface BrandMatch {
   searchKeywords: string[];
 }
 
+// 明示条件フィルタ：ユーザーが狭い軸（韓国/Y2K/ゴープコア等）を明示指定したときの所属条件（ハード）。
+// ⚠️ color/silhouette/material は加点のまま（ハード化しない）。genre/culture の狭い軸だけここに来る。
+export interface BrandHardConstraints {
+  requiredGenres?:   string[]; // STYLE_AXES key="genre"
+  requiredCultures?: string[]; // STYLE_AXES key="culture"
+}
+
 // 主軸は重み高め・補助は低め。genre は最も識別力が高いので僅かに加点、era は揺れやすいので僅かに減点。
 const AXIS_CONFIG = [
   { key: "color", label: "色", weight: 1.0, factsKey: "colors", brandKey: "colorSignals" },
@@ -98,9 +105,27 @@ function scoreBrand(facts: StyleFacts, brand: BrandTaxonomyEntry): ScoredBrand {
   return { brand, score, matchedReasons, hasMainOverlap };
 }
 
+// 明示条件（ハード制約）を満たすか。requiredGenres / requiredCultures のどちらかが一致すれば通過（OR）。
+// ⚠️ 制約が空（どちらも未指定）なら常に通過。指定された側のみ評価する。
+function passesConstraints(brand: BrandTaxonomyEntry, c: BrandHardConstraints): boolean {
+  const reqG = c.requiredGenres ?? [];
+  const reqC = c.requiredCultures ?? [];
+  if (reqG.length === 0 && reqC.length === 0) return true;
+  const genreSet   = new Set(brand.genreCandidates.map(norm));
+  const cultureSet = new Set(brand.cultureCandidates.map(norm));
+  const genreHit   = reqG.some((t) => genreSet.has(norm(t)));
+  const cultureHit = reqC.some((t) => cultureSet.has(norm(t)));
+  return genreHit || cultureHit;
+}
+
 // 事実属性 → 近いブランド候補（上位 5〜8・スコア順・理由つき）。決定的・純関数。
-export function matchBrands(facts: StyleFacts): BrandMatch[] {
-  return BRAND_TAXONOMY.map((brand) => scoreBrand(facts, brand))
+// constraints があれば ★ スコアリング前に候補集合を絞る（top8 slice 後の後フィルタではない）。
+// ⚠️ constraints 省略時は従来と完全に同一（後方互換）。スコア式・閾値・sort・slice は不変。
+export function matchBrands(facts: StyleFacts, constraints?: BrandHardConstraints): BrandMatch[] {
+  const pool = constraints
+    ? BRAND_TAXONOMY.filter((b) => passesConstraints(b, constraints))
+    : BRAND_TAXONOMY;
+  return pool.map((brand) => scoreBrand(facts, brand))
     .filter((s) => s.hasMainOverlap && s.score >= MIN_SCORE) // 主軸一致ゼロは出さない（補助だけの偶然一致を弾く）
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RESULTS)
