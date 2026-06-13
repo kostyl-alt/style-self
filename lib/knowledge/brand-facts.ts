@@ -90,9 +90,26 @@ const UTTERANCE_RULES: UtteranceRule[] = [
   { kw: "サイバーパンク", genres: ["サイバーパンク/近未来"], hard: { requiredGenres: ["サイバーパンク/近未来"] } },
   { kw: "アメカジ",       genres: ["アメカジ"], hard: { requiredGenres: ["アメカジ"] } },
   { kw: "ミリタリー",     genres: ["ミリタリー"], hard: { requiredGenres: ["ミリタリー"] } },
-  // ↓ 広い軸：加点のみ（hard なし）
+  // ↓ 狭い軸（追加・40→55拡張）：soft genres は hard と同じタグでミラー。
+  { kw: "アメリカ古着",   genres: ["アメリカ古着"], hard: { requiredGenres: ["アメリカ古着"] } },
+  { kw: "ワーク",         genres: ["ワークスタイル"], hard: { requiredGenres: ["ワークスタイル"] } },
+  { kw: "アイビー",       genres: ["アイビー/トラッド"], hard: { requiredGenres: ["アイビー/トラッド"] } },
+  { kw: "トラッド",       genres: ["アイビー/トラッド"], hard: { requiredGenres: ["アイビー/トラッド"] } },
+  // ⚠️ 「韓国ガーリー」は hard 追加しない（既存「韓国」hard が部分一致で先に拾い、韓国ストリートと混線するため）。
+  //    フレンチ/韓国ガーリーを効かせたいときは「フレンチガーリー」kw を使う。「ガーリー」単体は下の soft で拾う。
+  { kw: "フレンチガーリー", genres: ["フレンチ/韓国ガーリー"], hard: { requiredGenres: ["フレンチ/韓国ガーリー"] } },
+  { kw: "ロマンティック", genres: ["ロマンティック"], hard: { requiredGenres: ["ロマンティック"] } },
+  { kw: "ゴス",           genres: ["ゴシック/ゴス"], hard: { requiredGenres: ["ゴシック/ゴス"] } },
+  { kw: "ゴシック",       genres: ["ゴシック/ゴス"], hard: { requiredGenres: ["ゴシック/ゴス"] } },
+  { kw: "ダークアカデミア", genres: ["ダークアカデミア"], hard: { requiredGenres: ["ダークアカデミア"] } },
+  { kw: "ヴィジュアル系", genres: ["ヴィジュアル系"], hard: { requiredGenres: ["ヴィジュアル系"] } },
+  { kw: "ロリータ",       genres: ["ロリータ"], hard: { requiredGenres: ["ロリータ"] } },
+  { kw: "ゴシックロリータ", genres: ["ゴシックロリータ"], hard: { requiredGenres: ["ゴシックロリータ"] } },
+  // ↓ 広い軸：加点のみ（hard なし）。フェミニン/ガーリーは広い傘なので絞りすぎ回避で soft 据え置き。
   { kw: "ストリート",     genres: ["ストリート"] },
   { kw: "テック",         genres: ["テックウェア"] },
+  { kw: "フェミニン",     genres: ["フェミニン/ガーリー"] },
+  { kw: "ガーリー",       genres: ["フェミニン/ガーリー"] },
 ];
 
 function factsFromUtterance(text: string): { colors: string[]; silhouettes: string[]; genres: string[] } {
