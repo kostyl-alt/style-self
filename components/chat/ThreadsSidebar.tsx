@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useThreads } from "@/lib/hooks/use-threads";
 import ThreadItem from "@/components/chat/ThreadItem";
 import NewThreadButton from "@/components/chat/NewThreadButton";
@@ -15,12 +15,19 @@ import DeleteThreadModal from "@/components/chat/DeleteThreadModal";
 interface Props {
   currentThreadId: string | null;
   onSelectThread:  (id: string | null) => void;
+  // ★ 一時チャット: 親(/ai page)が thread 退避後に increment する。変化で一覧を再取得し即時反映する。
+  //   初期値 0(falsy)では再取得しない(useThreads が mount 時に既に取得済のため二重 fetch を避ける)。
+  refreshKey?: number;
 }
 
-export default function ThreadsSidebar({ currentThreadId, onSelectThread }: Props) {
+export default function ThreadsSidebar({ currentThreadId, onSelectThread, refreshKey }: Props) {
   const { threads, loading, error, refresh, create, rename, remove } = useThreads();
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (refreshKey) void refresh();
+  }, [refreshKey, refresh]);
 
   async function handleCreate() {
     const t = await create();

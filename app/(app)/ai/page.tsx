@@ -135,6 +135,8 @@ function ChatPageInner() {
   const [isClosetOpen, setIsClosetOpen] = useState(false);
   // ★ Sprint C-2 段階3-D/E: MoodboardPickerModal 開閉
   const [isMbOpen, setIsMbOpen] = useState(false);
+  // ★ 一時チャット: 通常会話を thread 退避した後に increment → ThreadsSidebar が一覧を即時再取得(案2)。
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   // ★ 統合 Sprint: 世界観フィッティング軸の体型プロフィール(MB → coordinate に注入)。
   // 未登録ユーザーは null のまま → buildMoodboardPrompt は ★ 既存出力と完全互換。
@@ -222,6 +224,8 @@ function ChatPageInner() {
   //   "[]" で上書きする race を防止・真因切り分け済 2026-05-21)
   useEffect(() => {
     if (!hydrated) return;
+    // ★ 一時チャット: temporaryMode 中は localStorage にも一切残さない(痕跡ゼロ)。
+    if (temporaryMode) return;
     // ★ H-4a: thread 選択中は DB が永続先 → localStorage には書かない(DB thread を上書きしない)
     if (currentThreadId) return;
     // ★ 空配列で上書きしない(多層防御・将来クリア機能の地雷予防)
@@ -231,7 +235,7 @@ function ChatPageInner() {
       //   reload 後は dataUrl 空 → テキスト fallback 表示。quota 超過で全履歴を失う事故を防ぐ。
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.map(lightenMessageForStorage)));
     } catch { /* quota 超過等は無視(永続化失敗してもセッション内は動く) */ }
-  }, [messages, hydrated, currentThreadId]);
+  }, [messages, hydrated, currentThreadId, temporaryMode]);
 
   // メッセージ追加で末端へ自動スクロール
   useEffect(() => {
@@ -242,6 +246,8 @@ function ChatPageInner() {
   //   ★ 移行後は遷移しない(ユーザーが意図的に開いたわけではない)→ 左ペインに「過去の会話」が出現するのみ。
   //   既存 localStorage 本体は残すため、移行直後も currentThreadId=null の中央表示は従来どおり。
   useEffect(() => {
+    // ★ 一時チャット: temporaryMode 中は旧 localStorage の DB 移行も走らせない(多層防御・痕跡ゼロ)。
+    if (temporaryMode) return;
     void migrateLocalstorageIfNeeded({
       createThread: async (title) => {
         try {
@@ -331,7 +337,8 @@ function ChatPageInner() {
       };
       replaceMessage(setMessages, loadingId, resultContent);
       // ★ H-4a: thread 選択中は products メッセージも DB 永続化(metadata.message で忠実復元)
-      if (currentThreadId) {
+      // ★ 一時チャット: temporaryMode 中は DB に残さない。
+      if (currentThreadId && !temporaryMode) {
         void threadMessages.persistMessage(
           currentThreadId,
           { id: loadingId, role: "assistant", content: resultContent, createdAt: Date.now() } as unknown as PersistableMessage,
@@ -383,7 +390,8 @@ function ChatPageInner() {
     }
 
     // ★ H-4a: thread 選択中は user メッセージを DB 永続化(currentThreadId=null 時は既存挙動のまま)
-    if (currentThreadId) {
+    // ★ 一時チャット: temporaryMode 中は DB に残さない。
+    if (currentThreadId && !temporaryMode) {
       void threadMessages.persistMessage(currentThreadId, userMsg as unknown as PersistableMessage, trimmed);
     }
 
@@ -522,7 +530,8 @@ function ChatPageInner() {
               };
           replaceMessage(setMessages, loadingId, replyContent);
           // ★ H-4a: thread 選択中は assistant 応答も DB 永続化(metadata に原 Message 保持)
-          if (currentThreadId) {
+          // ★ 一時チャット: temporaryMode 中は DB に残さない。
+          if (currentThreadId && !temporaryMode) {
             const displayText = replyData.coordinate
               ? (replyData.coordinate.summary || replyData.coordinate.direction || "(コーデ提案)")
               : replyData.reply!;
@@ -570,11 +579,65 @@ function ChatPageInner() {
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
   }
 
+  // ★ 一時チャット(ChatGPT準拠): confirm なし。
+  //   ON(通常→一時): 元の通常会話は消さず DB へ退避(thread化)してから まっさらな一時へ。
+  //     ・currentThreadId あり = 既に DB thread → 退避不要。
+  //     ・currentThreadId null かつ messages 非空 = 新規通常会話 → その場で thread化(submitFeedback 踏襲)。
+  //     ・⚠️ thread化が失敗したら切替を中止(会話を消さない・データ消失防止が最優先)。失敗は alert で通知。
+  //   OFF(一時→通常): 一時会話は保存せず痕跡ゼロで破棄 → 通常の新規へ。
+  async function handleToggleTemporary() {
+    if (!temporaryMode) {
+      // ON: 通常 → 一時
+      if (!currentThreadId && messages.length > 0) {
+        // 新規通常会話を DB へ退避(消失防止)。成功を確認してからクリアする。
+        try {
+          const firstUser = messages.find((m) => m.role === "user" && m.content.kind === "text");
+          const title = firstUser && firstUser.content.kind === "text"
+            ? firstUser.content.text.slice(0, 40)
+            : "コーデ相談";
+          const res = await fetch("/api/threads", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ title }),
+          });
+          if (!res.ok) throw new Error("thread create failed");
+          const data = await res.json() as { thread?: { id: string } };
+          const tid = data.thread?.id ?? null;
+          if (!tid) throw new Error("thread id missing");
+          for (const m of messages) {
+            const dt = feedbackDisplayText(m.content);
+            if (dt === null) continue;
+            await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+          }
+          setSidebarRefreshKey((k) => k + 1);  // ★ サイドバー即時反映(案2)
+        } catch {
+          // ★ 切替中止: 会話を消さず通常モードに留める(データ消失防止が最優先)。
+          alert("会話の保存に失敗したため、一時チャットに切り替えできませんでした。通信状況を確認してもう一度お試しください。");
+          return;
+        }
+      }
+      // 退避済 or 既に DB thread or 空 → まっさらな一時へ
+      setMessages([]);
+      setAttachedMb(null);
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      if (currentThreadId) router.push("/ai");  // ?thread を落とす
+      setTemporaryMode(true);
+    } else {
+      // OFF: 一時 → 通常(一時会話は保存しない＝痕跡ゼロで破棄)
+      setMessages([]);
+      setAttachedMb(null);
+      if (currentThreadId) router.push("/ai");
+      setTemporaryMode(false);
+    }
+  }
+
   // ★ Phase 3: 評価フィードバック（好き/違う/保存）。会話は流さず裏で記録し、judgment_rules 抽出を起動。
   //   案B: ephemeral（thread 未作成）時はその場で thread を作り、現在の会話を永続化してから feedback 保存。
   //   message_id は使わず content に提案の核を同梱（DB id マッピング回避）。best-effort・失敗は握りつぶし。
   async function submitFeedback(kind: "like" | "dislike" | "save", reason?: string) {
     if (!FEEDBACK_LOOP) return;
+    // ★ 一時チャット: temporaryMode 中は thread を作らない(feedback 保存で会話が永続化されるのを防ぐ・痕跡ゼロ)。UI 側でも非表示にする。
+    if (temporaryMode) return;
     try {
       // ③-c-4: 対象返信(KO 由来の直近 assistant)を特定し request_id / message_id を確保する。
       //   ・koRequestId は ③-c-5b の KO 書き戻し用。配線B。feedback route へ渡し、サーバ側で
@@ -685,7 +748,8 @@ function ChatPageInner() {
 
     // thread 永続化: path があれば image kind(metadata.message で忠実復元・Step3 で署名URL表示)、
     //   無ければ従来の text marker にフォールバック。いずれも DB content 列は marker(base64 は載せない)。
-    if (currentThreadId) {
+    // ★ 一時チャット: temporaryMode 中は写真相談メッセージも DB に残さない。
+    if (currentThreadId && !temporaryMode) {
       const marker = note ? `📷 好きな写真（${note}）` : "📷 好きな写真";
       const persistContent: MessageContent = storagePath
         ? { kind: "image", storagePath, caption: note }
@@ -714,7 +778,8 @@ function ChatPageInner() {
       const { summary, sections } = parseAspirationReply(data.reply);
       const replyContent: MessageContent = { kind: "aspiration", summary, sections: sections.length ? sections : undefined };
       replaceMessage(setMessages, loadingId, replyContent);
-      if (currentThreadId) {
+      // ★ 一時チャット: temporaryMode 中は写真相談の返答も DB に残さない。
+      if (currentThreadId && !temporaryMode) {
         void threadMessages.persistMessage(
           currentThreadId,
           { id: loadingId, role: "assistant", content: replyContent, createdAt: Date.now() } as unknown as PersistableMessage,
@@ -772,6 +837,7 @@ function ChatPageInner() {
       <ThreadsSidebar
         currentThreadId={currentThreadId}
         onSelectThread={handleSelectThread}
+        refreshKey={sidebarRefreshKey}
       />
       <div className="flex-1 min-w-0 h-full">
     {/* ★ H-3: 以下は既存チャット本体を内包。C-L で min-h-screen → h-full（viewport 高に固定）に変更。*/}
@@ -781,7 +847,9 @@ function ChatPageInner() {
         <div>
           <p className="text-xs tracking-widest text-gray-400 uppercase">STYLE-SELF AI</p>
           <h1 className="text-lg font-light text-gray-900 mt-0.5">
-            {GENERAL_BRAIN_MODE && generalModeOn ? "なんでも相談できます" : "何を相談しますか?"}
+            {temporaryMode
+              ? "一時チャット"
+              : GENERAL_BRAIN_MODE && generalModeOn ? "なんでも相談できます" : "何を相談しますか?"}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -801,11 +869,11 @@ function ChatPageInner() {
             </button>
           )}
           {/* 一時チャット（TEMPORARY_CHAT_MODE フラグON時のみ表示・default OFF）。
-              ★ 2段目: トグルで temporaryMode state を切り替えるだけ。保存停止/切替=新規/読込skip/送信伝達は次段以降で接続。 */}
+              ★ 3段目まで: トグル切替=confirm→クリア→新規(handleToggleTemporary)＋保存停止(DB/localStorage)を接続済。育成読込skip/送信body伝達は次段で接続。 */}
           {TEMPORARY_CHAT_MODE && (
             <button
               type="button"
-              onClick={() => setTemporaryMode((v) => !v)}
+              onClick={handleToggleTemporary}
               aria-pressed={temporaryMode}
               className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                 temporaryMode
@@ -834,6 +902,17 @@ function ChatPageInner() {
               世界観は写真の相談で育てる方針のため、勝手な世界観断定をトップに出さない。
               空状態は何も出さない(入力欄から始める)。WorldviewCard / SuggestionChips のコンポーネント本体・
               診断機能・/api/worldview-card は無改修(ここで描画しないだけ)。*/}
+        {/* ★ 一時チャット: 空状態のとき ChatGPT 風の説明バナー(temporaryMode 時のみ)。 */}
+        {temporaryMode && messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-2">
+            <p className="text-3xl">🕊️</p>
+            <p className="text-sm font-medium text-gray-700">一時チャット</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              このチャットは履歴に残りません。<br />
+              育成（好みの蓄積）にも使われません。
+            </p>
+          </div>
+        )}
         {messages.map((m) => (
           <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={submitFeedback} />
         ))}
@@ -890,7 +969,7 @@ function ChatPageInner() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={pendingPhoto ? "この写真について補足できます（任意）" : "例: 黒系の服が好き / 📎で好きな写真を送ってもOK"}
+            placeholder={pendingPhoto ? "この写真について補足できます（任意）" : temporaryMode ? "一時チャット（保存されません）" : "例: 黒系の服が好き / 📎で好きな写真を送ってもOK"}
             rows={2}
             autoFocus
             disabled={loading}
