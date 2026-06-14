@@ -99,6 +99,7 @@ interface StylistChatRequest {
   intent?:      unknown;
   history?:     unknown;
   moodboardId?: unknown;  // ★ Phase 2: MB context object 経路（指定時 moodboard_analysis を読んで短文応答）
+  temporary?:   unknown;  // ★ 一時チャット: true のとき brand-learn で育成(style_signals/preference)を読まず発話のみでマッチ
 }
 
 const MB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -148,6 +149,8 @@ export async function POST(request: NextRequest) {
       });
     }
     const intent = typeof body.intent === "string" ? body.intent : "";
+    // ★ 一時チャット: 育成読込skip フラグ(brand-learn のみで使用・client 信頼は最小化)。
+    const temporary = typeof body.temporary === "boolean" ? body.temporary : false;
 
     // 方針C本体(案イ): 本対話モード = 分野横断の外部脳。
     //   fashion intent/persona/context/品質ゲート/エディタAI は一切触らず、ここで隔離して早期 return。
@@ -248,7 +251,7 @@ export async function POST(request: NextRequest) {
       intent === "closet"          ? fetchClosetContext(supabase, userId)
       : intent === "coordinate"     ? fetchCoordinateContext(supabase, userId)
       : intent === "style-consult"  ? fetchStyleConsultContext(supabase, userId)
-      : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId, text)
+      : intent === "brand-learn"    ? fetchBrandLearnContext(supabase, userId, text, temporary)
       :                                fetchDiagnoseContext(supabase, userId),
       useKnowledgeSearch
         ? fetchKnowledgeOSViaSearchKnowledge(text)

@@ -490,6 +490,8 @@ function ChatPageInner() {
               history: recentHistory,
               // ★ Phase 2: MB 添付中は moodboardId を送り、サーバが moodboard_analysis を読んで短文応答。
               moodboardId: isMbContextSend ? attachedMb!.id : undefined,
+              // ★ 一時チャット: temporary 時は brand-learn で育成(style_signals/preference)を読まず発話のみでマッチ。
+              temporary: temporaryMode,
             }),
           });
           const replyData = await replyRes.json() as StylistChatResponse;
@@ -764,7 +766,8 @@ function ChatPageInner() {
       const res = await fetch("/api/ai/aspiration-photo", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ base64, mediaType, note }),
+        // ★ 一時チャット: temporary 伝達(書込停止は5段目で接続・ここでは伝達のみ)。
+        body:    JSON.stringify({ base64, mediaType, note, temporary: temporaryMode }),
       });
       const data = await res.json() as { ok?: boolean; reply?: string; reason?: string; error?: string };
       if (!res.ok || !data.ok || !data.reply) {

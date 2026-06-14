@@ -169,9 +169,11 @@ export async function fetchBrandLearnContext(
   supabase: SupabaseClient<Database>,
   userId: string,
   text?: string, // Step4-a: 明示条件の発言キーワードマップ用(optional・既存呼び出し無破壊)
+  skipSignalsPreference?: boolean, // Step4-b 一時チャット: true で育成(style_signals)+好み(preference)を読まず発話のみで facts を作る
 ): Promise<StylistChatContext> {
   // 診断撤廃(あ): worldview_profiles(診断ポエム)の注入を停止。育成方針＝勝手に世界観を断定しない。
   //   好み(事実) + curated brands のみ注入。worldview フィールドは null/[] で返す。
+  // ★ 一時チャット(skipSignalsPreference): style_signals/style_preference を読まない(痕跡ゼロ・育成非反映)。
   const [brandsRow, prefRow, signalRows] = await Promise.all([
     supabase
       .from("brands")
@@ -187,20 +189,23 @@ export async function fetchBrandLearnContext(
         maniac_level:   number;
         price_range:    string;
       }> | null }>,
-    supabase
-      .from("users")
-      .select("style_preference")
-      .eq("id", userId)
-      .maybeSingle() as unknown as Promise<{ data: { style_preference: unknown } | null }>,
-    // Step4-a: 育成 style_signals(主 facts ソース)。best-effort・失敗/空でも [] で壊さない。
-    fetchStyleSignals(supabase, userId),
+    skipSignalsPreference
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("users")
+          .select("style_preference")
+          .eq("id", userId)
+          .maybeSingle() as unknown as Promise<{ data: { style_preference: unknown } | null }>,
+    // Step4-a: 育成 style_signals(主 facts ソース)。best-effort・失敗/空でも [] で壊さない。一時チャットは読まない。
+    skipSignalsPreference ? Promise.resolve([] as SignalAttributes[]) : fetchStyleSignals(supabase, userId),
   ]);
 
-  const stylePreference = extractStylePreference(prefRow?.data?.style_preference);
+  const stylePreference = skipSignalsPreference ? undefined : extractStylePreference(prefRow?.data?.style_preference);
 
   // Step4-a/B: facts 組み立て → 決定的 matchBrands。constraintsActive は明示条件フィルタが効いたか(会話層 graceful 3分岐用)。
+  //   一時チャット時は signals/preference を渡さず text(発話)のみで facts を作る。
   const { matches, constraintsActive } = computeBrandMatches({
-    signals:    signalRows,
+    signals:    skipSignalsPreference ? undefined : signalRows,
     preference: stylePreference,
     text,
   });
