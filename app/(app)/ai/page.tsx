@@ -917,7 +917,7 @@ function ChatPageInner() {
           </div>
         )}
         {messages.map((m) => (
-          <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={submitFeedback} />
+          <Bubble key={m.id} msg={m} onNavigate={executeNavigate} onSearchProducts={handleSearchProducts} onSendPrompt={(p) => handleSubmit(undefined, p)} onFeedback={temporaryMode ? undefined : submitFeedback} />
         ))}
         <div ref={endRef} />
       </div>
@@ -1239,7 +1239,8 @@ function Bubble({
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
   onSendPrompt: (prompt: string) => void;
-  onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
+  // ★ 一時チャット: temporaryMode 時は page から onFeedback を渡さない(undefined)→ feedback ボタンを描画しない。
+  onFeedback?: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }) {
   if (msg.role === "user") {
     // 憧れ写真分析: 画像バブル（送った写真を表示して分析結果と見比べられるように）。
@@ -1280,7 +1281,8 @@ function AssistantContent({
   onNavigate: (intent: string) => void;
   onSearchProducts: (moodboardId: string) => void | Promise<void>;
   onSendPrompt: (prompt: string) => void;
-  onFeedback: (kind: "like" | "dislike" | "save", reason?: string) => void;
+  // ★ 一時チャット: temporaryMode 時は undefined → CoordinateReplyCard 側 `FEEDBACK_LOOP && onFeedback` ガードで feedback ボタン非描画。
+  onFeedback?: (kind: "like" | "dislike" | "save", reason?: string) => void;
 }) {
   if (content.kind === "loading") {
     // ★ C-2c-1 UX-B(MVP・固定文言): MB 経由はパイプライン段階を併記
