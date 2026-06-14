@@ -62,6 +62,7 @@ interface AspirationPhotoRequest {
   base64?:    unknown;
   mediaType?: unknown;
   note?:      unknown;
+  temporary?: unknown;  // ★ 一時チャット: true で style_signals 書込を停止(育成非反映)
 }
 
 interface AspirationPhotoResponse {
@@ -91,6 +92,8 @@ export async function POST(request: NextRequest) {
         ? (body.mediaType as ImageMediaType)
         : "image/jpeg";
     const note = typeof body.note === "string" ? body.note : undefined;
+    // ★ 一時チャット: true のとき style_signals に書かない(育成非反映・痕跡ゼロ)。client 信頼最小化で boolean 以外は false。
+    const temporary = typeof body.temporary === "boolean" ? body.temporary : false;
 
     // 3) 文脈（変換先の補助）をサーバ自前 SELECT。列絞りで worldview_tags は構造的に取得しない。
     //    style-consult 用 fetcher を流用（世界観 + 体型 + 好み/避けたい印象 + 避けたい服）。
@@ -139,7 +142,8 @@ export async function POST(request: NextRequest) {
 
     // Phase A: 事実属性を style_signals に保存（フラグON時・ベストエフォート）。
     //   ⚠️ 保存の成否に関わらず分析の返答は必ず返す（保存は分析を邪魔しない）。OFF/失敗時は何もしない＝退行ゼロ。
-    if (STYLE_SIGNALS) {
+    //   ★ 一時チャット: temporary 時は書き込まない(育成非反映・痕跡ゼロ)。分析の返答は通常通り返す。
+    if (STYLE_SIGNALS && !temporary) {
       try {
         const attributes = parseStyleSignals(raw);
         if (attributes) {
