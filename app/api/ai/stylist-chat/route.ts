@@ -52,6 +52,8 @@ import { getJudgmentRules } from "@/lib/utils/judgment-rules-service";
 // ★ H-4b1-b-1: coordinate(MB 経由)の JSON 化接続(privacy 再帰 strip + parse フォールバック)
 import { stripCanonicalSlugsRecursive } from "@/lib/utils/strip-canonical-slugs";
 import { parseCoordinateReply } from "@/lib/utils/parse-coordinate-reply";
+// 🔴 生JSON素通しバグ B(安全網): fallback reply に生 JSON が流れたとき画面に出さない受け皿。
+import { stripRawJsonReply } from "@/lib/utils/strip-raw-json-reply";
 import type { CoordinateReply } from "@/types/coordinate-reply";
 // ③-c: context fetcher 群は lib/stylist-chat/context.ts に抽出（挙動不変・compare-chat と共有）。
 import {
@@ -224,10 +226,12 @@ export async function POST(request: NextRequest) {
           });
         }
         // parse 失敗 → strip して reply フォールバック（退行ゼロ）
+        // 🔴 B(安全網): coordinate_v2 でない JSON(捏造 brand_guide_v2 等)が raw のまま流れるのを防ぐ。
         const { cleaned } = stripCanonicalSlugs(mbRaw);
+        const safe = stripRawJsonReply(cleaned);
         return NextResponse.json<StylistChatResponse>({
           ok:      true,
-          reply:   cleaned.length > 0 ? cleaned : "うまく言葉にできませんでした。もう一度教えてください。",
+          reply:   safe.length > 0 ? safe : "うまく言葉にできませんでした。もう一度教えてください。",
           actions: buildActions(intent),
         });
       }
@@ -383,7 +387,9 @@ export async function POST(request: NextRequest) {
     const actions = buildActions(intent);
 
     // 7) 念のため reply の空・極端短文化を guard
-    const reply = cleaned.length > 0 ? cleaned : "うまく言葉にできませんでした。もう一度教えてください。";
+    // 🔴 B(安全網): isMbCoordinate parse 失敗等で生 JSON が cleaned に残ったら画面に出さない(通常プロースは no-op)。
+    const safe = stripRawJsonReply(cleaned);
+    const reply = safe.length > 0 ? safe : "うまく言葉にできませんでした。もう一度教えてください。";
 
     return NextResponse.json<StylistChatResponse>({
       ok:          true,

@@ -145,7 +145,8 @@ style-self/
 │   │   ├── color-aliases.ts          # 色名表記揺れマップ（Sprint 40）
 │   │   ├── product-match.ts          # 商品スコアリング・行変換（Sprint 40 / 41 / 41.3でシルエット・季節・テイスト・NG誤爆対策追加）
 │   │   ├── admin-check.ts            # ADMIN_EMAILS allowlist チェック（Sprint 41）
-│   │   └── worldview-matcher.ts      # タグ集計→8パターン判定（Sprint 42、単一2点・複数1点）
+│   │   ├── worldview-matcher.ts      # タグ集計→8パターン判定（Sprint 42、単一2点・複数1点）
+│   │   └── strip-raw-json-reply.ts   # 生JSON素通しバグB(安全網)：LLMが自然文契約を破りJSON/```jsonを吐いたfallback replyを中和する純関数（looksJson時のみ働き通常プロースはno-op）
 │   ├── dictionaries/
 │   │   ├── material.ts               # 素材辞書（14素材：本能・文化・感覚の3層）
 │   │   ├── color.ts                  # 色辞書（15色：温度感・重量感・距離感）
