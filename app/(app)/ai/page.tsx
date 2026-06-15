@@ -399,10 +399,8 @@ function ChatPageInner() {
       // ★ ★ ★ 案 F(統合 Sprint hotfix v2): MB prompt 経由は段階 A(Haiku/overlay-intent)を skip。
       //   buildMoodboardPrompt が出力する固定 signature を冒頭一致で検出し、
       //   intent="coordinate" を client side で直接確定する(★ Haiku を呼ばない =
-      //   JSON parse 失敗が ★ 構造的に起きない)。
+      //   JSON parse 失敗が ★ 構造的に起きない)。長文 MB プロンプト経路は ★ この skip を温存。
       //   他経路(MVP-1c 直接コーデ依頼 / 5 intent / 通常会話)は ★ 既存通り段階 A 経由(完全不変)。
-      //   ★ Phase 2: MB 添付（context object 経路）も同様に段階 A を skip して coordinate 確定。
-      const isMbCoordinate = isMbCoordinatePreview || isMbContextSend;
 
       // 方針C本体(案イ): 本対話モード ON のとき overlay/intent を skip し intent='general' を直接確定。
       //   両ゲート(intent分類/ファッションペルソナ)を迂回・fashion 経路は一切通らない。
@@ -411,7 +409,8 @@ function ChatPageInner() {
       let data: IntentResponse & { error?: string };
       if (generalMode) {
         data = { ok: true, intent: "general", mode: "api", params: {}, confidence: 1, suggestions: [] };
-      } else if (isMbCoordinate) {
+      } else if (isMbCoordinatePreview) {
+        // ★ 長文 MB プロンプト(MB_PROMPT_SIGNATURE)は従来通り coordinate 強制(段階A skip・JSON parse 回避を温存)。
         data = {
           ok:          true,
           intent:      "coordinate",
@@ -420,6 +419,25 @@ function ChatPageInner() {
           confidence:  1,
           suggestions: [],
         };
+      } else if (isMbContextSend) {
+        // ★ A1(生JSONバグ根本対処): MB チップ添付時は overlay/intent で分類だけ確認(probe)。
+        //   brand-learn 判定の発話(「オススメのブランド」等)だけ brand-learn 経路へ流し、
+        //   それ以外(コーデ/着方相談/曖昧/probe失敗)は ★ 従来通り coordinate 強制(コーデflow無改変)。
+        //   → ブランド質問が coordinate JSON 強制経路を通らなくなり、brand_guide_v2 捏造の発生源を断つ。
+        let probe: (IntentResponse & { error?: string }) | null = null;
+        try {
+          const res = await fetch("/api/overlay/intent", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ text: trimmed }),
+          });
+          if (res.ok) probe = await res.json() as IntentResponse & { error?: string };
+        } catch { /* probe 失敗時は下の coordinate フォールバック(従来挙動) */ }
+        if (probe && probe.ok && probe.intent === "brand-learn") {
+          data = probe;
+        } else {
+          data = { ok: true, intent: "coordinate", mode: "api", params: {}, confidence: 1, suggestions: [] };
+        }
       } else {
         // ★ D1-1 /api/overlay/intent の呼び方は完全に同じ(body/headers 不変)
         const res = await fetch("/api/overlay/intent", {
@@ -436,6 +454,11 @@ function ChatPageInner() {
           return;
         }
       }
+
+      // ★ A1: 実効的な MB-coordinate 判定。長文プロンプトは常に coordinate、
+      //   チップ添付は overlay/intent が coordinate に倒れたとき(=brand-learn 以外)のみ true。
+      //   brand-learn 判定時は false → coordinate 専用の後段処理(moodboardId 付与等)を通さない。
+      const isMbCoordinate = isMbCoordinatePreview || (isMbContextSend && data.intent === "coordinate");
 
       // ★ P1-C-1.5a 会話連続性(L1 並列案 / L3 sessionIntent / L4 切替検出なし):
       //   - 直前の assistant reply に sessionIntent があれば会話継続中
