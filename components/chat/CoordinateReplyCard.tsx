@@ -30,10 +30,34 @@ const DISLIKE_REASONS = [
 
 const ACTIONS_VISIBLE = 6;  // ★ 4-c: 可視6個＋「他の相談 ▾」で残り展開
 
+// ★ 見出し(S1): Haiku の direction はポエム化しがちで指示でも抑えきれないため、表示には使わず
+//   構造データ(条件タグ)から決定的に組む。色・シルエットを主、検索ワードを補に、短語を「・」で最大5個。
+//   何も組めない場合のみ direction にフォールバック(従来動作・壊れない)。
+function buildHeadingTags(co: CoordinateReply): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: unknown) => {
+    if (typeof raw !== "string") return;
+    const t = raw.trim();
+    if (!t || t.length > 8) return;        // 長文の断片・空を弾く(短語のみ)
+    if (seen.has(t)) return;               // 重複除去
+    seen.add(t);
+    out.push(t);
+  };
+  const fit = co.fitConditions;
+  if (fit) {
+    (fit.colors ?? []).forEach(push);       // 主: 色
+    (fit.silhouettes ?? []).forEach(push);  // 主: シルエット
+  }
+  (co.searchKeywords ?? []).forEach(push);  // 補: 検索ワード(短語のみ)
+  return out.slice(0, 5);                   // 最大5タグ
+}
+
 export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedback }: Props) {
   const [open, setOpen] = useState(false);
   const [showAllActions, setShowAllActions] = useState(false);
   const co = coordinate;
+  const headingTags = buildHeadingTags(co);
 
   const fit = co.fitConditions;
   const fitRows: { label: string; values: string[] }[] = fit
@@ -51,8 +75,12 @@ export default function CoordinateReplyCard({ coordinate, onSendPrompt, onFeedba
 
   return (
     <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-4 space-y-4 leading-relaxed">
-      {/* 方向性 */}
-      {co.direction && <p className="font-bold">{co.direction}</p>}
+      {/* ★ 見出し(S1): 条件タグから決定的に生成。組めなければ direction にフォールバック(従来動作)。 */}
+      {headingTags.length > 0
+        ? <p className="font-bold">{headingTags.join("・")}</p>
+        : co.direction
+          ? <p className="font-bold">{co.direction}</p>
+          : null}
 
       {/* ★ Phase 4-b: どう着る（操作・順序付き・新方針の主役・direction直下） */}
       {(co.stylingMoves?.length ?? 0) > 0 && (
