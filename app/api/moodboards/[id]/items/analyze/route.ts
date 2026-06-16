@@ -128,6 +128,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         caption,
         source_url: null,
         order_index: orderIndex,
+        // ★ 複数画像MB分析 Step 1: 画像ごとの構造化 vision を保存(Vision 失敗時は {})。caption は温存。
+        vision: analysis?.vision ?? {},
       } as never)
       .select("id, image_url, caption, source_url, order_index, created_at")
       .single() as unknown as {

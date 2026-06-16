@@ -68,6 +68,43 @@ export interface VisionAnalysisResult {
   dominant_colors: string[];             // hex 2-3 個
 }
 
+// ★ 複数画像MB分析 Step 1: 画像ごとの構造化 observed facts（per-image・moodboard_items.vision に保存）。
+//   ⚠️ board-level brief(MoodboardBrief)とは別物＝混ぜない。集約(repeated/accent)とブランド接続は後段で vision を読む。
+export type VisionBasis = "observed" | "inferred";
+export type VisionConfidence = "high" | "medium" | "low";
+
+export interface VisionFactEntry {
+  value:      string;
+  basis:      VisionBasis;
+  confidence: VisionConfidence;
+}
+
+// 画像から見える事実（色/アイテム/場所/光）。色は基本 observed・確信が低いものや素材感等は inferred 混在。
+export interface VisionFacts {
+  colors:    VisionFactEntry[];
+  items:     VisionFactEntry[];
+  locations: VisionFactEntry[];
+  lighting:  VisionFactEntry[];
+}
+
+// ⚠️ STYLE_AXES 実在タグに正規化したシグナル（集約/ブランドマッチング用・自由文は入れない）。
+export interface VisionStyleSignals {
+  colorTags:      string[];
+  materialTags:   string[];
+  silhouetteTags: string[];
+  genreTags:      string[];
+  cultureTags:    string[];
+}
+
+export interface MoodboardItemVision {
+  schemaVersion: 1;
+  roles:         string[];        // 複数 role 可（鏡自撮り=model/outfit/location/color/silhouette 同時等）
+  primaryRole?:  string;
+  visualFacts:   VisionFacts;
+  styleSignals:  VisionStyleSignals;
+  freeText:      { caption: string; notes: string[] };  // 表示/説明用（styleSignals と混ぜない）
+}
+
 export interface AnalyzeImageInput {
   image_url: string;  // moodboard-images bucket の public URL
 }
