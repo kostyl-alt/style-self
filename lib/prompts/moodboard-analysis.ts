@@ -65,11 +65,28 @@ const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化す
     "anomaly": ["普通に見えないための違和感（例: スカーフを巻いて視線を一点に集める）"],
     "mbStylingRules": ["このMB世界観特有の着こなしルール"],
     "avoidStyling": ["避けるべき着方（例: 全部をジャストサイズで揃えて平坦にしない）"]
+  },
+  "brief": {
+    "concept":   { "value": "世界観の短いラベル（3〜10字・詩的禁止・例: 静かな硬質ミニマル）", "basis": "inferred" },
+    "story":     { "value": "場面・物語を1〜2文（例: 夜明け前の無人の街を一人歩く）", "basis": "inferred" },
+    "person":    { "value": "この理想像の人物を1文（性別感/年齢感/体型/雰囲気・例: 20代前半・中性的・細身・硬質で静か）", "basis": "inferred" },
+    "lifestyle": { "value": "生活/カルチャー像を1文", "basis": "inferred" },
+    "hair":      { "value": "髪型/長さ/質感", "basis": "inferred" },
+    "makeup":    { "value": "メイク系統（ナチュラル/ダーク/ノーメイク等）", "basis": "inferred" },
+    "location":  { "value": "場所/空間", "basis": "inferred" },
+    "light":     { "value": "光の種類/時間帯/影/明暗", "basis": "inferred" },
+    "colorPalette": { "main": ["メインカラー"], "accent": ["差し色"], "saturation": "彩度の傾向（例: 低彩度・無彩色寄り）", "basis": "inferred" }
   }
 }
 
 【各配列の目安】colors/materials/silhouettes/ng_elements は各 3〜6 個。
-shopping_axis の各配列は 2〜4 個。styling_axis の各配列は 1〜3 個（操作は具体的に・空でよい項目は省略可）。`;
+shopping_axis の各配列は 2〜4 個。styling_axis の各配列は 1〜3 個（操作は具体的に・空でよい項目は省略可）。
+
+【brief（注釈付きMBの追加情報）】各テキスト項目は { value, basis } で持つ。
+- ★ basis: 視覚的に確認できない値は "inferred"（推測）。caption/世界観に明記がある場合のみ "observed"。確証が薄い項目はキーごと省略してよい（無理に埋めない）。
+- concept は詩的表現・比喩・装飾を禁止し、短いタグ的ラベルにする。
+- ★ person は「このムードボードが描く“理想像”の人物」を表す。ユーザー本人の体型・体ではない（混同禁止）。
+- colorPalette は既存 colors と重複してよい（main/accent/saturation に構造化した追加ビュー）。`;
 
 export function buildMoodboardAnalysisUserMessage(input: MoodboardAnalysisInput): string {
   const lines: string[] = [];
@@ -126,7 +143,7 @@ export async function analyzeMoodboard(
   return callClaudeJSON<MoodboardAnalysisLLM>({
     systemPrompt: SYSTEM_PROMPT,
     userMessage:  buildMoodboardAnalysisUserMessage(input),
-    // ★ Phase 4-a: styling_axis 追加で出力が増えたため 2048→3072（途中切れ防止）
-    maxTokens:    3072,
+    // ★ Phase 4-a: styling_axis で 2048→3072。★ Moodboard First Step 1: brief 追加で 3072→4096（途中切れ防止）
+    maxTokens:    4096,
   });
 }

@@ -113,6 +113,37 @@ export interface StylingAxis {
   avoidStyling?:    string[];   // 避けるべき着方
 }
 
+// ★ Moodboard First Step 1: 注釈付きMBの追加データ（brief）。
+//   各テキスト値は { value, basis } で「観察(observed)/推測(inferred)」を機械可読に持つ。
+//   画像から確実でない値は basis="inferred"。Step 1 は board がテキスト(caption)ベースなので原則 inferred。
+export type BriefBasis = "observed" | "inferred";
+
+export interface BriefField {
+  value: string;
+  basis: BriefBasis;
+}
+
+// 色は構造化（メイン/差し色/彩度）。既存 colors[] は別途温存し、これは追加ビュー。
+export interface ColorPalette {
+  main:       string[];   // メインカラー（日本語名）
+  accent:     string[];   // 差し色
+  saturation: string;     // 彩度の傾向（例: 低彩度・無彩色寄り）
+  basis:      BriefBasis;
+}
+
+// 9項目・各任意（確証が薄い項目は省略可）。
+export interface MoodboardBrief {
+  concept?:      BriefField;     // 世界観の短いラベル（3〜10字・詩的禁止）
+  story?:        BriefField;     // 場面・物語（1〜2文）
+  person?:       BriefField;     // ★ MB画像が描く理想像の人物（性別感/年齢感/体型/雰囲気）。ユーザー本人の体型(body_profile)とは別物
+  lifestyle?:    BriefField;     // 生活/カルチャー像
+  hair?:         BriefField;     // 髪型/長さ/質感
+  makeup?:       BriefField;     // メイク系統
+  location?:     BriefField;     // 場所/空間
+  light?:        BriefField;     // 光の種類/時間帯/影/明暗
+  colorPalette?: ColorPalette;
+}
+
 export interface MoodboardAnalysisRow {
   moodboard_id:   string;
   worldview_core: string;     // 世界観コア（1〜2文）
@@ -123,6 +154,7 @@ export interface MoodboardAnalysisRow {
   ng_elements:    string[];
   shopping_axis:  ShoppingAxis;
   styling_axis:   StylingAxis;  // ★ Phase 4-a: 着こなし操作の軸
+  brief:          MoodboardBrief;  // ★ Moodboard First Step 1: 注釈付きMBの追加データ（additive・消費者ゼロ）
   source:         string;     // 生成元（モデル名等）
   created_at:     string;
   updated_at:     string;

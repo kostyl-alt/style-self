@@ -23,6 +23,8 @@ import type {
   MoodboardAnalysisRow,
   MoodboardAnalysisLLM,
   AnalyzeMoodboardResponse,
+  MoodboardBrief,
+  BriefBasis,
 } from "@/types/moodboard";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,39 @@ function buildProfileNote(result: unknown): string | null {
 
 function toStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+// ★ Moodboard First Step 1: LLM の brief を防御的に正規化（object でなければ {}・value は string 強制・
+//   basis は enum 既定 inferred・colorPalette 配列は string[] 化）。空値の項目はキーごと省略。
+const BRIEF_TEXT_KEYS = ["concept", "story", "person", "lifestyle", "hair", "makeup", "location", "light"] as const;
+
+function normBasis(v: unknown): BriefBasis {
+  return v === "observed" ? "observed" : "inferred";
+}
+
+function normalizeBrief(raw: unknown): MoodboardBrief {
+  if (!raw || typeof raw !== "object") return {};
+  const r = raw as Record<string, unknown>;
+  const out: MoodboardBrief = {};
+  for (const key of BRIEF_TEXT_KEYS) {
+    const f = r[key];
+    if (f && typeof f === "object") {
+      const fo = f as Record<string, unknown>;
+      const value = typeof fo.value === "string" ? fo.value.trim() : "";
+      if (value !== "") out[key] = { value, basis: normBasis(fo.basis) };
+    }
+  }
+  const cp = r.colorPalette;
+  if (cp && typeof cp === "object") {
+    const c = cp as Record<string, unknown>;
+    const main = toStringArray(c.main);
+    const accent = toStringArray(c.accent);
+    const saturation = typeof c.saturation === "string" ? c.saturation.trim() : "";
+    if (main.length > 0 || accent.length > 0 || saturation !== "") {
+      out.colorPalette = { main, accent, saturation, basis: normBasis(c.basis) };
+    }
+  }
+  return out;
 }
 
 // 既存解析の有無確認（Phase 2: クライアントの遅延自動生成の判定用）。
@@ -179,6 +214,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       ng_elements:    toStringArray(llm.ng_elements),
       shopping_axis:  (llm.shopping_axis && typeof llm.shopping_axis === "object") ? llm.shopping_axis : {},
       styling_axis:   (llm.styling_axis && typeof llm.styling_axis === "object") ? llm.styling_axis : {},
+      brief:          normalizeBrief(llm.brief),  // ★ Moodboard First Step 1: additive・消費者ゼロ
       source:         MODEL,
       created_at:     now,
       updated_at:     now,
@@ -187,7 +223,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
     const { data: saved, error: upsertErr } = await supabase
       .from("moodboard_analysis")
       .upsert(payload as never, { onConflict: "moodboard_id" })
-      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, source, created_at, updated_at")
+      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, brief, source, created_at, updated_at")
       .single() as unknown as {
         data: MoodboardAnalysisRow | null;
         error: { message: string } | null;
