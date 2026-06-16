@@ -67,14 +67,14 @@ const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化す
     "avoidStyling": ["避けるべき着方（例: 全部をジャストサイズで揃えて平坦にしない）"]
   },
   "brief": {
-    "concept":   { "value": "世界観の短いラベル（3〜10字・詩的禁止・例: 静かな硬質ミニマル）", "basis": "inferred" },
+    "concept":   { "value": "検索ワードに近いファッションラベル（genre/color/silhouette/mood の組合せ・例: ノーメイク・ダークグランジ）", "basis": "inferred" },
     "story":     { "value": "場面・物語を1〜2文（例: 夜明け前の無人の街を一人歩く）", "basis": "inferred" },
-    "person":    { "value": "この理想像の人物を1文（性別感/年齢感/体型/雰囲気・例: 20代前半・中性的・細身・硬質で静か）", "basis": "inferred" },
-    "lifestyle": { "value": "生活/カルチャー像を1文", "basis": "inferred" },
-    "hair":      { "value": "髪型/長さ/質感", "basis": "inferred" },
-    "makeup":    { "value": "メイク系統（ナチュラル/ダーク/ノーメイク等）", "basis": "inferred" },
-    "location":  { "value": "場所/空間", "basis": "inferred" },
-    "light":     { "value": "光の種類/時間帯/影/明暗", "basis": "inferred" },
+    "person":    { "value": "理想像の人物を短語/区切り（例: 20代前半 / 中性的 / 細身 / 整えすぎない硬質さ）。⚠️ユーザー本人でなくMBが描く理想像", "basis": "inferred" },
+    "lifestyle": { "value": "生活/カルチャー像を短語/区切り（例: 都市生活 / 芸術系 / 一人の時間）", "basis": "inferred" },
+    "hair":      { "value": "髪型/長さ/質感を短語/区切り（例: 黒 / ミディアム / 濡れ感）", "basis": "inferred" },
+    "makeup":    { "value": "メイク系統を短語/区切り（例: ほぼノーメイク / マット）", "basis": "inferred" },
+    "location":  { "value": "場所/空間を短語/区切り（例: コンクリート室内 / 夜の街路）", "basis": "inferred" },
+    "light":     { "value": "光を短語/区切り（例: 低照度 / 夜 / 硬い影 / 青み）", "basis": "inferred" },
     "colorPalette": { "main": ["メインカラー"], "accent": ["差し色"], "saturation": "彩度の傾向（例: 低彩度・無彩色寄り）", "basis": "inferred" }
   }
 }
@@ -84,7 +84,12 @@ shopping_axis の各配列は 2〜4 個。styling_axis の各配列は 1〜3 個
 
 【brief（注釈付きMBの追加情報）】各テキスト項目は { value, basis } で持つ。
 - ★ basis: 視覚的に確認できない値は "inferred"（推測）。caption/世界観に明記がある場合のみ "observed"。確証が薄い項目はキーごと省略してよい（無理に埋めない）。
-- concept は詩的表現・比喩・装飾を禁止し、短いタグ的ラベルにする。
+- ★ concept は「検索ワードに近い・服/ブランド/素材/シルエットに変換できるファッションラベル」にする。genre（グランジ/ストリート/ミニマル等）・color（黒/低彩度等）・silhouette・mood を組み合わせた、画像から見える事実ベースの名前にする。
+  ・抽象感情語を主役にしない。「感情的緊張」「孤独」「言葉にできない」「密度」「透明な」等のポエム語は禁止。
+  ・NG例（こういう詩的・感情語は作らない）: 「黒と甘さの感情的緊張」「言葉にする前の感情」「静かな感情の密度」「夜に沈む透明な孤独」「壊れかけた甘さ」。
+  ・OK例（こういう genre/color/mood の組合せにする）: 「ノーメイク・ダークグランジ」「低彩度グランジカジュアル」「黒ベースのグランジミックス」「ノーメイク×黒ストリート」「ダークカジュアル」「90sグランジ」「黒とデニムのグランジ」「低彩度ロックカジュアル」。
+- ★ person / lifestyle / location / light / hair / makeup の value は ★ 長文にせず短語を「 / 」で区切ったタグ状にする（例: 「20代前半 / 中性的 / 細身 / 整えすぎない硬質さ」）。文章化しない。
+- ★ story だけは 1〜2 文の物語のままにする（短語化しない）。
 - ★ person は「このムードボードが描く“理想像”の人物」を表す。ユーザー本人の体型・体ではない（混同禁止）。
 - colorPalette は既存 colors と重複してよい（main/accent/saturation に構造化した追加ビュー）。`;
 

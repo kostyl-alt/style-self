@@ -35,6 +35,9 @@ import type {
   MoodboardItemRow,
   AnalyzeItemResponse,
   FromUrlItemResponse,
+  MoodboardAnalysisRow,
+  MoodboardBrief,
+  BriefField,
 } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import {
@@ -68,6 +71,8 @@ export default function MoodboardDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  // ★ Moodboard First Step 2: board 解析(brief 含む)を読むだけ。GET は生成しない(無ければ null=セクション非表示)。
+  const [analysis, setAnalysis] = useState<MoodboardAnalysisRow | null>(null);
 
   // モーダル状態
   const [editingConcept, setEditingConcept] = useState(false);
@@ -138,6 +143,20 @@ export default function MoodboardDetailPage() {
   useEffect(() => {
     if (mbId) void fetchMoodboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mbId]);
+
+  // ★ Moodboard First Step 2: board 解析(brief)を取得して「設計図」セクションに表示する(読むだけ)。
+  //   GET は生成しない(未解析なら analysis=null → セクション非表示)。失敗時も非表示で従来通り。
+  useEffect(() => {
+    if (!mbId) return;
+    let cancelled = false;
+    fetch(`/api/moodboards/${mbId}/analyze`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { analysis: MoodboardAnalysisRow | null } | null) => {
+        if (!cancelled) setAnalysis(d?.analysis ?? null);
+      })
+      .catch(() => { /* 未解析/エラーは非表示(従来通り) */ });
+    return () => { cancelled = true; };
   }, [mbId]);
 
   // ---- 画像追加(★ v2 改訂 + v4 複数選択: file[] select → モーダル → confirm → 順次 upload)----
@@ -429,6 +448,9 @@ export default function MoodboardDetailPage() {
             </div>
           )}
         </section>
+
+        {/* ★ Moodboard First Step 2: brief(+既存analysis)を「設計図」として表示(読むだけ・空なら非表示) */}
+        <BriefSection analysis={analysis} />
 
         {/* ★ v2 改訂: 必須要素 8 進捗 + チェックリスト */}
         <section className="space-y-3">
@@ -880,6 +902,145 @@ function UrlAddModal({
 }
 
 // ====================================================================
+// ★ Moodboard First Step 2: 「このムードボードの設計図」表示専用セクション。
+//   brief(Step1)+ 既存 analysis(materials/silhouettes/ng_elements/colors) を読むだけ。書き換えない。
+//   3段構成: 上段=世界観の核(concept/story) / 中段=写真から読み取った場面 / 下段=服に落とす情報。
+//   ⚠️「今あるものだけ出す」: brandMatches/searchKeywords/outfitRules は未存在なので出さない(後段で項目が増えたらここに足す)。
+//   inferred(推測)の値にだけ控えめな「推測」マーカー。空(null/{} かつ下段も無)なら非表示=既存画面は従来通り。
+const BRIEF_MIDDLE: { key: keyof MoodboardBrief; label: string }[] = [
+  { key: "person",    label: "人物" },
+  { key: "lifestyle", label: "ライフスタイル" },
+  { key: "location",  label: "ロケーション" },
+  { key: "light",     label: "光" },
+  { key: "hair",      label: "ヘア" },
+  { key: "makeup",    label: "メイク" },
+];
+
+function InferredTag() {
+  // ★ 控えめな小pill(薄グレー・角丸・本文と視覚的に分離)。値の一部に見せない。
+  return (
+    <span className="ml-1.5 inline-flex items-center align-middle text-[10px] leading-none text-gray-400 bg-gray-100 rounded-full px-1.5 py-[3px] whitespace-nowrap">
+      推測
+    </span>
+  );
+}
+
+function NamePills({ items, tone }: { items: string[]; tone: "solid" | "soft" }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((t, i) => (
+        <span
+          key={i}
+          className={`text-[11px] px-2 py-0.5 rounded-full ${
+            tone === "solid" ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600"
+          }`}
+        >
+          {t}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BriefLowerRow({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="flex gap-2 text-[13px]">
+      <span className="text-gray-400 w-20 flex-shrink-0">{label}</span>
+      <span className="text-gray-700">{items.join(" / ")}</span>
+    </div>
+  );
+}
+
+function BriefSection({ analysis }: { analysis: MoodboardAnalysisRow | null }) {
+  if (!analysis) return null;
+  const brief: MoodboardBrief = analysis.brief ?? {};
+  const cp = brief.colorPalette;
+
+  const middle = BRIEF_MIDDLE
+    .map((m) => ({ ...m, field: brief[m.key] as BriefField | undefined }))
+    .filter((m): m is typeof m & { field: BriefField } => !!(m.field && m.field.value));
+
+  const materials   = analysis.materials ?? [];
+  const silhouettes = analysis.silhouettes ?? [];
+  const ng          = analysis.ng_elements ?? [];
+
+  const hasUpper = !!(brief.concept?.value || brief.story?.value);
+  const hasMiddle = middle.length > 0;
+  const hasColor = !!(cp && (cp.main.length > 0 || cp.accent.length > 0 || cp.saturation));
+  const hasLower = hasColor || materials.length > 0 || silhouettes.length > 0 || ng.length > 0;
+  if (!hasUpper && !hasMiddle && !hasLower) return null;
+
+  return (
+    <section className="space-y-4 border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
+      <div>
+        <p className="text-xs tracking-widest text-gray-400 uppercase">このムードボードの設計図</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">AIが画像から読み取った世界観・服・ブランドの注釈</p>
+      </div>
+
+      {/* 上段: 世界観の核 */}
+      {hasUpper && (
+        <div className="space-y-1.5">
+          {brief.concept?.value && (
+            <p className="text-base font-bold text-gray-900">
+              {brief.concept.value}
+              {brief.concept.basis === "inferred" && <InferredTag />}
+            </p>
+          )}
+          {brief.story?.value && (
+            <div className="space-y-1">
+              <p className="text-sm text-gray-700 leading-relaxed">{brief.story.value}</p>
+              {/* story は文章なので推測pillを文末ベタ付けせず独立行(右寄せ)に */}
+              {brief.story.basis === "inferred" && (
+                <div className="flex justify-end"><InferredTag /></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 中段: 写真から読み取った場面 */}
+      {hasMiddle && (
+        <div className="space-y-1.5">
+          {middle.map((m) => (
+            <div key={m.key} className="flex gap-2 text-[13px]">
+              <span className="text-gray-400 w-20 flex-shrink-0">{m.label}</span>
+              <span className="text-gray-700">
+                {m.field.value}
+                {m.field.basis === "inferred" && <InferredTag />}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 下段: 服に落とす情報(今あるものだけ) */}
+      {hasLower && (
+        <div className="space-y-2 border-t border-gray-100 pt-3">
+          {hasColor && cp && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-gray-500">
+                カラー
+                {cp.basis === "inferred" && <InferredTag />}
+              </p>
+              {cp.main.length > 0 && <NamePills items={cp.main} tone="solid" />}
+              {cp.accent.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-400 flex-shrink-0">差し色</span>
+                  <NamePills items={cp.accent} tone="soft" />
+                </div>
+              )}
+              {cp.saturation && <p className="text-[11px] text-gray-500">{cp.saturation}</p>}
+            </div>
+          )}
+          {materials.length > 0 && <BriefLowerRow label="素材" items={materials} />}
+          {silhouettes.length > 0 && <BriefLowerRow label="シルエット" items={silhouettes} />}
+          {ng.length > 0 && <BriefLowerRow label="避ける" items={ng} />}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ConceptEditModal — description 編集(★ プロセス誘導 placeholder + 例文)
 // ====================================================================
 function ConceptEditModal({
