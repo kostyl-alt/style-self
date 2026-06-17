@@ -128,3 +128,4 @@ npm run build        # ビルド確認
 | `env-and-flags.md` | 環境変数 / フィーチャーフラグ一覧 | .env*, lib/flags.ts, app/api |
 | `rakuten.md` | 楽天API認証・同期コマンド | lib/rakuten.ts, app/api/admin/sync-* |
 | `knowledge-os.md` | Knowledge OS（MCP）連携手順・報告ルール | lib/knowledge*, app/api/ai |
+| `styling-quality.md` | スタイリング品質（事実ベース/構造再現/断定回避/買える条件/固有名捏造防止） | lib/prompts, app/api/ai, lib/utils/vision-analyzer.ts |
