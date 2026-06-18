@@ -201,6 +201,24 @@ export interface MoodboardSignals {
   signals:       AggregatedSignal[];
 }
 
+// ---- 複数画像MB分析 A2: 決定的ブランド翻訳（moodboard_analysis.brand_translation）----
+//   signals の主軸（core/repeated）を StyleFacts に変換し matchBrands（ローカル 105 辞書）に渡した結果。
+//   ⚠️ ブランド/検索ワードはコードが決定的に組む（matchBrands + 純関数）・LLM は一切関与しない。
+//   固有名の捏造を防ぐため LLM 由来の brief とはスキーマで分離する（signals と同じ思想）。
+//   brands は lib/knowledge/brand-match.ts の BrandMatch と同型（name/score/matchedReasons/searchKeywords）。
+export interface BrandTranslationMatch {
+  name:           string;
+  score:          number;
+  matchedReasons: string[];
+  searchKeywords: string[];
+}
+
+export interface BrandTranslation {
+  schemaVersion: 1;
+  brands:        BrandTranslationMatch[];  // 近いブランド候補（上位 5〜8・スコア順）
+  searchKeywords: string[];                // ブランド由来 + 主軸タグ組合せ（重複除去）
+}
+
 export interface MoodboardAnalysisRow {
   moodboard_id:   string;
   worldview_core: string;     // 世界観コア（1〜2文）
@@ -213,15 +231,16 @@ export interface MoodboardAnalysisRow {
   styling_axis:   StylingAxis;  // ★ Phase 4-a: 着こなし操作の軸
   brief:          MoodboardBrief;  // ★ Moodboard First Step 1: 注釈付きMBの追加データ（additive・消費者ゼロ）
   signals:        MoodboardSignals;  // ★ Layer2: 決定的集約（repeated/accent）・additive・消費者ゼロ・LLM 産物でない
+  brand_translation: BrandTranslation;  // ★ A2: 決定的ブランド翻訳（signals主軸→matchBrands）・additive・消費者ゼロ・LLM 産物でない
   source:         string;     // 生成元（モデル名等）
   created_at:     string;
   updated_at:     string;
 }
 
 // LLM 出力（DBメタ抜き）。analyze API が callClaudeJSON で受け取る形。
-// ⚠️ signals は LLM 産物でなく決定的集約の計算値なので Omit する（LLM には作らせない）。
+// ⚠️ signals / brand_translation は LLM 産物でなく決定的計算値なので Omit する（LLM には作らせない）。
 export type MoodboardAnalysisLLM =
-  Omit<MoodboardAnalysisRow, "moodboard_id" | "source" | "created_at" | "updated_at" | "signals">;
+  Omit<MoodboardAnalysisRow, "moodboard_id" | "source" | "created_at" | "updated_at" | "signals" | "brand_translation">;
 
 export interface AnalyzeMoodboardResponse {
   analysis: MoodboardAnalysisRow;

@@ -19,6 +19,7 @@ import { MODEL } from "@/lib/claude";
 import { analyzeMoodboard } from "@/lib/prompts/moodboard-analysis";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
 import { aggregateMoodboardSignals } from "@/lib/utils/moodboard-aggregate";
+import { translateSignalsToBrands } from "@/lib/utils/moodboard-brand-translation";
 import { getDecisionRules, getInfluences } from "@/lib/knowledge-os/client";
 import type {
   MoodboardAnalysisRow,
@@ -164,6 +165,10 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       (itemRows ?? []).map((it) => ({ id: it.id, vision: it.vision })),
     );
 
+    // ★ A2: signals 主軸 → matchBrands（ローカル 105 辞書）で近いブランド/検索ワードに決定的翻訳（LLM 不使用）。
+    //    A2-1 は算出のみ無挙動＝誰も brand_translation を読まない（Step2 下段表示は A2-2）。主軸空なら graceful に空。
+    const brandTranslation = translateSignalsToBrands(signals);
+
     // 5) 診断プロフィール（任意の文脈）
     const { data: profile } = await supabase
       .from("worldview_profiles")
@@ -225,6 +230,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       styling_axis:   (llm.styling_axis && typeof llm.styling_axis === "object") ? llm.styling_axis : {},
       brief:          normalizeBrief(llm.brief),  // ★ Moodboard First Step 1: additive・消費者ゼロ
       signals,                                    // ★ Layer2: 決定的集約（純関数の計算値・LLM 産物でない）・additive・消費者ゼロ
+      brand_translation: brandTranslation,        // ★ A2: 決定的ブランド翻訳（matchBrands・LLM 産物でない）・additive・消費者ゼロ
       source:         MODEL,
       created_at:     now,
       updated_at:     now,
@@ -233,7 +239,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
     const { data: saved, error: upsertErr } = await supabase
       .from("moodboard_analysis")
       .upsert(payload as never, { onConflict: "moodboard_id" })
-      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, brief, signals, source, created_at, updated_at")
+      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, brief, signals, brand_translation, source, created_at, updated_at")
       .single() as unknown as {
         data: MoodboardAnalysisRow | null;
         error: { message: string } | null;
