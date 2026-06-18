@@ -76,6 +76,14 @@ export const STYLE_SIGNALS = process.env.STYLE_SIGNALS === "true";
 //   client 参照のため NEXT_PUBLIC_*。matcher/render/辞書/brand-facts は無改修・DBスキーマ変更なし。
 export const TEMPORARY_CHAT_MODE = process.env.NEXT_PUBLIC_TEMPORARY_CHAT_MODE === "true";
 
+// MB_SIGNALS_IN_BRIEF: 複数画像MB分析 Layer3。board brief 生成（analyzeMoodboard）の入力を
+//   caption集約のみ → signals(Layer2 決定的集約 repeated/accent)の「主軸/差し」も渡す形にする。
+//   1枚に引っ張られた断定/盛りを構造的に減らす（事実集約は決定的・意味づけだけLLM）。
+//   既定 OFF（"true" のときだけ ON）。OFF/未設定時は user message に signals セクションを足さない＝
+//   従来の analyzeMoodboard 入力・出力形と完全に同一（退行ゼロ）。
+//   analyzeMoodboard は API route(server) で動くため NEXT_PUBLIC_ 不要。接続は Step3b。
+export const MB_SIGNALS_IN_BRIEF = process.env.MB_SIGNALS_IN_BRIEF === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

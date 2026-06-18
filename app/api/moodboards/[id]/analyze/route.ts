@@ -202,6 +202,8 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
         worldviewProfileNote,
         koDecisionRules,
         koInfluences,
+        // ★ Layer3（Step3a）: 配線のみ。buildMoodboardAnalysisUserMessage は未使用＝無挙動。接続は Step3b（MB_SIGNALS_IN_BRIEF）。
+        signals,
       });
     } catch (llmErr) {
       const msg = llmErr instanceof Error ? llmErr.message : String(llmErr);

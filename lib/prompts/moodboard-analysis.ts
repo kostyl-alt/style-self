@@ -11,7 +11,7 @@
 // 出力は MoodboardAnalysisLLM（types/moodboard.ts）に一致する JSON。
 
 import { callClaudeJSON } from "@/lib/claude";
-import type { MoodboardAnalysisLLM } from "@/types/moodboard";
+import type { MoodboardAnalysisLLM, MoodboardSignals, SignalAxis } from "@/types/moodboard";
 
 export interface MoodboardAnalysisInput {
   name:                 string;
@@ -23,6 +23,57 @@ export interface MoodboardAnalysisInput {
   // ★ 案A: Knowledge OS の参考知見（best-effort・空なら何も足さない＝従来出力と同一）
   koDecisionRules?:     string[];        // 判断ルール文
   koInfluences?:        string[];        // 影響源（subject_name：fusion_essence 等）
+  // ★ Layer3（Step3a）: Layer2 の決定的集約シグナル（repeated/accent）。
+  //   ⚠️ Step3a は配線のみ＝buildMoodboardAnalysisUserMessage はこれを user message に足さない（無挙動）。
+  //   接続（主軸/差しセクションの注入）は Step3b で MB_SIGNALS_IN_BRIEF フラグ越しに行う。
+  signals?:             MoodboardSignals;
+}
+
+// ★ Layer3（Step3a）: signals を「主軸（repeated/core）／差し（accent）」のラベル付きテキストに整形する純関数。
+//   ⚠️ Step3a では定義のみ（buildMoodboardAnalysisUserMessage から呼ばない＝出力不変）。Step3b で接続する。
+const SIGNAL_AXIS_LABEL: Record<SignalAxis, string> = {
+  color:      "色",
+  material:   "素材",
+  silhouette: "シルエット",
+  genre:      "ジャンル",
+  culture:    "カルチャー",
+};
+
+export function formatSignalsForBrief(signals: MoodboardSignals | undefined): string {
+  if (!signals || signals.signals.length === 0) return "";
+
+  // strength を 主軸（core/repeated）／差し（accent）の 2 群に畳む。
+  const core: { axis: SignalAxis; value: string; count: number }[] = [];
+  const accent: { axis: SignalAxis; value: string; count: number }[] = [];
+  for (const s of signals.signals) {
+    (s.strength === "accent" ? accent : core).push({ axis: s.axis, value: s.value, count: s.count });
+  }
+
+  // axis ごとに「タグ(N枚)」を「 / 」で連結。axis 並びは固定（color→material→silhouette→genre→culture）。
+  const axisOrder: SignalAxis[] = ["color", "material", "silhouette", "genre", "culture"];
+  const renderGroup = (rows: { axis: SignalAxis; value: string; count: number }[]): string[] => {
+    const out: string[] = [];
+    for (const axis of axisOrder) {
+      const items = rows.filter((r) => r.axis === axis);
+      if (items.length === 0) continue;
+      out.push(`- ${SIGNAL_AXIS_LABEL[axis]}: ${items.map((r) => `${r.value}(${r.count}枚)`).join(" / ")}`);
+    }
+    return out;
+  };
+
+  const lines: string[] = [];
+  lines.push("[複数画像の共通の芯（決定的に集約済み・これを世界観の主軸にする）]");
+  const coreLines = renderGroup(core);
+  if (coreLines.length > 0) {
+    lines.push("主軸（複数枚に繰り返し＝世界観の芯）:");
+    lines.push(...coreLines);
+  }
+  const accentLines = renderGroup(accent);
+  if (accentLines.length > 0) {
+    lines.push("差し（1枚だけ＝アクセント・芯にしない）:");
+    lines.push(...accentLines);
+  }
+  return lines.join("\n");
 }
 
 const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化する専門家です。
