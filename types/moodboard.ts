@@ -181,6 +181,26 @@ export interface MoodboardBrief {
   colorPalette?: ColorPalette;
 }
 
+// ---- 複数画像MB分析 Layer2: 決定的集約シグナル（moodboard_analysis.signals）----
+//   vision.styleSignals（STYLE_AXES 正規化済み）を画像横断で集約。⚠️ 事実の集約は決定的（純関数）・
+//   LLM 由来の brief とはスキーマで分離する。Layer3 以降がこれを読む（現状 消費者ゼロ）。
+export type SignalAxis = "color" | "material" | "silhouette" | "genre" | "culture";
+export type SignalStrength = "core" | "repeated" | "accent";
+
+export interface AggregatedSignal {
+  axis:     SignalAxis;
+  value:    string;        // STYLE_AXES 実在タグ
+  count:    number;        // 何枚の画像に出たか
+  imageIds: string[];      // どの画像に出たか（根拠を辿れる）
+  strength: SignalStrength;
+}
+
+export interface MoodboardSignals {
+  schemaVersion: 1;
+  imageCount:    number;          // 集約に使った画像枚数
+  signals:       AggregatedSignal[];
+}
+
 export interface MoodboardAnalysisRow {
   moodboard_id:   string;
   worldview_core: string;     // 世界観コア（1〜2文）
@@ -192,14 +212,16 @@ export interface MoodboardAnalysisRow {
   shopping_axis:  ShoppingAxis;
   styling_axis:   StylingAxis;  // ★ Phase 4-a: 着こなし操作の軸
   brief:          MoodboardBrief;  // ★ Moodboard First Step 1: 注釈付きMBの追加データ（additive・消費者ゼロ）
+  signals:        MoodboardSignals;  // ★ Layer2: 決定的集約（repeated/accent）・additive・消費者ゼロ・LLM 産物でない
   source:         string;     // 生成元（モデル名等）
   created_at:     string;
   updated_at:     string;
 }
 
 // LLM 出力（DBメタ抜き）。analyze API が callClaudeJSON で受け取る形。
+// ⚠️ signals は LLM 産物でなく決定的集約の計算値なので Omit する（LLM には作らせない）。
 export type MoodboardAnalysisLLM =
-  Omit<MoodboardAnalysisRow, "moodboard_id" | "source" | "created_at" | "updated_at">;
+  Omit<MoodboardAnalysisRow, "moodboard_id" | "source" | "created_at" | "updated_at" | "signals">;
 
 export interface AnalyzeMoodboardResponse {
   analysis: MoodboardAnalysisRow;

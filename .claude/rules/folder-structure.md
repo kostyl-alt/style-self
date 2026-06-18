@@ -45,7 +45,7 @@ paths:
 - `flags.ts`(NEXT_PUBLIC_* フラグ・→ env-and-flags.md) `style-taxonomy.ts`(`STYLE_AXES` 8軸: genre/culture/era/color/silhouette/material/mood)
 - `stylist-chat/context.ts`(intent別 context fetcher・サーバ自前SELECT)
 - `knowledge/`: `brand-match`(matchBrands) `brand-facts`(computeBrandMatches) `brand-render`(renderBrandMatchCards) `fashion-axes` `worldview-patterns` `worldview-concepts` `diagnosis-questions` `product-worldview-tags`(31語) `wardrobe-color-systems`
-- `utils/`: `silhouette-map` `body-rules` `zozo-link` `season` `knowledge-merge` `url-extract` `history-helper` `color-aliases` `product-match` `admin-check` `worldview-matcher` `strip-raw-json-reply`(生JSON安全網) `parse-coordinate-reply` `strip-canonical-slugs` `moodboard-analysis-service` `moodboard-essentials`(必須要素8) `vision-analyzer`(per-image Vision) `judgment-rules-service`
+- `utils/`: `silhouette-map` `body-rules` `zozo-link` `season` `knowledge-merge` `url-extract` `history-helper` `color-aliases` `product-match` `admin-check` `worldview-matcher` `strip-raw-json-reply`(生JSON安全網) `parse-coordinate-reply` `strip-canonical-slugs` `moodboard-analysis-service` `moodboard-essentials`(必須要素8) `vision-analyzer`(per-image Vision) `moodboard-aggregate`(Layer2 決定的集約 repeated/accent・純関数) `judgment-rules-service`
 - `dictionaries/`: `material`(14素材) `color`(15色) `line`(10シルエット) `ratio`(8比率) `index`(re-export) `inject`(getMaterialContext 等)
 - `validators/`: `coordinate` `analyze` `purchase-check` `analyze-item`（validateAndFix* 群）
 - `prompts/`: 各AI機能のプロンプト — `coordinate` `analyze` `analyze-item` `style-consult` `stylist-chat`(チャット段階B・persona+coordinate_v2契約) `overlay-intent`(分類) `moodboard-analysis`(MB board解析) `moodboard-prompt`(MB→長文prompt) `editor-prompt`(コーデ評価AI) `virtual-coordinate` `concept-translate` `abstract-coordinate` `purchase` `brand-recommend` `trend-translate`/`trend-extract` `learn-insight` `culture-explain` `extract-product-info` `analyze-product-image`/`analyze-product-text` `normalize-product`/`normalize-interpretation` `knowledge-extract` 等
@@ -54,7 +54,7 @@ paths:
 `index.ts`(アプリ型) `database.ts`(DB型) `chat-thread.ts` `moodboard.ts`(MoodboardRow/Item/Analysis/Brief/ItemVision 等) `coordinate-reply.ts` `chat-ui.ts` `product-candidate.ts` 等
 
 ## supabase/
-`migrations/`(連番 001〜033・最新 033。**全リストと内容は database.md**) / `seeds/`
+`migrations/`(連番 001〜034・最新 034。**全リストと内容は database.md**) / `seeds/`
 
 ## ルート直下
 `middleware.ts`(認証) `vercel.json`(Vercel Cron) `.env.local`(gitignore) `CLAUDE.md`

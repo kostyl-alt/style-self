@@ -18,6 +18,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { MODEL } from "@/lib/claude";
 import { analyzeMoodboard } from "@/lib/prompts/moodboard-analysis";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
+import { aggregateMoodboardSignals } from "@/lib/utils/moodboard-aggregate";
 import { getDecisionRules, getInfluences } from "@/lib/knowledge-os/client";
 import type {
   MoodboardAnalysisRow,
@@ -145,17 +146,23 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "このムードボードを解析する権限がありません" }, { status: 403 });
     }
 
-    // 4) items キャプション群（既存 per-image 解析資産を再利用＝テキスト統合方式）
+    // 4) items キャプション群 + vision（既存 per-image 解析資産を再利用＝テキスト統合方式）
+    //    ★ Layer2: vision も読み、styleSignals を画像横断で決定的に集約する（LLM コール増ゼロ・SELECT に列追加のみ）。
     const { data: itemRows } = await supabase
       .from("moodboard_items")
-      .select("caption, order_index")
+      .select("id, caption, order_index, vision")
       .eq("moodboard_id", params.id)
       .order("order_index", { ascending: true }) as unknown as {
-        data: { caption: string | null; order_index: number }[] | null;
+        data: { id: string; caption: string | null; order_index: number; vision: unknown }[] | null;
       };
     const itemCaptions = (itemRows ?? [])
       .map((it) => (it.caption ?? "").trim())
       .filter((c) => c !== "");
+
+    // ★ Layer2: 決定的集約（純関数・LLM 不要）。誰も signals を読まないが、Layer3 以降の受け皿として保存する。
+    const signals = aggregateMoodboardSignals(
+      (itemRows ?? []).map((it) => ({ id: it.id, vision: it.vision })),
+    );
 
     // 5) 診断プロフィール（任意の文脈）
     const { data: profile } = await supabase
@@ -215,6 +222,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       shopping_axis:  (llm.shopping_axis && typeof llm.shopping_axis === "object") ? llm.shopping_axis : {},
       styling_axis:   (llm.styling_axis && typeof llm.styling_axis === "object") ? llm.styling_axis : {},
       brief:          normalizeBrief(llm.brief),  // ★ Moodboard First Step 1: additive・消費者ゼロ
+      signals,                                    // ★ Layer2: 決定的集約（純関数の計算値・LLM 産物でない）・additive・消費者ゼロ
       source:         MODEL,
       created_at:     now,
       updated_at:     now,
@@ -223,7 +231,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
     const { data: saved, error: upsertErr } = await supabase
       .from("moodboard_analysis")
       .upsert(payload as never, { onConflict: "moodboard_id" })
-      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, brief, source, created_at, updated_at")
+      .select("moodboard_id, worldview_core, colors, materials, silhouettes, mood, ng_elements, shopping_axis, styling_axis, brief, signals, source, created_at, updated_at")
       .single() as unknown as {
         data: MoodboardAnalysisRow | null;
         error: { message: string } | null;

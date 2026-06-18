@@ -28,14 +28,14 @@ paths:
 | `diagnosis_sessions` / `worldview_profiles` / `user_style_events` | 診断詳細 / 最新確定プロファイル(user_id 主キー) / 行動イベントログ |
 | `chat_threads` / `messages` / `feedback` / `judgment_rules` | 対話AIスタイリスト基盤（H-1：スレッド / role=user/assistant・metadata jsonb / like/dislike 等 / 好み・NG・style_rule を次回生成に反映） |
 | `moodboards` / `moodboard_items` | ムードボード本体 / 参考画像（`caption` + `vision` jsonb=画像ごとの構造化observed facts） |
-| `moodboard_analysis` | MB の board単位 context object（worldview_core/colors/materials/silhouettes/mood/ng_elements/shopping_axis/styling_axis/**brief** jsonb・1 MBに1行・再解析で上書き・RLSは親moodboards経由EXISTS） |
+| `moodboard_analysis` | MB の board単位 context object（worldview_core/colors/materials/silhouettes/mood/ng_elements/shopping_axis/styling_axis/**brief**/**signals** jsonb・1 MBに1行・再解析で上書き・RLSは親moodboards経由EXISTS。`signals`=Layer2 決定的集約 repeated/accent） |
 | `style_signals` | 写真分析の育成事実タグ（attributes jsonb・brand-facts の主 facts ソース） |
 
 ## マイグレーション（supabase/migrations/・連番）
 
-001 初期(users/wardrobe_items/coordinates) / 002-003 wardrobe更新(season/taste→text[], status, worldview_*) / 004 external_products / 005-006 身体情報 / 007 users.worldview / 008 style_analysis / 009 brands(+初期20件) / 010 inspirations / 011 style_preference / 012-013 trends(+根拠) / 014 body_profile / 015 knowledge_sources・knowledge_rules / 016 ai_history / 017 product_curation / 018 product_multi_attrs(colors/materials配列・axes) / 019 material_composition / 020 diagnosis_v2(diagnosis_sessions/worldview_profiles/user_style_events) / 021 avoid_items / 027 H-1 chat基盤(chat_threads/messages/feedback/judgment_rules) ※022-026未記載 / 029 moodboard_analysis ※028未記載 / 030 styling_axis追加 / 031 style_signals / 032 moodboard_analysis.brief追加 / 033 moodboard_items.vision追加
+001 初期(users/wardrobe_items/coordinates) / 002-003 wardrobe更新(season/taste→text[], status, worldview_*) / 004 external_products / 005-006 身体情報 / 007 users.worldview / 008 style_analysis / 009 brands(+初期20件) / 010 inspirations / 011 style_preference / 012-013 trends(+根拠) / 014 body_profile / 015 knowledge_sources・knowledge_rules / 016 ai_history / 017 product_curation / 018 product_multi_attrs(colors/materials配列・axes) / 019 material_composition / 020 diagnosis_v2(diagnosis_sessions/worldview_profiles/user_style_events) / 021 avoid_items / 027 H-1 chat基盤(chat_threads/messages/feedback/judgment_rules) ※022-026未記載 / 029 moodboard_analysis ※028未記載 / 030 styling_axis追加 / 031 style_signals / 032 moodboard_analysis.brief追加 / 033 moodboard_items.vision追加 / 034 moodboard_analysis.signals追加(Layer2 決定的集約)
 
-⚠️ 新規マイグレーションは `add column if not exists` / 存在チェックで**破壊なし・冪等**にする（030/032/033 が前例）。RLS は親テーブル経由 EXISTS を踏襲。
+⚠️ 新規マイグレーションは `add column if not exists` / 存在チェックで**破壊なし・冪等**にする（030/032/033/034 が前例）。RLS は親テーブル経由 EXISTS を踏襲。
 
 ## ⚠️ Supabase v2 型推論バグ（`as never`・全 insert/update 箇所で必要）
 `.insert()` / `.update()` が `never` 型になるケースがある。回避策（既存パターン踏襲）:
