@@ -5,6 +5,7 @@
 //   集約済みの同形 interface があるためそれを再利用(重複を作らない)。
 import type { CoordinateReply, EditorScorePayload } from "@/types/coordinate-reply";
 import type { ProductCandidate } from "@/types/product-candidate";
+import type { MoodboardItemVision, MoodboardSignals } from "@/types/moodboard";
 
 export type { EditorScorePayload };
 
@@ -37,6 +38,8 @@ export type MessageContent =
   | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
   | { kind: "products"; candidates: ProductCandidate[]; queriesUsed: string[]; moodboardId: string; loading?: boolean; error?: string | null }  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージで関心分離・/api/products/candidates 結果)
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
+  | { kind: "photos-sent";   photoDataUrls: string[]; caption?: string }  // ★ 📷構造の送信バブル: 送った写真を通常サイズで表示(ephemeral・DB非保存)
+  | { kind: "photos-structure"; photos: { index: number; vision: MoodboardItemVision }[]; signals: MoodboardSignals; photoDataUrls?: string[] }  // ★ 複数写真→構造抽出+共通点抽出（/api/ai/photos-structure・MB非依存・ブランドなし）。index=送信配列での元位置・photoDataUrls=送った写真のサムネイル(ephemeral・DB非保存)
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
 export interface Message {

@@ -120,8 +120,17 @@ const SYSTEM_PROMPT = `あなたはファッション画像分析の専門家で
 export async function analyzeImage(imageUrl: string): Promise<VisionAnalysisResult> {
   // 1) 画像 URL → base64 + mediaType(server-side fetch)
   const { base64, mediaType } = await fetchImageAsBase64(imageUrl);
+  // 2-3) base64 経路に委譲（Vision 呼出 + 正規化）。
+  return analyzeImageFromBase64(base64, mediaType);
+}
 
-  // 2) Claude Vision 呼出(既存 callClaudeWithImage 流用・★ vision 拡張で出力増のため 1024→2048)
+// ★ チャット複数写真→構造: base64 を直接受ける入口（URL/Storage 不要・MB 非依存・既存 analyzeImage と同じ Vision+正規化）。
+//   チャットの📎写真は base64 で来るため、アップロードせず構造化 vision を得るのに使う。
+export async function analyzeImageFromBase64(
+  base64: string,
+  mediaType: ImageMediaType,
+): Promise<VisionAnalysisResult> {
+  // Claude Vision 呼出(既存 callClaudeWithImage 流用・vision 拡張で 2048)
   const raw = await callClaudeWithImage<Record<string, unknown>>(
     SYSTEM_PROMPT,
     base64,
@@ -129,8 +138,7 @@ export async function analyzeImage(imageUrl: string): Promise<VisionAnalysisResu
     "この画像を分析してください。",
     2048,
   );
-
-  // 3) JSON 検証 + 正規化
+  // JSON 検証 + 正規化
   return normalizeAnalysisResult(raw);
 }
 

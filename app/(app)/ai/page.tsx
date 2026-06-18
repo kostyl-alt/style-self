@@ -49,7 +49,7 @@ import InputAttachments from "@/components/chat/InputAttachments";
 import ClosetPickerModal from "@/components/chat/ClosetPickerModal";
 import MoodboardPickerModal from "@/components/chat/MoodboardPickerModal";
 import { buildMoodboardPrompt, MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboard-prompt";
-import type { MoodboardWithItems } from "@/types/moodboard";
+import type { MoodboardWithItems, MoodboardItemVision, MoodboardSignals } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
 import { useChatSession } from "@/components/chat/ChatSessionProvider";
@@ -836,6 +836,72 @@ function ChatPageInner() {
       return null;
     });
   }
+  // ★ 複数写真→構造抽出+共通点抽出（既存1枚 aspiration とは別経路・隔離・additive）。
+  //   各写真を圧縮→base64→ /api/ai/photos-structure（各写真 analyzeImage + 共通点 signals 集約）→ 結果カード表示。
+  //   ⚠️ ブランド/brief は呼ばない。MB は作らない。DB/localStorage には載せない（ephemeral）。
+  async function handlePhotosStructure(files: File[]) {
+    if (loading || files.length === 0) return;
+    setLoading(true);
+    let loadingId: string | null = null;
+    try {
+      // 先に圧縮→base64 にして、送信バブルに送った写真を即表示できるようにする。
+      const images: { base64: string; mediaType: string }[] = [];
+      for (const file of files) {
+        try {
+          const processed = await processImageForUpload(file);
+          const { base64, mediaType } = await fileToBase64(processed);
+          images.push({ base64, mediaType });
+        } catch { /* 1枚失敗は無視して継続 */ }
+      }
+      if (images.length === 0) {
+        setMessages((prev) => trimByMax([...prev, {
+          id: newMessageId(), role: "assistant", content: { kind: "error", message: "写真の処理に失敗しました" }, createdAt: Date.now(),
+        }]));
+        return;
+      }
+      // 送った写真のサムネイル（ephemeral・DB/localStorage には載せない）。送信バブルと結果側で共用。
+      const photoDataUrls = images.map((im) => `data:${im.mediaType};base64,${im.base64}`);
+      // 送信バブル（送った写真を通常サイズで表示）+ loading を追加。
+      const userMsg: Message = {
+        id:        newMessageId(),
+        role:      "user",
+        content:   { kind: "photos-sent", photoDataUrls, caption: `📷 写真${images.length}枚の構造を分析` },
+        createdAt: Date.now(),
+      };
+      const lid = newMessageId();
+      loadingId = lid;
+      setMessages((prev) => trimByMax([...prev, userMsg, {
+        id: lid, role: "assistant", content: { kind: "loading" }, createdAt: Date.now(),
+      }]));
+      const res = await fetch("/api/ai/photos-structure", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ images }),
+      });
+      const data = await res.json() as {
+        ok?: boolean; photos?: { index: number; vision: MoodboardItemVision }[]; signals?: MoodboardSignals; reason?: string; error?: string;
+      };
+      if (!res.ok || !data.ok || !data.photos || !data.signals) {
+        replaceMessage(setMessages, lid, {
+          kind:    "error",
+          message: data.error ?? (data.reason === "auth_required" ? "ログインが必要です" : "写真の分析に失敗しました"),
+        });
+        return;
+      }
+      // 結果側にも同じサムネイルを渡す（index で各構造と対応）。
+      replaceMessage(setMessages, lid, { kind: "photos-structure", photos: data.photos, signals: data.signals, photoDataUrls });
+    } catch (err) {
+      const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
+      if (loadingId) {
+        replaceMessage(setMessages, loadingId, errContent);
+      } else {
+        setMessages((prev) => trimByMax([...prev, { id: newMessageId(), role: "assistant", content: errContent, createdAt: Date.now() }]));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 送信ディスパッチャ: 写真があれば aspiration（補足テキストを note で渡す）、無ければ従来の通常チャット。
   function handleComposerSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -971,6 +1037,7 @@ function ChatPageInner() {
           onClosetOpen={() => setIsClosetOpen(true)}
           onMbOpen={() => setIsMbOpen(true)}
           onPhotoSelect={ASPIRATION_PHOTO ? handlePhotoPick : undefined}
+          onPhotosStructure={handlePhotosStructure}
         />
         {/* 段階2: 選択した写真のプレビュー（サムネイル＋取り消し）。送信は送信ボタンで。*/}
         {pendingPhoto && (
@@ -1272,6 +1339,10 @@ function Bubble({
       const { dataUrl, storagePath, caption } = msg.content;
       return <AspirationImageBubble dataUrl={dataUrl} storagePath={storagePath} caption={caption} />;
     }
+    // ★ 📷構造の送信バブル: 送った写真を通常サイズで並べる（自分が何を送ったか分かるように）。押すと拡大。
+    if (msg.content.kind === "photos-sent") {
+      return <PhotosSentBubble photoDataUrls={msg.content.photoDataUrls} caption={msg.content.caption} />;
+    }
     // user 吹き出し:右寄り
     const text = msg.content.kind === "text" ? msg.content.text : "";
     return (
@@ -1432,6 +1503,10 @@ function AssistantContent({
       </div>
     );
   }
+  // ★ 複数写真→構造抽出+共通点抽出（ブランドは出さない・決定的）。
+  if (content.kind === "photos-structure") {
+    return <PhotosStructureCard photos={content.photos} signals={content.signals} photoDataUrls={content.photoDataUrls} />;
+  }
   // image は user 専用 kind（assistant では発生しない）。型の網羅性のためガード。
   if (content.kind !== "intent-result") return null;
   // 既存 intent-result : D1-2a 既存 ResultView を ★シグネチャ無変更で★ 再利用
@@ -1439,6 +1514,153 @@ function AssistantContent({
   return (
     <div className="rounded-2xl rounded-bl-md overflow-hidden">
       <ResultView result={content.result} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+// ★ 📷構造の写真ライトボックス（ChatGPT 風・全画面拡大）。React state のみで開閉（localStorage 不使用）。
+//   src=null で閉。⚠️ 📷構造の写真専用（既存の画像表示は触らない）。
+function PhotoLightbox({ src, onClose }: { src: string | null; onClose: () => void }) {
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="閉じる"
+        className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none"
+      >
+        ×
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt="拡大表示"
+        className="max-h-[90vh] max-w-[92vw] object-contain rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
+// ★ 📷構造の送信バブル（送った写真を通常サイズで並べ、押すと拡大）。
+function PhotosSentBubble({ photoDataUrls, caption }: { photoDataUrls: string[]; caption?: string }) {
+  const [zoom, setZoom] = useState<string | null>(null);
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] space-y-1.5">
+        {caption && (
+          <div className="bg-gray-800 text-white text-sm rounded-2xl rounded-br-md px-4 py-2 whitespace-pre-wrap break-words inline-block ml-auto">
+            {caption}
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {photoDataUrls.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={url}
+              alt={`送った写真 ${i + 1}`}
+              onClick={() => setZoom(url)}
+              className="h-28 w-28 object-cover rounded-xl border border-gray-200 cursor-zoom-in"
+            />
+          ))}
+        </div>
+      </div>
+      <PhotoLightbox src={zoom} onClose={() => setZoom(null)} />
+    </div>
+  );
+}
+
+// ★ 複数写真→構造抽出+共通点抽出のカード。共通点(signals の core/repeated)を「何枚に出たか」付きで上に、
+//   各写真の構造(styleSignals タグ + 観察された色/アイテム)を下に。⚠️ ブランドは出さない。
+function PhotosStructureCard({
+  photos,
+  signals,
+  photoDataUrls,
+}: {
+  photos: { index: number; vision: MoodboardItemVision }[];
+  signals: MoodboardSignals;
+  photoDataUrls?: string[];
+}) {
+  const [zoom, setZoom] = useState<string | null>(null);
+  const AXIS_LABEL: Record<string, string> = {
+    color: "色", material: "素材", silhouette: "シルエット", genre: "ジャンル", culture: "カルチャー",
+  };
+  // 共通点 = core/repeated のみ（accent=1枚だけは「共通点」ではないので出さない）。
+  const common = signals.signals.filter((s) => s.strength !== "accent");
+
+  return (
+    <div className="space-y-3 bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
+      <p className="text-xs tracking-widest text-gray-400 uppercase">{photos.length}枚の写真から読み取った構造</p>
+
+      {/* 共通点（繰り返し惹かれているもの） */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-gray-900">繰り返し惹かれているもの</p>
+        {common.length > 0 ? (
+          <div className="space-y-1">
+            {common.map((s, i) => (
+              <div key={i} className="flex gap-2 text-[13px]">
+                <span className="text-gray-400 w-16 flex-shrink-0">{AXIS_LABEL[s.axis] ?? s.axis}</span>
+                <span className="text-gray-800">
+                  {s.value}
+                  <span className="text-gray-400 ml-1">（{s.count}枚）</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-gray-400">複数枚に共通する芯はまだ弱めです（写真を増やすと出やすくなります）。</p>
+        )}
+      </div>
+
+      {/* 各写真の構造 */}
+      <details className="border-t border-gray-100 pt-2">
+        <summary className="cursor-pointer text-xs text-gray-500 select-none">各写真の構造を見る</summary>
+        <div className="mt-2 space-y-3">
+          {photos.map((p, i) => {
+            const ss = p.vision.styleSignals;
+            const rows: { label: string; tags: string[] }[] = [
+              { label: "色",         tags: ss.colorTags },
+              { label: "素材",       tags: ss.materialTags },
+              { label: "シルエット", tags: ss.silhouetteTags },
+              { label: "ジャンル",   tags: ss.genreTags },
+              { label: "カルチャー", tags: ss.cultureTags },
+            ].filter((r) => r.tags.length > 0);
+            const items = p.vision.visualFacts.items.map((f) => f.value).filter(Boolean);
+            const thumb = photoDataUrls?.[p.index];
+            return (
+              <div key={i} className="flex gap-2.5">
+                {thumb && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumb} alt={`写真 ${i + 1}`} onClick={() => setZoom(thumb)} className="h-16 w-16 flex-shrink-0 object-cover rounded-lg border border-gray-200 cursor-zoom-in" />
+                )}
+                <div className="space-y-1 min-w-0">
+                <p className="text-[12px] text-gray-500">写真 {i + 1}</p>
+                {rows.map((r) => (
+                  <div key={r.label} className="flex gap-2 text-[12px]">
+                    <span className="text-gray-400 w-16 flex-shrink-0">{r.label}</span>
+                    <span className="text-gray-700">{r.tags.join("・")}</span>
+                  </div>
+                ))}
+                {items.length > 0 && (
+                  <div className="flex gap-2 text-[12px]">
+                    <span className="text-gray-400 w-16 flex-shrink-0">アイテム</span>
+                    <span className="text-gray-700">{items.join("・")}</span>
+                  </div>
+                )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </details>
+      <PhotoLightbox src={zoom} onClose={() => setZoom(null)} />
     </div>
   );
 }

@@ -21,6 +21,7 @@ interface InputAttachmentsProps {
   onMbOpen?:       () => void;             // ★ Sprint C-2 段階3-E: MB 本実装(MoodboardPickerModal 親側制御)
   onUrlSubmit?:    (url: string) => void;  // 将来用・現状は notice のみ
   onPhotoSelect?:  (file: File) => void;   // 将来用・現状は notice のみ
+  onPhotosStructure?: (files: File[]) => void;  // ★ 複数写真→構造+共通点（指定時のみ📷ボタン表示・既存📎とは別）
 }
 
 type Notice = { id: number; text: string };
@@ -29,9 +30,11 @@ export default function InputAttachments({
   onClosetOpen,
   onMbOpen,
   onPhotoSelect,
+  onPhotosStructure,
   // onUrlSubmit は今回未使用(将来 Sprint C で実装)
 }: InputAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photosInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isUrlOpen, setIsUrlOpen] = useState(false);
   const [urlText, setUrlText] = useState("");
@@ -59,6 +62,18 @@ export default function InputAttachments({
     }
     // input をリセット(同じファイルを再選択できるように)
     e.target.value = "";
+  }
+
+  function handlePhotosStructureClick(): void {
+    photosInputRef.current?.click();
+  }
+
+  function handlePhotosStructureChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const list = e.target.files;
+    if (list && list.length > 0 && onPhotosStructure) {
+      onPhotosStructure(Array.from(list));
+    }
+    e.target.value = "";  // 同じ写真を再選択できるように
   }
 
   function handleUrlClick(): void {
@@ -91,6 +106,8 @@ export default function InputAttachments({
     <div className="space-y-2">
       <div className="flex gap-1.5 items-center">
         <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />
+        {/* ★ 複数写真→構造+共通点（onPhotosStructure 指定時のみ・既存📎とは別の📷） */}
+        {onPhotosStructure && <AttachButton icon="📷" label="構造"    onClick={handlePhotosStructureClick} />}
         {/* 🔗URL(商品URL)は PRODUCTS_ENABLED、👕服(クローゼット)は ENABLE_CLOSET で制御。
             SIMPLE_MODE では写真と MB の2つだけ表示。 */}
         {PRODUCTS_ENABLED && <AttachButton icon="🔗" label="URL"      onClick={handleUrlClick} />}
@@ -107,6 +124,16 @@ export default function InputAttachments({
         accept="image/*"
         hidden
         onChange={handlePhotoChange}
+      />
+
+      {/* ★ 複数写真→構造+共通点 用（複数選択可） */}
+      <input
+        ref={photosInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={handlePhotosStructureChange}
       />
 
       {/* URL 入力簡易モーダル */}
