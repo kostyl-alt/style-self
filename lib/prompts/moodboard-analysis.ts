@@ -11,6 +11,7 @@
 // 出力は MoodboardAnalysisLLM（types/moodboard.ts）に一致する JSON。
 
 import { callClaudeJSON } from "@/lib/claude";
+import { MB_SIGNALS_IN_BRIEF } from "@/lib/flags";
 import type { MoodboardAnalysisLLM, MoodboardSignals, SignalAxis } from "@/types/moodboard";
 
 export interface MoodboardAnalysisInput {
@@ -29,8 +30,11 @@ export interface MoodboardAnalysisInput {
   signals?:             MoodboardSignals;
 }
 
-// ★ Layer3（Step3a）: signals を「主軸（repeated/core）／差し（accent）」のラベル付きテキストに整形する純関数。
-//   ⚠️ Step3a では定義のみ（buildMoodboardAnalysisUserMessage から呼ばない＝出力不変）。Step3b で接続する。
+// ★ Layer3（Step3b）: signals を「主軸（repeated/core）」のラベル付きテキストに整形する純関数。
+//   ⚠️ 差し（accent=1枚だけ）は列挙しない（A確定）。理由: accent を全部並べると LLM が 1 枚だけの
+//   ジャンル/カルチャー（サイバーパンク/地雷系 等）を拾って盛り、Layer3 が消したいはずの
+//   「1枚に引っ張られる断定」を再導入してしまうため。差しの扱いは指示文 1 行に委ねる（リスト化しない）。
+//   主軸が無ければ空文字を返す（graceful＝呼び出し側がセクションごと足さない）。
 const SIGNAL_AXIS_LABEL: Record<SignalAxis, string> = {
   color:      "色",
   material:   "素材",
@@ -42,38 +46,26 @@ const SIGNAL_AXIS_LABEL: Record<SignalAxis, string> = {
 export function formatSignalsForBrief(signals: MoodboardSignals | undefined): string {
   if (!signals || signals.signals.length === 0) return "";
 
-  // strength を 主軸（core/repeated）／差し（accent）の 2 群に畳む。
-  const core: { axis: SignalAxis; value: string; count: number }[] = [];
-  const accent: { axis: SignalAxis; value: string; count: number }[] = [];
-  for (const s of signals.signals) {
-    (s.strength === "accent" ? accent : core).push({ axis: s.axis, value: s.value, count: s.count });
-  }
+  // 主軸（core/repeated）のみ採用。accent は捨てる（A確定）。
+  const core = signals.signals
+    .filter((s) => s.strength !== "accent")
+    .map((s) => ({ axis: s.axis, value: s.value, count: s.count }));
+  if (core.length === 0) return "";  // 主軸が無い（全 accent＝小/疎MB）→ セクションを足さない。
 
   // axis ごとに「タグ(N枚)」を「 / 」で連結。axis 並びは固定（color→material→silhouette→genre→culture）。
   const axisOrder: SignalAxis[] = ["color", "material", "silhouette", "genre", "culture"];
-  const renderGroup = (rows: { axis: SignalAxis; value: string; count: number }[]): string[] => {
-    const out: string[] = [];
-    for (const axis of axisOrder) {
-      const items = rows.filter((r) => r.axis === axis);
-      if (items.length === 0) continue;
-      out.push(`- ${SIGNAL_AXIS_LABEL[axis]}: ${items.map((r) => `${r.value}(${r.count}枚)`).join(" / ")}`);
-    }
-    return out;
-  };
+  const coreLines: string[] = [];
+  for (const axis of axisOrder) {
+    const items = core.filter((r) => r.axis === axis);
+    if (items.length === 0) continue;
+    coreLines.push(`- ${SIGNAL_AXIS_LABEL[axis]}: ${items.map((r) => `${r.value}(${r.count}枚)`).join(" / ")}`);
+  }
 
-  const lines: string[] = [];
-  lines.push("[複数画像の共通の芯（決定的に集約済み・これを世界観の主軸にする）]");
-  const coreLines = renderGroup(core);
-  if (coreLines.length > 0) {
-    lines.push("主軸（複数枚に繰り返し＝世界観の芯）:");
-    lines.push(...coreLines);
-  }
-  const accentLines = renderGroup(accent);
-  if (accentLines.length > 0) {
-    lines.push("差し（1枚だけ＝アクセント・芯にしない）:");
-    lines.push(...accentLines);
-  }
-  return lines.join("\n");
+  return [
+    "[複数画像の共通の芯（決定的に集約済み・これを世界観の主軸にする）]",
+    "主軸（複数枚に繰り返し＝世界観の芯）:",
+    ...coreLines,
+  ].join("\n");
 }
 
 const SYSTEM_PROMPT = `あなたはファッションの世界観を言語化する専門家です。
@@ -163,6 +155,21 @@ export function buildMoodboardAnalysisUserMessage(input: MoodboardAnalysisInput)
     lines.push("");
     lines.push("[参考画像メモ]");
     input.itemCaptions.forEach((c, i) => lines.push(`${i + 1}. ${c}`));
+  }
+
+  // ★ Layer3（Step3b）: フラグ ON かつ 主軸が非空のときだけ、決定的集約（主軸）を注入する。
+  //   OFF/未設定 or 主軸空（既存MB・vision無し・小/疎MB）→ 何も足さない＝従来出力と完全同一（graceful）。
+  const signalsText = MB_SIGNALS_IN_BRIEF ? formatSignalsForBrief(input.signals) : "";
+  if (signalsText !== "") {
+    lines.push("");
+    lines.push(signalsText);
+    lines.push("");
+    lines.push("【複数画像の芯を最優先する】");
+    lines.push("- 上の主軸は複数枚に繰り返し出た＝このMBの芯。concept / colorPalette / mood / silhouettes / story は主軸から組む。");
+    lines.push("- 主軸以外の要素は各画像固有の差し（1枚だけ）。世界観の核にしない・全体の断定にしない・主軸に無い要素を新たに足して盛らない。");
+    lines.push("- concept はポエム禁止＝検索ワードに近いファッションラベル（genre/color/mood の組合せ）。主軸タグを優先して使う。");
+    lines.push("- 参考画像メモ（各画像の自由文）は補助。主軸と食い違うときは集約（主軸）を優先する。");
+    lines.push("- 主軸が空（集約なし）のときは従来どおりキャプションから推定してよい。");
   }
 
   if (input.worldviewProfileNote !== null && input.worldviewProfileNote.trim() !== "") {
