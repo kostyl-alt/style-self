@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
@@ -189,6 +189,11 @@ function ChatPageInner() {
   // 末端 ref(自動スクロール用)
   const endRef = useRef<HTMLDivElement>(null);
 
+  // ★ AUTOSAVE_THREAD(第1段): 作りたて thread の id を一時保持(load effect の再ロード抑止=race ガード)。
+  const skipLoadThreadIdRef = useRef<string | null>(null);
+  // ★ AUTOSAVE_THREAD(第1段): 1通目 thread 化を一度だけ走らせるロック(成功で立てっぱなし・失敗で解除し再試行可)。
+  const autosaveLockRef = useRef(false);
+
   // P1-C-1.5b-i+ fix v2: hydrate 完了フラグ(useState 化で再render 経由・persist の stale [] 上書き race を防止)
   const [hydrated, setHydrated] = useState(false);
 
@@ -209,6 +214,15 @@ function ChatPageInner() {
   const loadThreadMessages = threadMessages.loadMessages;
   useEffect(() => {
     if (!currentThreadId) return;
+    // ★ AUTOSAVE_THREAD race ガード(最重要): 本セッションで「今作った」thread は再ロードしない。
+    //   autosaveEnsureThread が router.replace(?thread=id) する直前にこの ref へ id を入れる。
+    //   ここで setMessages([]) → DB再ロードすると、進行中(=in-memory)の会話を一瞬消す/上書きしてしまう。
+    //   作りたて thread の中身は in-memory messages が真実源(既に persist 済)なので再ロードを丸ごと skip。
+    //   ★ one-shot: 消費後に null へ戻す → 後でユーザーが同 thread を選び直した時は通常どおり DB ロードする。
+    if (skipLoadThreadIdRef.current === currentThreadId) {
+      skipLoadThreadIdRef.current = null;
+      return;
+    }
     let cancelled = false;
     setMessages([]);  // ★ 即クリア(load 完了前から中央を空にし、前 thread の残留を断つ)
     void loadThreadMessages(currentThreadId).then((loaded) => {
@@ -217,6 +231,21 @@ function ChatPageInner() {
     });
     return () => { cancelled = true; };
   }, [currentThreadId, loadThreadMessages]);
+
+  // ★ AUTOSAVE_THREAD(第1段): 1通目の応答が揃った直後に thread 化を一度だけ起動する。
+  //   ・全送信経路(テキスト/写真/商品)共通: messages と loading を見て「送信成功後」を判定する。
+  //   ・条件: フラグ ON・currentThreadId=null・非 temporary・loading 完了・user+assistant(非loading)が揃う。
+  //   ・autosaveLockRef で二重起動を防止(成功で立てっぱなし=2通目以降は currentThreadId 経路へ・失敗で解除し再試行)。
+  useEffect(() => {
+    if (!AUTOSAVE_THREAD || currentThreadId || temporaryMode) return;
+    if (autosaveLockRef.current || loading) return;
+    if (messages.length < 2) return;
+    const hasAssistantReply = messages.some((m) => m.role === "assistant" && m.content.kind !== "loading");
+    if (!hasAssistantReply) return;
+    autosaveLockRef.current = true;
+    void autosaveEnsureThread(messages).then((ok) => { if (!ok) autosaveLockRef.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, loading, currentThreadId, temporaryMode]);
 
   // P1-C-1.5b-i+: 履歴永続化 persist(messages 変更で書き出し)
   // MAX_MESSAGES=30 で trimByMax により既に上限ありなので quota 安全。
@@ -653,6 +682,46 @@ function ChatPageInner() {
       setAttachedMb(null);
       if (currentThreadId) router.push("/ai");
       setTemporaryMode(false);
+    }
+  }
+
+  // ★ AUTOSAVE_THREAD(第1段): 1通目送信成功後に thread を作成し ?thread=id を URL に載せる。
+  //   ・currentThreadId=null かつ 非 temporary かつ フラグ ON のときだけ動く(OFF/未設定=完全現状維持)。
+  //   ・thread 作成ロジックは feedback/toggle の「ephemeral→thread化」と同型(流用)。
+  //   ・★ race ガード: persist 後・router.replace 前に skipLoadThreadIdRef へ tid を入れ、load effect の
+  //     setMessages([])→DB再ロードを抑止する(進行中の会話を消さない)。
+  //   ・以降のメッセージは currentThreadId が立つので既存 persist 配線(341/394/559)がそのまま発火。
+  //   ・best-effort: 失敗(thread作成失敗等)は false を返し従来の localStorage 経路に委ねる(退行なし)。
+  async function autosaveEnsureThread(currentMessages: Message[]): Promise<boolean> {
+    if (!AUTOSAVE_THREAD || currentThreadId || temporaryMode) return false;
+    if (currentMessages.length === 0) return false;
+    try {
+      const firstUser = currentMessages.find((m) => m.role === "user" && m.content.kind === "text");
+      const title = firstUser && firstUser.content.kind === "text"
+        ? firstUser.content.text.slice(0, 40)
+        : "コーデ相談";
+      const res = await fetch("/api/threads", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ title }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json() as { thread?: { id: string } };
+      const tid = data.thread?.id ?? null;
+      if (!tid) return false;
+      // ★ race ガード: URL を切り替える前に「再ロードしない thread」として登録。
+      skipLoadThreadIdRef.current = tid;
+      for (const m of currentMessages) {
+        const dt = feedbackDisplayText(m.content);
+        if (dt === null) continue;
+        await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+      }
+      setSidebarRefreshKey((k) => k + 1);  // サイドバー即時反映
+      router.replace(`/ai?thread=${tid}`);
+      return true;
+    } catch {
+      // best-effort: 失敗時は従来の localStorage 経路に委ねる(退行なし)
+      return false;
     }
   }
 

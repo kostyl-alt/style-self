@@ -84,6 +84,14 @@ export const TEMPORARY_CHAT_MODE = process.env.NEXT_PUBLIC_TEMPORARY_CHAT_MODE =
 //   analyzeMoodboard は API route(server) で動くため NEXT_PUBLIC_ 不要。接続は Step3b。
 export const MB_SIGNALS_IN_BRIEF = process.env.MB_SIGNALS_IN_BRIEF === "true";
 
+// AUTOSAVE_THREAD: チャット履歴 ChatGPT 型 第1段。普通に喋るだけの会話（currentThreadId=null）が
+//   thread 化されず localStorage 揮発 → リロード/復帰で消える問題を直す。ON 時のみ、1通目の
+//   ユーザー送信が成功した直後に thread を作成し ?thread=id を URL に載せる（以降は既存 persist 配線が
+//   そのまま発火 → 自動DB保存・URL が残るのでリロード復元も同時に直る）。
+//   既定 OFF。OFF/未設定時は currentThreadId=null のまま＝従来挙動（localStorage 経路）と完全に同一（退行ゼロ）。
+//   temporary 中は thread を作らない（一時チャット無改修）。client 参照のため NEXT_PUBLIC_*。
+export const AUTOSAVE_THREAD = process.env.NEXT_PUBLIC_AUTOSAVE_THREAD === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

@@ -44,6 +44,7 @@ ADMIN_EMAILS=
 | `MB_CONTEXT_OBJECT` | MB→チャットを長文prompt でなく moodboard_analysis(context object) 経由に（既定 ON＝`!== "false"`） |
 | `FEEDBACK_LOOP` | コーデの好き/違う/保存フィードバック + judgment_rules 反映 |
 | `TEMPORARY_CHAT_MODE` | 一時チャット（履歴非保存・育成非反映の ChatGPT 同等モード） |
+| `AUTOSAVE_THREAD` | チャット履歴 ChatGPT 型 第1段。ON時のみ1通目送信成功後に thread作成＋`?thread=id`をURLに載せ自動DB保存＆リロード復元（OFF/未設定で現状維持・temporary無改修・raceガード付） |
 | `ASPIRATION_PHOTO` | 憧れ写真分析（チャットで写真添付→分解） |
 | `GENERAL_BRAIN_MODE` | 本対話モード（fashion ゲートを迂回し汎用応答） |
 | `PRODUCTS_ENABLED` | 実商品候補/購入導線（本番 false） |
