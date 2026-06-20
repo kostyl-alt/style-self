@@ -14,6 +14,8 @@
 // notice はインラインメッセージ(自動消去 3 秒)で表示する。
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Image as ImageIcon, LayoutGrid, FolderPlus } from "lucide-react";
 import { ENABLE_CLOSET, PRODUCTS_ENABLED } from "@/lib/flags";
 
 interface InputAttachmentsProps {
@@ -35,12 +37,15 @@ export default function InputAttachments({
   onStyleMatch,
   // onUrlSubmit は今回未使用(将来 Sprint C で実装)
 }: InputAttachmentsProps) {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
   const styleMatchInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isUrlOpen, setIsUrlOpen] = useState(false);
   const [urlText, setUrlText] = useState("");
+  // ★ 「＋」メニュー（ChatGPT 風・入力まわりの導線を1つに集約）。表示層のみ・既存 onClick を呼ぶ器。
+  const [isPlusOpen, setIsPlusOpen] = useState(false);
 
   function showNotice(text: string): void {
     const id = Date.now();
@@ -118,31 +123,43 @@ export default function InputAttachments({
   }
 
   return (
-    <div className="space-y-2">
-      {/* ★ Style Match Result の主役CTA（onStyleMatch 指定時=フラグON時のみ・既存ボタンとは別の新体験） */}
-      {onStyleMatch && (
+    <div className="flex items-end gap-1.5">
+      {/* ★ 「＋」メニュー（ChatGPT 風・入力欄に内包される丸アイコン）。✨理想写真と🎨MB をここに集約。
+            各項目は既存 onClick を呼ぶだけ＝機能不変・可逆。 */}
+      <div className="relative shrink-0">
         <button
           type="button"
-          onClick={handleStyleMatchClick}
-          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-gray-800 text-white text-sm rounded-xl hover:bg-gray-700 transition-colors"
+          onClick={() => setIsPlusOpen((o) => !o)}
+          aria-label="追加"
+          aria-expanded={isPlusOpen}
+          className="flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
         >
-          ✨ 理想写真を分析する
+          <Plus className="w-5 h-5" strokeWidth={2} />
         </button>
-      )}
-      <div className="flex gap-1.5 items-center">
-        {/* 📎写真(aspiration)は onPhotoSelect 指定時のみ表示（Style Match 一本化で page 側が undefined を渡し非表示にできる） */}
-        {onPhotoSelect && <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />}
-        {/* ★ 複数写真→構造+共通点（onPhotosStructure 指定時のみ・既存📎とは別の📷） */}
-        {onPhotosStructure && <AttachButton icon="📷" label="構造"    onClick={handlePhotosStructureClick} />}
-        {/* 🔗URL(商品URL)は PRODUCTS_ENABLED、👕服(クローゼット)は ENABLE_CLOSET で制御。
-            SIMPLE_MODE では写真と MB の2つだけ表示。 */}
-        {PRODUCTS_ENABLED && <AttachButton icon="🔗" label="URL"      onClick={handleUrlClick} />}
-        {ENABLE_CLOSET    && <AttachButton icon="👕" label="服"       onClick={onClosetOpen}    />}
-        <AttachButton icon="🎨" label="MB"       onClick={handleMbClick} />
-        {notice && (
-          <span className="text-[11px] text-gray-500 ml-2 truncate">{notice.text}</span>
+        {isPlusOpen && (
+          <>
+            {/* 外側クリックで閉じる */}
+            <div className="fixed inset-0 z-30" onClick={() => setIsPlusOpen(false)} aria-hidden="true" />
+            <div className="absolute bottom-full left-0 mb-2 z-40 w-56 bg-white border border-gray-100 rounded-2xl shadow-lg py-1.5 overflow-hidden">
+              {onStyleMatch && (
+                <MenuRow icon={<ImageIcon className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleStyleMatchClick(); }}>理想写真を分析</MenuRow>
+              )}
+              <MenuRow icon={<LayoutGrid className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleMbClick(); }}>ムードボードから選ぶ</MenuRow>
+              <MenuRow icon={<FolderPlus className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); router.push("/moodboard"); }}>ムードボードを作る</MenuRow>
+            </div>
+          </>
         )}
       </div>
+      {/* 📎写真(aspiration)は onPhotoSelect 指定時のみ表示（Style Match 一本化で page 側が undefined を渡し非表示にできる） */}
+      {onPhotoSelect && <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />}
+      {/* ★ 複数写真→構造+共通点（onPhotosStructure 指定時のみ・既存📎とは別の📷） */}
+      {onPhotosStructure && <AttachButton icon="📷" label="構造"    onClick={handlePhotosStructureClick} />}
+      {/* 🔗URL(商品URL)は PRODUCTS_ENABLED、👕服(クローゼット)は ENABLE_CLOSET で制御。 */}
+      {PRODUCTS_ENABLED && <AttachButton icon="🔗" label="URL"      onClick={handleUrlClick} />}
+      {ENABLE_CLOSET    && <AttachButton icon="👕" label="服"       onClick={onClosetOpen}    />}
+      {notice && (
+        <span className="text-[11px] text-gray-500 ml-2 truncate self-center">{notice.text}</span>
+      )}
 
       <input
         ref={fileInputRef}
@@ -212,6 +229,20 @@ export default function InputAttachments({
         </>
       )}
     </div>
+  );
+}
+
+// ★ 「＋」メニューの1行（左に線アイコン＋右に短いラベル・ホバーで薄くハイライト）。
+function MenuRow({ icon, onClick, children }: { icon: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50 transition-colors"
+    >
+      <span className="shrink-0">{icon}</span>
+      <span>{children}</span>
+    </button>
   );
 }
 

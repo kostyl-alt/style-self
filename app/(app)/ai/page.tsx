@@ -1185,19 +1185,6 @@ function ChatPageInner() {
             </span>
           </div>
         )}
-        {/* A-5 P1-D: 入力欄近接ボタン(写真 / URL / クローゼット / MB)。
-              ASPIRATION_PHOTO ON のとき 📎写真選択を pendingPhoto セットに配線（onPhotoSelect）。即送信せずプレビュー。
-              OFF時は従来どおり notice（退行ゼロ）。テキストだけの送信は従来の通常チャット（段階A/B）のまま。
-              ★ Style Match 一本化 第1段: STYLE_MATCH ON のとき 📎写真/📷構造を「隠す」（props を undefined に）。
-                handler/API/kind/表示分岐は全て残す＝完全可逆（props を戻すだけで復活）。
-                STYLE_MATCH OFF のときは従来どおり 📎/📷 を出す＝OFF は現状維持（回帰ゼロ）。 */}
-        <InputAttachments
-          onClosetOpen={() => setIsClosetOpen(true)}
-          onMbOpen={() => setIsMbOpen(true)}
-          onPhotoSelect={STYLE_MATCH ? undefined : (ASPIRATION_PHOTO ? handlePhotoPick : undefined)}
-          onPhotosStructure={STYLE_MATCH ? undefined : handlePhotosStructure}
-          onStyleMatch={STYLE_MATCH ? handleStyleMatch : undefined}
-        />
         {/* 段階2: 選択した写真のプレビュー（サムネイル＋取り消し）。送信は送信ボタンで。*/}
         {pendingPhoto && (
           <div className="flex items-center gap-2">
@@ -1216,8 +1203,15 @@ function ChatPageInner() {
             <span className="text-[11px] text-gray-500">この写真で送ります（補足を書ける）</span>
           </div>
         )}
-        {/* 入力欄: textarea + 送信ボタンを1枠の flex 行に（Claude/ChatGPT型・ボタンは右 inline）*/}
-        <div className="flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-gray-400">
+        {/* 入力欄: ＋メニュー + textarea + 送信ボタンを1枠の pill に（ChatGPT型・＋は左に内包）*/}
+        <div className="flex items-end gap-1.5 border border-gray-200 rounded-3xl pl-2 pr-2 py-1.5 focus-within:border-gray-400">
+          <InputAttachments
+            onClosetOpen={() => setIsClosetOpen(true)}
+            onMbOpen={() => setIsMbOpen(true)}
+            onPhotoSelect={STYLE_MATCH ? undefined : (ASPIRATION_PHOTO ? handlePhotoPick : undefined)}
+            onPhotosStructure={STYLE_MATCH ? undefined : handlePhotosStructure}
+            onStyleMatch={STYLE_MATCH ? handleStyleMatch : undefined}
+          />
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
