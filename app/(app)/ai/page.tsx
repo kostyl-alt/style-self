@@ -1838,7 +1838,6 @@ function PhotosStructureCard({
 // 外部アプリの検索 URL を決定的に組み立てる（新規タブで開く・Pinterest は画像表示せず検索リンクで代替）。
 const EXT_SEARCH_URL = {
   zozo:      (q: string) => `https://zozo.jp/search/?p_keyv=${encodeURIComponent(q)}`,
-  rakuten:   (q: string) => `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(q)}/`,
   mercari:   (q: string) => `https://jp.mercari.com/search?keyword=${encodeURIComponent(q)}`,
   pinterest: (q: string) => `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(q)}`,
 };
@@ -1930,12 +1929,11 @@ function StyleMatchCard({
 
           {keywords.zozo_rakuten.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[11px] text-gray-400">ZOZO・楽天（新品）</p>
+              <p className="text-[11px] text-gray-400">ZOZO（新品）</p>
               {keywords.zozo_rakuten.map((q, i) => (
                 <div key={i} className="flex items-center gap-2 flex-wrap">
                   <span className="text-[13px] text-gray-800">{q}</span>
                   <ExtLink href={EXT_SEARCH_URL.zozo(q)} label="ZOZO" />
-                  <ExtLink href={EXT_SEARCH_URL.rakuten(q)} label="楽天" />
                 </div>
               ))}
             </div>
