@@ -52,6 +52,7 @@ import { buildMoodboardPrompt, MB_PROMPT_SIGNATURE } from "@/lib/prompts/moodboa
 import type { MoodboardWithItems, MoodboardItemVision, MoodboardSignals } from "@/types/moodboard";
 import type { BodyProfile } from "@/types/index";
 import type { Message, MessageContent, SuggestionItem, IntentResponse, EditorScorePayload } from "@/types/chat-ui";
+import type { StyleMatchKeywords } from "@/lib/prompts/style-match-keywords";
 import { useChatSession } from "@/components/chat/ChatSessionProvider";
 import { uploadAspirationImage, getAspirationSignedUrl } from "@/lib/storage";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -1020,7 +1021,29 @@ function ChatPageInner() {
         });
         return;
       }
-      replaceMessage(setMessages, lid, { kind: "style-match", photos: data.photos, signals: data.signals, photoDataUrls });
+      // 第1段の骨格(写真＋タグ)を即表示し、④検索ワードは LLM 1回を挟むので keywordsLoading で待たせる。
+      const photos = data.photos;
+      const signals = data.signals;
+      replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywordsLoading: true });
+
+      // ④ アプリ別検索ワード（隔離ルート・事実は渡すだけ・LLM は検索語化のみ）。best-effort・失敗は keywordsError。
+      const items = photos.flatMap((p) => p.vision.visualFacts.items.map((f) => f.value)).filter(Boolean);
+      try {
+        const kwRes = await fetch("/api/ai/style-match-keywords", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ signals, items }),
+        });
+        const kwData = await kwRes.json() as { ok?: boolean; keywords?: StyleMatchKeywords; reason?: string };
+        if (kwRes.ok && kwData.ok && kwData.keywords) {
+          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywords: kwData.keywords });
+        } else {
+          // 芯が弱い(empty_signals)等は検索ワードなしで骨格のみ確定（エラー扱いにしない）。
+          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls });
+        }
+      } catch {
+        replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywordsError: true });
+      }
     } catch (err) {
       const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
       if (loadingId) {
@@ -1640,8 +1663,16 @@ function AssistantContent({
     return <PhotosStructureCard photos={content.photos} signals={content.signals} photoDataUrls={content.photoDataUrls} />;
   }
   if (content.kind === "style-match") {
-    // 第1段は signals(抽出タグ)＋写真サムネのみ使用。per-photo vision(content.photos)は第3段(買う条件)で使う。
-    return <StyleMatchCard signals={content.signals} photoDataUrls={content.photoDataUrls} />;
+    // 抽出タグ(signals)＋写真サムネ＋④検索ワード(keywords)。per-photo vision(content.photos)は第3段(買う条件)で使う。
+    return (
+      <StyleMatchCard
+        signals={content.signals}
+        photoDataUrls={content.photoDataUrls}
+        keywords={content.keywords}
+        keywordsLoading={content.keywordsLoading}
+        keywordsError={content.keywordsError}
+      />
+    );
   }
   // image は user 専用 kind（assistant では発生しない）。型の網羅性のためガード。
   if (content.kind !== "intent-result") return null;
@@ -1804,12 +1835,39 @@ function PhotosStructureCard({
 // ★ Style Match Result 第1段の結果カード（骨格＝①写真一覧 ②抽出タグ）。
 //   ②抽出タグは signals(core/repeated) から決定的に作る（LLM 不要・accent=1枚だけは除外）。
 //   ③買う条件/④検索ワード(LLM整形)/⑤外部検索ボタン/⑥理由 は第2段以降。ephemeral（React state のみ）。
+// 外部アプリの検索 URL を決定的に組み立てる（新規タブで開く・Pinterest は画像表示せず検索リンクで代替）。
+const EXT_SEARCH_URL = {
+  zozo:      (q: string) => `https://zozo.jp/search/?p_keyv=${encodeURIComponent(q)}`,
+  rakuten:   (q: string) => `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(q)}/`,
+  mercari:   (q: string) => `https://jp.mercari.com/search?keyword=${encodeURIComponent(q)}`,
+  pinterest: (q: string) => `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(q)}`,
+};
+
+function ExtLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center px-2 py-0.5 bg-white border border-gray-300 rounded-md text-[11px] text-gray-600 hover:bg-gray-100 transition-colors"
+    >
+      {label}
+    </a>
+  );
+}
+
 function StyleMatchCard({
   signals,
   photoDataUrls,
+  keywords,
+  keywordsLoading,
+  keywordsError,
 }: {
   signals: MoodboardSignals;
   photoDataUrls?: string[];
+  keywords?: StyleMatchKeywords;
+  keywordsLoading?: boolean;
+  keywordsError?: boolean;
 }) {
   const [zoom, setZoom] = useState<string | null>(null);
   // 抽出タグ = core/repeated のみ（accent=1枚だけは「繰り返し惹かれている」ではないので骨格では出さない）。
@@ -1858,6 +1916,54 @@ function StyleMatchCard({
           <p className="text-[12px] text-gray-400">複数枚に共通する芯はまだ弱めです（写真を増やすと出やすくなります）。</p>
         )}
       </div>
+
+      {/* ④ アプリ別検索ワード（LLM 整形・「これで探せる」）＋ ⑤ 外部検索ボタン（新規タブ・Pinterestは検索リンク） */}
+      {keywordsLoading ? (
+        <p className="text-[12px] text-gray-400 border-t border-gray-100 pt-2">検索ワードを考えています…</p>
+      ) : keywords ? (
+        <div className="space-y-2 border-t border-gray-100 pt-2">
+          <p className="text-xs font-semibold text-gray-900">これで探せる</p>
+
+          {keywords.zozo_rakuten.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-gray-400">ZOZO・楽天（新品）</p>
+              {keywords.zozo_rakuten.map((q, i) => (
+                <div key={i} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] text-gray-800">{q}</span>
+                  <ExtLink href={EXT_SEARCH_URL.zozo(q)} label="ZOZO" />
+                  <ExtLink href={EXT_SEARCH_URL.rakuten(q)} label="楽天" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {keywords.mercari_furugi.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-gray-400">メルカリ（古着・中古）</p>
+              {keywords.mercari_furugi.map((q, i) => (
+                <div key={i} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] text-gray-800">{q}</span>
+                  <ExtLink href={EXT_SEARCH_URL.mercari(q)} label="メルカリ" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {keywords.pinterest_en.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-gray-400">Pinterest（着こなし・英語）</p>
+              {keywords.pinterest_en.map((q, i) => (
+                <div key={i} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] text-gray-800">{q}</span>
+                  <ExtLink href={EXT_SEARCH_URL.pinterest(q)} label="Pinterest" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : keywordsError ? (
+        <p className="text-[12px] text-gray-400 border-t border-gray-100 pt-2">検索ワードの生成に失敗しました（タグから探してみてください）。</p>
+      ) : null}
 
       <PhotoLightbox src={zoom} onClose={() => setZoom(null)} />
     </div>

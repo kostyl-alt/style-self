@@ -6,6 +6,7 @@
 import type { CoordinateReply, EditorScorePayload } from "@/types/coordinate-reply";
 import type { ProductCandidate } from "@/types/product-candidate";
 import type { MoodboardItemVision, MoodboardSignals } from "@/types/moodboard";
+import type { StyleMatchKeywords } from "@/lib/prompts/style-match-keywords";
 
 export type { EditorScorePayload };
 
@@ -40,7 +41,7 @@ export type MessageContent =
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示
   | { kind: "photos-sent";   photoDataUrls: string[]; caption?: string }  // ★ 📷構造の送信バブル: 送った写真を通常サイズで表示(ephemeral・DB非保存)
   | { kind: "photos-structure"; photos: { index: number; vision: MoodboardItemVision }[]; signals: MoodboardSignals; photoDataUrls?: string[] }  // ★ 複数写真→構造抽出+共通点抽出（/api/ai/photos-structure・MB非依存・ブランドなし）。index=送信配列での元位置・photoDataUrls=送った写真のサムネイル(ephemeral・DB非保存)
-  | { kind: "style-match"; photos: { index: number; vision: MoodboardItemVision }[]; signals: MoodboardSignals; photoDataUrls?: string[] }  // ★ Style Match Result 第1段(理想写真→「買える言葉」)。解析は photos-structure 流用。第1段は①写真一覧②抽出タグ(signals決定的)の骨格・③④⑤は第2段以降(ephemeral・DB非保存)
+  | { kind: "style-match"; photos: { index: number; vision: MoodboardItemVision }[]; signals: MoodboardSignals; photoDataUrls?: string[]; keywords?: StyleMatchKeywords; keywordsLoading?: boolean; keywordsError?: boolean }  // ★ Style Match Result(理想写真→「買える言葉」)。解析は photos-structure 流用。①写真一覧②抽出タグ(signals決定的)＋④アプリ別検索ワード(keywords=LLM整形・第2段)＋⑤外部検索ボタン。③買う条件は第3段(ephemeral・DB非保存)
   | { kind: "error";         message: string };                   // 通信 / API エラー
 
 export interface Message {
