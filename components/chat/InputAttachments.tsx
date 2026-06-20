@@ -130,7 +130,8 @@ export default function InputAttachments({
         </button>
       )}
       <div className="flex gap-1.5 items-center">
-        <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />
+        {/* 📎写真(aspiration)は onPhotoSelect 指定時のみ表示（Style Match 一本化で page 側が undefined を渡し非表示にできる） */}
+        {onPhotoSelect && <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />}
         {/* ★ 複数写真→構造+共通点（onPhotosStructure 指定時のみ・既存📎とは別の📷） */}
         {onPhotosStructure && <AttachButton icon="📷" label="構造"    onClick={handlePhotosStructureClick} />}
         {/* 🔗URL(商品URL)は PRODUCTS_ENABLED、👕服(クローゼット)は ENABLE_CLOSET で制御。

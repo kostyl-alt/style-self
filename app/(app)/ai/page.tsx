@@ -1187,12 +1187,15 @@ function ChatPageInner() {
         )}
         {/* A-5 P1-D: 入力欄近接ボタン(写真 / URL / クローゼット / MB)。
               ASPIRATION_PHOTO ON のとき 📎写真選択を pendingPhoto セットに配線（onPhotoSelect）。即送信せずプレビュー。
-              OFF時は従来どおり notice（退行ゼロ）。テキストだけの送信は従来の通常チャット（段階A/B）のまま。 */}
+              OFF時は従来どおり notice（退行ゼロ）。テキストだけの送信は従来の通常チャット（段階A/B）のまま。
+              ★ Style Match 一本化 第1段: STYLE_MATCH ON のとき 📎写真/📷構造を「隠す」（props を undefined に）。
+                handler/API/kind/表示分岐は全て残す＝完全可逆（props を戻すだけで復活）。
+                STYLE_MATCH OFF のときは従来どおり 📎/📷 を出す＝OFF は現状維持（回帰ゼロ）。 */}
         <InputAttachments
           onClosetOpen={() => setIsClosetOpen(true)}
           onMbOpen={() => setIsMbOpen(true)}
-          onPhotoSelect={ASPIRATION_PHOTO ? handlePhotoPick : undefined}
-          onPhotosStructure={handlePhotosStructure}
+          onPhotoSelect={STYLE_MATCH ? undefined : (ASPIRATION_PHOTO ? handlePhotoPick : undefined)}
+          onPhotosStructure={STYLE_MATCH ? undefined : handlePhotosStructure}
           onStyleMatch={STYLE_MATCH ? handleStyleMatch : undefined}
         />
         {/* 段階2: 選択した写真のプレビュー（サムネイル＋取り消し）。送信は送信ボタンで。*/}
