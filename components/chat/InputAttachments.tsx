@@ -22,6 +22,7 @@ interface InputAttachmentsProps {
   onUrlSubmit?:    (url: string) => void;  // 将来用・現状は notice のみ
   onPhotoSelect?:  (file: File) => void;   // 将来用・現状は notice のみ
   onPhotosStructure?: (files: File[]) => void;  // ★ 複数写真→構造+共通点（指定時のみ📷ボタン表示・既存📎とは別）
+  onStyleMatch?: (files: File[]) => void;  // ★ Style Match Result（指定時のみ「理想写真を分析する」ボタン表示・既存📎/📷とは別・additive）
 }
 
 type Notice = { id: number; text: string };
@@ -31,10 +32,12 @@ export default function InputAttachments({
   onMbOpen,
   onPhotoSelect,
   onPhotosStructure,
+  onStyleMatch,
   // onUrlSubmit は今回未使用(将来 Sprint C で実装)
 }: InputAttachmentsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
+  const styleMatchInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isUrlOpen, setIsUrlOpen] = useState(false);
   const [urlText, setUrlText] = useState("");
@@ -76,6 +79,18 @@ export default function InputAttachments({
     e.target.value = "";  // 同じ写真を再選択できるように
   }
 
+  function handleStyleMatchClick(): void {
+    styleMatchInputRef.current?.click();
+  }
+
+  function handleStyleMatchChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const list = e.target.files;
+    if (list && list.length > 0 && onStyleMatch) {
+      onStyleMatch(Array.from(list));
+    }
+    e.target.value = "";  // 同じ写真を再選択できるように
+  }
+
   function handleUrlClick(): void {
     setIsUrlOpen(true);
   }
@@ -104,6 +119,16 @@ export default function InputAttachments({
 
   return (
     <div className="space-y-2">
+      {/* ★ Style Match Result の主役CTA（onStyleMatch 指定時=フラグON時のみ・既存ボタンとは別の新体験） */}
+      {onStyleMatch && (
+        <button
+          type="button"
+          onClick={handleStyleMatchClick}
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-gray-800 text-white text-sm rounded-xl hover:bg-gray-700 transition-colors"
+        >
+          ✨ 理想写真を分析する
+        </button>
+      )}
       <div className="flex gap-1.5 items-center">
         <AttachButton icon="📎" label="写真"     onClick={handlePhotoClick} />
         {/* ★ 複数写真→構造+共通点（onPhotosStructure 指定時のみ・既存📎とは別の📷） */}
@@ -134,6 +159,16 @@ export default function InputAttachments({
         multiple
         hidden
         onChange={handlePhotosStructureChange}
+      />
+
+      {/* ★ Style Match Result 用（複数選択可） */}
+      <input
+        ref={styleMatchInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={handleStyleMatchChange}
       />
 
       {/* URL 入力簡易モーダル */}

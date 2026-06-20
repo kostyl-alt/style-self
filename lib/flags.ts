@@ -92,6 +92,13 @@ export const MB_SIGNALS_IN_BRIEF = process.env.MB_SIGNALS_IN_BRIEF === "true";
 //   temporary 中は thread を作らない（一時チャット無改修）。client 参照のため NEXT_PUBLIC_*。
 export const AUTOSAVE_THREAD = process.env.NEXT_PUBLIC_AUTOSAVE_THREAD === "true";
 
+// STYLE_MATCH: Style Match Result(理想写真→「買える言葉」→すぐ探せる)の新体験。第1段=新ボタン
+//   「理想写真を分析する」+ 新カード骨格(①写真一覧 ②抽出タグ=signals core/repeated から決定的)。
+//   解析は既存 /api/ai/photos-structure を流用(新バックエンドなし)・ephemeral(DB/localStorage非保存)。
+//   既定 OFF。OFF/未設定時は新ボタンを出さない=完全現状維持(回帰ゼロ)。既存の📎写真/📷構造は無改修。
+//   ③買う条件/④検索ワード(LLM整形)/⑤外部検索ボタンは第2段以降。client 参照のため NEXT_PUBLIC_*。
+export const STYLE_MATCH = process.env.NEXT_PUBLIC_STYLE_MATCH === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

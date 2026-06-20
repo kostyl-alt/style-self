@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
 import type { CoordinateReply } from "@/types/coordinate-reply";
@@ -971,6 +971,68 @@ function ChatPageInner() {
     }
   }
 
+  // ★ Style Match Result 第1段（理想写真→「買える言葉」）。解析は既存 /api/ai/photos-structure を流用
+  //   （新バックエンドなし）。handlePhotosStructure と同型だが結果 kind は "style-match"（骨格＝写真一覧＋抽出タグ）。
+  //   ⚠️ ブランド/brief は呼ばない・MB 作らない・DB/localStorage 非保存（ephemeral・既存と隔離・additive）。
+  async function handleStyleMatch(files: File[]) {
+    if (loading || files.length === 0) return;
+    setLoading(true);
+    let loadingId: string | null = null;
+    try {
+      const images: { base64: string; mediaType: string }[] = [];
+      for (const file of files) {
+        try {
+          const processed = await processImageForUpload(file);
+          const { base64, mediaType } = await fileToBase64(processed);
+          images.push({ base64, mediaType });
+        } catch { /* 1枚失敗は無視して継続 */ }
+      }
+      if (images.length === 0) {
+        setMessages((prev) => trimByMax([...prev, {
+          id: newMessageId(), role: "assistant", content: { kind: "error", message: "写真の処理に失敗しました" }, createdAt: Date.now(),
+        }]));
+        return;
+      }
+      const photoDataUrls = images.map((im) => `data:${im.mediaType};base64,${im.base64}`);
+      const userMsg: Message = {
+        id:        newMessageId(),
+        role:      "user",
+        content:   { kind: "photos-sent", photoDataUrls, caption: `✨ 理想写真${images.length}枚を分析` },
+        createdAt: Date.now(),
+      };
+      const lid = newMessageId();
+      loadingId = lid;
+      setMessages((prev) => trimByMax([...prev, userMsg, {
+        id: lid, role: "assistant", content: { kind: "loading" }, createdAt: Date.now(),
+      }]));
+      const res = await fetch("/api/ai/photos-structure", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ images }),
+      });
+      const data = await res.json() as {
+        ok?: boolean; photos?: { index: number; vision: MoodboardItemVision }[]; signals?: MoodboardSignals; reason?: string; error?: string;
+      };
+      if (!res.ok || !data.ok || !data.photos || !data.signals) {
+        replaceMessage(setMessages, lid, {
+          kind:    "error",
+          message: data.error ?? (data.reason === "auth_required" ? "ログインが必要です" : "写真の分析に失敗しました"),
+        });
+        return;
+      }
+      replaceMessage(setMessages, lid, { kind: "style-match", photos: data.photos, signals: data.signals, photoDataUrls });
+    } catch (err) {
+      const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
+      if (loadingId) {
+        replaceMessage(setMessages, loadingId, errContent);
+      } else {
+        setMessages((prev) => trimByMax([...prev, { id: newMessageId(), role: "assistant", content: errContent, createdAt: Date.now() }]));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 送信ディスパッチャ: 写真があれば aspiration（補足テキストを note で渡す）、無ければ従来の通常チャット。
   function handleComposerSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -1107,6 +1169,7 @@ function ChatPageInner() {
           onMbOpen={() => setIsMbOpen(true)}
           onPhotoSelect={ASPIRATION_PHOTO ? handlePhotoPick : undefined}
           onPhotosStructure={handlePhotosStructure}
+          onStyleMatch={STYLE_MATCH ? handleStyleMatch : undefined}
         />
         {/* 段階2: 選択した写真のプレビュー（サムネイル＋取り消し）。送信は送信ボタンで。*/}
         {pendingPhoto && (
@@ -1576,6 +1639,10 @@ function AssistantContent({
   if (content.kind === "photos-structure") {
     return <PhotosStructureCard photos={content.photos} signals={content.signals} photoDataUrls={content.photoDataUrls} />;
   }
+  if (content.kind === "style-match") {
+    // 第1段は signals(抽出タグ)＋写真サムネのみ使用。per-photo vision(content.photos)は第3段(買う条件)で使う。
+    return <StyleMatchCard signals={content.signals} photoDataUrls={content.photoDataUrls} />;
+  }
   // image は user 専用 kind（assistant では発生しない）。型の網羅性のためガード。
   if (content.kind !== "intent-result") return null;
   // 既存 intent-result : D1-2a 既存 ResultView を ★シグネチャ無変更で★ 再利用
@@ -1729,6 +1796,69 @@ function PhotosStructureCard({
           })}
         </div>
       </details>
+      <PhotoLightbox src={zoom} onClose={() => setZoom(null)} />
+    </div>
+  );
+}
+
+// ★ Style Match Result 第1段の結果カード（骨格＝①写真一覧 ②抽出タグ）。
+//   ②抽出タグは signals(core/repeated) から決定的に作る（LLM 不要・accent=1枚だけは除外）。
+//   ③買う条件/④検索ワード(LLM整形)/⑤外部検索ボタン/⑥理由 は第2段以降。ephemeral（React state のみ）。
+function StyleMatchCard({
+  signals,
+  photoDataUrls,
+}: {
+  signals: MoodboardSignals;
+  photoDataUrls?: string[];
+}) {
+  const [zoom, setZoom] = useState<string | null>(null);
+  // 抽出タグ = core/repeated のみ（accent=1枚だけは「繰り返し惹かれている」ではないので骨格では出さない）。
+  //   core を先・repeated を後にして「強い芯」から並べる（count 同点は元順を保つ安定表示）。
+  const tags = signals.signals
+    .filter((s) => s.strength !== "accent")
+    .sort((a, b) => (a.strength === b.strength ? 0 : a.strength === "core" ? -1 : 1));
+  const thumbs = (photoDataUrls ?? []).filter(Boolean);
+
+  return (
+    <div className="space-y-3 bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
+      <p className="text-xs tracking-widest text-gray-400 uppercase">理想写真の分析</p>
+
+      {/* ① 写真一覧（主役・上に横並び・押すと拡大） */}
+      {thumbs.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {thumbs.map((src, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={src}
+              alt={`理想写真 ${i + 1}`}
+              onClick={() => setZoom(src)}
+              className="h-24 w-24 flex-shrink-0 object-cover rounded-xl border border-gray-200 cursor-zoom-in"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ② 抽出タグ（signals から決定的・長文でなくタグ・枚数付き） */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-gray-900">あなたが惹かれている要素</p>
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((s, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-gray-200 rounded-full text-[13px] text-gray-800"
+              >
+                {s.value}
+                <span className="text-gray-400 text-[11px]">{s.count}枚</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-gray-400">複数枚に共通する芯はまだ弱めです（写真を増やすと出やすくなります）。</p>
+        )}
+      </div>
+
       <PhotoLightbox src={zoom} onClose={() => setZoom(null)} />
     </div>
   );
