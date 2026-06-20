@@ -13,6 +13,9 @@ import type { MoodboardSignals, SignalAxis } from "@/types/moodboard";
 
 // LLM 出力（アプリ別検索ワード）。
 export interface StyleMatchKeywords {
+  // ★ 理由（1行）: この検索ワード群が「複数写真で繰り返し惹かれている共通の芯」のどこを再現しようとしているか。
+  //   「分解してくれてる感」を最小の文字で出すため、全体に1行だけ（任意・無くてもエラーにしない＝graceful）。
+  reason?:        string;
   zozo_rakuten:   string[];  // 日本語・新品EC（ZOZO/楽天）用
   mercari_furugi: string[];  // 日本語・フリマ/古着（メルカリ）用
   pinterest_en:   string[];  // 英語・着こなし発見（Pinterest）用
@@ -70,10 +73,17 @@ export const STYLE_MATCH_KEYWORDS_SYSTEM = `あなたは日本のファッショ
 - mercari_furugi（日本語・フリマ/古着）: 「古着」「ヴィンテージ」「90s」などの中古/レトロ寄りの語を色・アイテムと組合せる。例「古着 ブラックデニム ワイド」「ヴィンテージ レザージャケット 黒」。
 - pinterest_en（英語・着こなし発見）: 英語で、なるべく具体的に。outfit / style を添えてよいが抽象語だけにしない。例「black wide leg pants outfit men」「oversized leather jacket street style」。
 
+# 理由（reason・1行）
+- これらの検索ワード群が「複数の写真で繰り返し惹かれている共通の芯」のどこを再現しようとしているかを、1行で書く。
+- 必ず入力の共通の芯（色・シルエット・ジャンル等の事実）に紐づける。薄い感想・憶測は禁止。短く（40〜60字程度）。
+  - 良い: 「写真群で共通している『黒・ワイド・下半身の重さ』を再現するための検索ワードです」
+  - 良い: 「繰り返し出ている『黒のレイヤード』と『短丈トップス×ワイドパンツ』の重心を再現します」
+  - 悪い（禁止）: 「黒が好きそうだから」「おしゃれだから」「あなたに似合います」
+
 # 出力
 - 各配列は 3〜6個。短く具体的な検索ワードのみ。共通の芯を再現する語から並べる。
 - 次の JSON だけを出力する（説明・前置き・他のキーは一切禁止）:
-{"zozo_rakuten": ["..."], "mercari_furugi": ["..."], "pinterest_en": ["..."]}`;
+{"reason": "...", "zozo_rakuten": ["..."], "mercari_furugi": ["..."], "pinterest_en": ["..."]}`;
 
 // 主軸を user message に整形する。
 //   ⚠️ core/repeated（共通の芯）を主役・枚数(count)付きで強調。core を上に・repeated を下に。

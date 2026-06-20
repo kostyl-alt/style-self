@@ -1923,6 +1923,10 @@ function StyleMatchCard({
       ) : keywords ? (
         <div className="space-y-2 border-t border-gray-100 pt-2">
           <p className="text-xs font-semibold text-gray-900">これで探せる</p>
+          {/* ★ 理由(1行)＝この検索ワード群が再現しようとしている共通構造。主役は検索ワードなので小さく短く。 */}
+          {keywords.reason && (
+            <p className="text-[11px] text-gray-500 leading-snug">{keywords.reason}</p>
+          )}
 
           {keywords.zozo_rakuten.length > 0 && (
             <div className="space-y-1">

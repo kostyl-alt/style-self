@@ -75,7 +75,12 @@ export async function POST(request: NextRequest) {
       temperature:  0.3,
     });
 
+    // 理由は1行・長すぎる暴走を防ぐため最大120字で切る（無くても graceful）。
+    const reason = typeof raw.reason === "string" && raw.reason.trim()
+      ? raw.reason.trim().slice(0, 120)
+      : undefined;
     const keywords: StyleMatchKeywords = {
+      ...(reason ? { reason } : {}),
       zozo_rakuten:   cleanList(raw.zozo_rakuten),
       mercari_furugi: cleanList(raw.mercari_furugi),
       pinterest_en:   cleanList(raw.pinterest_en),
