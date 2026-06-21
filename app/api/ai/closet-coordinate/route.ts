@@ -10,12 +10,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { callClaude } from "@/lib/claude";
+import { callClaude, callClaudeJSON } from "@/lib/claude";
 import {
   CLOSET_COORDINATE_SYSTEM,
+  CLOSET_COORDINATE_JSON_SYSTEM,
   buildClosetCoordinateUserMessage,
   type ClosetCoordinateOptions,
 } from "@/lib/prompts/closet-coordinate";
+// ★ 第3段(買い足し→検索リンク): 検索ワードの型のみ流用(生成は closet 自身が reply と1回 JSON で出す)。
+import { type StyleMatchKeywords } from "@/lib/prompts/style-match-keywords";
 import { stripCanonicalSlugs, fetchStyleConsultContext, fetchStyleSignals } from "@/lib/stylist-chat/context";
 import { buildBrandFacts } from "@/lib/knowledge/brand-facts";
 import type { MoodboardSignals } from "@/types/moodboard";
@@ -31,9 +34,10 @@ interface ClosetCoordinateRequest {
 }
 
 interface ClosetCoordinateResponse {
-  ok:      boolean;
-  reply?:  string;
-  reason?: "auth_required" | "empty_facts";
+  ok:          boolean;
+  reply?:      string;
+  buyKeywords?: StyleMatchKeywords;  // ★ 第3段: 買い足し検索ワード(3アプリ・best-effort・無ければ省略=リンク無し)
+  reason?:     "auth_required" | "empty_facts";
 }
 
 export async function POST(request: NextRequest) {
@@ -80,25 +84,48 @@ export async function POST(request: NextRequest) {
       worldview = hasAny ? wv : undefined;
     } catch { worldview = undefined; }  // graceful: 取得失敗は世界観なしで従来どおり
 
-    // 4) LLM 1回(事実は渡すだけ・会話で提案)。質優先で既定 Sonnet。
+    // 4) LLM 1回(JSON): reply(会話文)と buyKeywords(買い足し検索ワード)を同時に返させる → reply とリンクが必ず一致。
+    //    ⚠️ 買い足しは「reply で勧めたアイテム＋世界観」を検索ワード化・手持ち服は除外(プロンプトで担保)。
+    //    ⚠️ Style Match の「再現」生成器は使わない(手持ち服を探すワードになる矛盾を解消)。
     const userMessage = buildClosetCoordinateUserMessage(
       signals ?? ({ schemaVersion: 1, imageCount: 0, signals: [] } as unknown as MoodboardSignals),
       { items, gender, note, ...(worldview ? { worldview } : {}) },
     );
-    const raw = await callClaude({
-      systemPrompt: CLOSET_COORDINATE_SYSTEM,
-      userMessage,
-      maxTokens:    1536,
-      temperature:  0.5,
-    });
+    const clean = (v: unknown): string[] => Array.isArray(v)
+      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean))).slice(0, 6)
+      : [];
 
-    // プライバシー三重防御(3): 返答から英語スラッグを検出削除(aspiration ルートと同じ)。
-    const reply = stripCanonicalSlugs(raw).cleaned.trim();
+    let reply = "";
+    let buyKeywords: StyleMatchKeywords | undefined;
+    try {
+      const parsed = await callClaudeJSON<{
+        reply?: unknown;
+        buyKeywords?: { zozo_rakuten?: unknown; mercari_furugi?: unknown; pinterest_en?: unknown };
+      }>({
+        systemPrompt: CLOSET_COORDINATE_JSON_SYSTEM,
+        userMessage,
+        maxTokens:    2048,   // reply(長文)＋buyKeywords を1回で出すため余裕を持たせる(callClaudeJSON 途中切れ対策)
+        temperature:  0.5,
+      });
+      // プライバシー三重防御(3): reply から英語スラッグを検出削除(aspiration ルートと同じ)。
+      reply = stripCanonicalSlugs(typeof parsed.reply === "string" ? parsed.reply : "").cleaned.trim();
+      const bk = parsed.buyKeywords;
+      if (bk) {
+        const zk = clean(bk.zozo_rakuten), mk = clean(bk.mercari_furugi), pk = clean(bk.pinterest_en);
+        if (zk.length > 0 || mk.length > 0 || pk.length > 0) buyKeywords = { zozo_rakuten: zk, mercari_furugi: mk, pinterest_en: pk };
+      }
+    } catch {
+      // ★ graceful: JSON 失敗時はテキストプロンプトで reply だけ取り直す(buyKeywords は諦める=リンク無し)。
+      try {
+        const rawText = await callClaude({ systemPrompt: CLOSET_COORDINATE_SYSTEM, userMessage, maxTokens: 1536, temperature: 0.5 });
+        reply = stripCanonicalSlugs(rawText).cleaned.trim();
+      } catch { /* both failed → reply 空 */ }
+    }
+
     if (!reply) {
       return NextResponse.json<ClosetCoordinateResponse>({ ok: true, reason: "empty_facts" });
     }
-
-    return NextResponse.json<ClosetCoordinateResponse>({ ok: true, reply });
+    return NextResponse.json<ClosetCoordinateResponse>({ ok: true, reply, ...(buyKeywords ? { buyKeywords } : {}) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[closet-coordinate] failed:", message);

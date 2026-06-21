@@ -35,7 +35,7 @@ export type MessageContent =
 
   | { kind: "aspiration";    summary: string; sections?: { label: string; content: string }[] }   // 憧れ写真分析(要約常時表示 + 詳細セクションを「詳しく見る」で折り畳み・[[SECTION:key]] で分割済)
   | { kind: "intent-result"; result: IntentResponse }             // /api/overlay/intent のレスポンス(MVP-1 範囲外 intent 用)
-  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合)
+  | { kind: "reply";         text: string; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null; buyKeywords?: StyleMatchKeywords }  // /api/ai/stylist-chat の自然文応答(P1-C-1.5a・sessionIntent は会話継続性のため・L3 / C-2a: moodboardId / C-2c-1: editorScore で E-0c 凡庸脱却の判定スコアを保持 / ③-c-4: koRequestId で feedback 突合 / 第3段: buyKeywords=手持ち服コーデ相談の買い足し検索ワード・closet 経路のみ set・3アプリリンク表示用)
   | { kind: "coordinate_v2"; coordinate: CoordinateReply; actions?: SuggestionItem[]; sessionIntent?: string; moodboardId?: string; editorScore?: EditorScorePayload; koRequestId?: string | null }  // ★ H-4b1-b-1: 構造化コーデ応答(暫定 pre 表示・表示順7 component は H-4b1-b-2 / ③-c-4: koRequestId で feedback 突合)
   | { kind: "products"; candidates: ProductCandidate[]; queriesUsed: string[]; moodboardId: string; loading?: boolean; error?: string | null }  // ★ G-2b 案D: 実商品候補(coordinate_v2 と別メッセージで関心分離・/api/products/candidates 結果)
   | { kind: "loading";       mbCoordinate?: boolean }              // 「考えています…」/ C-2c-1: MB は段階表示

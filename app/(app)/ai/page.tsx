@@ -1262,10 +1262,11 @@ function ChatPageInner() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ signals, items, ...(trimmedNote ? { note: trimmedNote } : {}) }),
       });
-      const ccData = await ccRes.json() as { ok?: boolean; reply?: string; reason?: string; error?: string };
+      const ccData = await ccRes.json() as { ok?: boolean; reply?: string; buyKeywords?: StyleMatchKeywords; reason?: string; error?: string };
       let finalContent: MessageContent;
       if (ccRes.ok && ccData.ok && ccData.reply) {
-        finalContent = { kind: "reply", text: ccData.reply };
+        // ★ 第3段: 買い足し検索ワードがあれば reply に同梱(描画側で3アプリリンク表示・無ければ従来どおり)。
+        finalContent = { kind: "reply", text: ccData.reply, ...(ccData.buyKeywords ? { buyKeywords: ccData.buyKeywords } : {}) };
       } else if (ccData.reason === "empty_facts") {
         finalContent = { kind: "reply", text: "写真からは服の特徴が読み取りにくかったです。別の角度や明るい場所で撮った写真だと、よりよく提案できます。" };
       } else {
@@ -1952,6 +1953,9 @@ function AssistantContent({
         <div className="bg-gray-50 text-gray-900 text-sm rounded-2xl rounded-bl-md px-4 py-3 whitespace-pre-wrap break-words leading-relaxed">
           {content.text}
         </div>
+        {/* ★ 第3段(買い足し→検索リンク): 手持ち服コーデ相談で買い足し検索ワードがある時だけ3アプリリンクを出す。
+            buyKeywords は closet 経路でのみ set → 通常 reply(stylist-chat)は無改修(描画されない)。 */}
+        {content.buyKeywords && <BuyKeywordsLinks keywords={content.buyKeywords} />}
         {/* C-2c-1: MB 経由 coordinate のエディタ AI 評価スコア表示(verify 用に折りたたみ) */}
         {content.editorScore && <EditorScoreFold score={content.editorScore} />}
         {content.actions && content.actions.length > 0 && (
@@ -2185,6 +2189,33 @@ function ExtLink({ href, label }: { href: string; label: string }) {
     >
       {label}
     </a>
+  );
+}
+
+// ★ 第3段(買い足し→検索リンク): 手持ち服コーデ相談 reply 下の「これで探せる」3アプリリンク。
+//   EXT_SEARCH_URL / ExtLink を流用(ZOZO は sjis・新規タブ)。StyleMatchCard とは別に reply 用の独立表示。
+function BuyKeywordsLinks({ keywords }: { keywords: StyleMatchKeywords }) {
+  const groups = [
+    { app: "ZOZO（新品）",          btn: "ZOZO",      words: keywords.zozo_rakuten,   url: EXT_SEARCH_URL.zozo },
+    { app: "メルカリ（古着・中古）", btn: "メルカリ",   words: keywords.mercari_furugi, url: EXT_SEARCH_URL.mercari },
+    { app: "Pinterest（着こなし・英語）", btn: "Pinterest", words: keywords.pinterest_en, url: EXT_SEARCH_URL.pinterest },
+  ];
+  if (!groups.some((g) => g.words.length > 0)) return null;
+  return (
+    <div className="space-y-2 bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3">
+      <p className="text-xs font-semibold text-gray-900">これで探せる（買い足し）</p>
+      {groups.map((g) => g.words.length > 0 && (
+        <div key={g.btn} className="space-y-1">
+          <p className="text-[11px] text-gray-400">{g.app}</p>
+          {g.words.map((q, i) => (
+            <div key={i} className="flex items-center gap-2 flex-wrap">
+              <span className="text-[13px] text-gray-800">{q}</span>
+              <ExtLink href={g.url(q)} label={g.btn} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
