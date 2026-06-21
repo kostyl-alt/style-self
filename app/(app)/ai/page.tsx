@@ -1233,6 +1233,22 @@ function ChatPageInner() {
       const signals = data.signals;
       const items = data.photos.flatMap((p) => p.vision.visualFacts.items.map((f) => f.value)).filter(Boolean);
 
+      // ★ 第2段(追撃会話): 手持ち服 facts を短いテキストにして photos-sent に保存(base64でなく軽い)。
+      //   ライブ state も更新→ buildStylistHistory が追撃時に user 行として積む。リロード後も ChatGPT 型保存で復元。
+      const factsSummary = signals.signals
+        .filter((s) => s.strength !== "accent")
+        .sort((a, b) => (a.strength === b.strength ? b.count - a.count : a.strength === "core" ? -1 : 1))
+        .map((s) => s.value)
+        .filter(Boolean)
+        .slice(0, 6)
+        .join("・");
+      const userContent: MessageContent = {
+        kind: "photos-sent", photoDataUrls, storagePaths,
+        caption: trimmedNote || `👕 手持ちの服${images.length}枚でコーデ相談`,
+        ...(factsSummary ? { factsSummary } : {}),
+      };
+      replaceMessage(setMessages, userMsg.id, userContent);
+
       // ② facts→新route で自由文のコーデ提案（事実は渡すだけ・言葉だけ LLM）。
       const ccRes = await fetch("/api/ai/closet-coordinate", {
         method:  "POST",
@@ -1253,7 +1269,8 @@ function ChatPageInner() {
       // ★ ChatGPT 型保存: thread があれば user(写真)→assistant(提案)を直列保存（写真は base64 落として storagePaths のみ）。
       if (CHATGPT_PERSIST && currentThreadId && !temporaryMode) {
         const asstMsg: Message = { id: lid, role: "assistant", content: finalContent, createdAt: Date.now() };
-        const userPersist = lightenMessageForStorage(userMsg);
+        // ★ 第2段: factsSummary 入りの userContent で保存(追撃の文脈がリロード後も復元される)。
+        const userPersist = lightenMessageForStorage({ ...userMsg, content: userContent });
         const asstPersist = lightenMessageForStorage(asstMsg);
         const tid = currentThreadId;
         void (async () => {
@@ -1760,6 +1777,12 @@ function buildStylistHistory(messages: Message[]): { role: "user" | "assistant";
     } else if (m.role === "assistant" && m.content.kind === "coordinate_v2") {
       // ★ H-4b1-b-1: coordinate_v2 は summary を履歴本文に(JSON 全体は渡さない・継続文脈用)
       out.push({ role: "assistant", text: m.content.coordinate.summary });
+    } else if (m.role === "user" && m.content.kind === "photos-sent" && m.content.factsSummary) {
+      // ★ 第2段(追撃会話): 手持ち服コーデ相談で送った写真の facts をテキストで文脈に積む(ChatGPT 型=全部積む)。
+      //   factsSummary がある時だけ発火(closet 経路のみ付与)→ Style Match の photos-sent や通常チャットは無影響。
+      //   写真 base64 は積まない(軽い)。caption(=ユーザーの質問)があれば併記し「服＋質問」を1行で。
+      const q = m.content.caption?.trim();
+      out.push({ role: "user", text: `手持ちの服の写真を送りました（特徴: ${m.content.factsSummary}）${q ? `。相談: ${q}` : ""}` });
     }
     // intent-result / loading / error は履歴に入れない(構造化情報・通信状態のため)
   }
