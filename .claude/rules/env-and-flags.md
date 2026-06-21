@@ -47,7 +47,8 @@ ADMIN_EMAILS=
 | `AUTOSAVE_THREAD` | チャット履歴 ChatGPT 型 第1段。ON時のみ1通目送信成功後に thread作成＋`?thread=id`をURLに載せ自動DB保存＆リロード復元（OFF/未設定で現状維持・temporary無改修・raceガード付） |
 | `ASPIRATION_PHOTO` | 憧れ写真分析（チャットで写真添付→分解） |
 | `STYLE_MATCH` | Style Match Result（理想写真→「買える言葉」→すぐ探せる。写真一覧/抽出タグ/検索ワード/外部検索ボタン。写真は aspiration-images に Storage 化＝第2段） |
-| `CHATGPT_PERSIST` | ChatGPT 型統一 第3段。ON時のみ feedbackDisplayText の ephemeral を廃し全kind（style-match/photos-sent/photos-structure/products/image）を thread があれば DB 保存＆履歴/リロード復元（写真は storagePaths のみ・base64 は載せない）。OFF/未設定で現状維持（ephemeral・回帰ゼロ）。thread 作成の標準化は第4段 |
+| `CHATGPT_PERSIST` | ChatGPT 型統一 第3段。ON時のみ feedbackDisplayText の ephemeral を廃し全kind（style-match/photos-sent/photos-structure/products/image）を thread があれば DB 保存＆履歴/リロード復元（写真は storagePaths のみ・base64 は載せない）。OFF/未設定で現状維持（ephemeral・回帰ゼロ）。第4段=空thread発火防止（autosaveEnsureThread が保存対象1件以上で thread 作成＆保存成功後に URL 切替） |
+| `RESTORE_LAST_THREAD` | ChatGPT 型統一 第5段。ON時のみ cold open（素の /ai・?thread 無し）で最後の thread（last_message_at 最新）を復元（?thread=id へ replace→既存 load effect が復元）。「新しいチャット」は ?thread を落として新規（一度だけ復元する ref で再復元しない）。OFF/未設定で現状維持（常に新規・中央は空・回帰ゼロ）。?thread 直接指定/temporary/進行中は対象外 |
 | `GENERAL_BRAIN_MODE` | 本対話モード（fashion ゲートを迂回し汎用応答） |
 | `PRODUCTS_ENABLED` | 実商品候補/購入導線（本番 false） |
 | `ENABLE_VISUALIZE` | コーデのビジュアル生成ボタン |

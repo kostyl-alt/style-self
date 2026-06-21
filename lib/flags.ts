@@ -106,6 +106,14 @@ export const STYLE_MATCH = process.env.NEXT_PUBLIC_STYLE_MATCH === "true";
 //   thread 作成の標準化は第4段。第3段は「thread がある時に全kind保存される」まで。client 参照のため NEXT_PUBLIC_*。
 export const CHATGPT_PERSIST = process.env.NEXT_PUBLIC_CHATGPT_PERSIST === "true";
 
+// RESTORE_LAST_THREAD: ChatGPT 型統一 第5段。素の /ai(?thread 無し)を開いたとき、最後の thread(直近の
+//   chat_thread)を復元する(ChatGPT 型=最後の会話を継続)。ON 時のみ、cold open で GET /api/threads の
+//   先頭(last_message_at 降順の最新)へ router.replace(?thread=id)し、既存の load effect が復元する。
+//   「新しいチャット」ボタンは ?thread を落として新規を開く(一度だけ復元する ref で再復元しない)。
+//   既定 OFF。OFF/未設定時は従来どおり「常に新規(中央は空)」＝完全現状維持(回帰ゼロ)。
+//   ?thread=id 直接指定・temporary・進行中(messages 非空)は対象外。client 参照のため NEXT_PUBLIC_*。
+export const RESTORE_LAST_THREAD = process.env.NEXT_PUBLIC_RESTORE_LAST_THREAD === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

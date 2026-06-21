@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH, CHATGPT_PERSIST } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH, CHATGPT_PERSIST, RESTORE_LAST_THREAD } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import { sjisPercentEncode } from "@/lib/utils/sjis";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
@@ -195,6 +195,9 @@ function ChatPageInner() {
   const skipLoadThreadIdRef = useRef<string | null>(null);
   // ★ AUTOSAVE_THREAD(第1段): 1通目 thread 化を一度だけ走らせるロック(成功で立てっぱなし・失敗で解除し再試行可)。
   const autosaveLockRef = useRef(false);
+  // ★ 第5段(RESTORE_LAST_THREAD): cold open での「最後の会話復元」を一度だけ走らせるロック。
+  //   復元後の ?thread 切替や「新しいチャット」での ?thread 落としで再復元しないため(ページ存続中は立てっぱなし)。
+  const restoreAttemptedRef = useRef(false);
 
   // P1-C-1.5b-i+ fix v2: hydrate 完了フラグ(useState 化で再render 経由・persist の stale [] 上書き race を防止)
   const [hydrated, setHydrated] = useState(false);
@@ -203,9 +206,34 @@ function ChatPageInner() {
   //   時間が経って開く人がほとんどなので、デフォルトを新規に。前回会話は migrateLocalstorageIfNeeded が
   //   DB thread へ退避するので左の履歴(ThreadsSidebar)から開ける。?thread=id 指定時は下の load effect が復元。
   //   ※ localStorage 復元(旧 hydrate)は廃止。persist は継続(セッションは保存→次回は履歴から)。
+  //   ★ 第5段(RESTORE_LAST_THREAD ON)時のみ「常に新規」をやめ、下の復元 effect が最後の会話を復元する。
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  // ★ 第5段(RESTORE_LAST_THREAD): cold open(素の /ai・?thread 無し)で最後の会話を復元する(ChatGPT 型)。
+  //   ・ON のときだけ動く(OFF/未設定=従来の「常に新規」＝完全現状維持)。
+  //   ・対象外: ?thread=id 直接指定(既存 load effect が復元)/ temporary / 進行中(messages 非空)。
+  //   ・GET /api/threads は last_message_at 降順 → 先頭が最新。router.replace(?thread=id)で既存 load effect に委譲。
+  //   ・restoreAttemptedRef で一度だけ(復元後の ?thread 変化や「新しいチャット」での ?thread 落としで再復元しない)。
+  //   ・best-effort: thread 無し/失敗は何もしない(新規のまま・退行なし)。
+  useEffect(() => {
+    if (!RESTORE_LAST_THREAD) return;
+    if (restoreAttemptedRef.current) return;
+    if (currentThreadId || temporaryMode) return;
+    if (messages.length > 0) return;
+    restoreAttemptedRef.current = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/threads");
+        if (!res.ok) return;
+        const data = await res.json() as { threads?: { id: string }[] };
+        const last = data.threads?.[0]?.id;
+        if (last) router.replace(`/ai?thread=${last}`);
+      } catch { /* best-effort: 失敗時は新規のまま */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentThreadId, temporaryMode, messages.length]);
 
   // ★ H-4a: thread 選択(?thread=id)で DB から messages をロード(単一真実源 = messages state)。
   //   currentThreadId が null の間は既存 localStorage 経路を維持(段階的移行)。
@@ -628,6 +656,18 @@ function ChatPageInner() {
   // P1-C-3: 新しいチャット(案 A シンプル・race fix v2 案 C 整合)
   // ★ removeItem は persist 経路外で動作・persist effect は messages.length===0 で早期 return
   function handleNewChat() {
+    // ★ 第5段(RESTORE_LAST_THREAD ON): ChatGPT 型。保存済み(thread)は履歴に残るので確認不要・?thread を
+    //   落として新規へ(restore は ref で再発火しない)。未保存(thread 無し)のみ従来の削除確認。
+    if (RESTORE_LAST_THREAD) {
+      if (messages.length === 0 && !currentThreadId) return;  // 既に空の新規なら何もしない
+      if (!currentThreadId && !confirm("現在の会話履歴を削除して新規セッションを開始しますか?")) return;
+      setMessages([]);
+      setAttachedMb(null);
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      if (currentThreadId) router.push("/ai");  // ?thread を落として新規へ
+      return;
+    }
+    // 従来(OFF): 完全現状維持(回帰ゼロ)
     if (messages.length === 0) return;
     if (!confirm("現在の会話履歴を削除して新規セッションを開始しますか?")) return;
     setMessages([]);
