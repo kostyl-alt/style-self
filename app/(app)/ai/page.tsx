@@ -982,11 +982,25 @@ function ChatPageInner() {
     let loadingId: string | null = null;
     try {
       const images: { base64: string; mediaType: string }[] = [];
+      // 第2段(写真 Storage 化): 各写真を憧れ写真と同じ aspiration-images バケットへ上げ storage path を確保。
+      //   ・ライブ表示は base64(photoDataUrls)のまま即時。path は後段(第3段)の DB 保存で base64 を載せないため。
+      //   ・images と storagePaths は index を揃える(同じ反復で両方 push・upload 失敗/未ログインは "" で穴埋め=graceful)。
+      const storagePaths: string[] = [];
+      let uid: string | null = null;
+      try {
+        const { data: { user } } = await createSupabaseBrowserClient().auth.getUser();
+        uid = user?.id ?? null;
+      } catch { /* graceful: 取得失敗時は upload せず base64 のみで表示 */ }
       for (const file of files) {
         try {
           const processed = await processImageForUpload(file);
           const { base64, mediaType } = await fileToBase64(processed);
           images.push({ base64, mediaType });
+          let path = "";
+          if (uid) {
+            try { path = await uploadAspirationImage(uid, file); } catch { /* path 無し(graceful) */ }
+          }
+          storagePaths.push(path);
         } catch { /* 1枚失敗は無視して継続 */ }
       }
       if (images.length === 0) {
@@ -999,7 +1013,7 @@ function ChatPageInner() {
       const userMsg: Message = {
         id:        newMessageId(),
         role:      "user",
-        content:   { kind: "photos-sent", photoDataUrls, caption: `✨ 理想写真${images.length}枚を分析` },
+        content:   { kind: "photos-sent", photoDataUrls, storagePaths, caption: `✨ 理想写真${images.length}枚を分析` },
         createdAt: Date.now(),
       };
       const lid = newMessageId();
@@ -1025,7 +1039,7 @@ function ChatPageInner() {
       // 第1段の骨格(写真＋タグ)を即表示し、④検索ワードは LLM 1回を挟むので keywordsLoading で待たせる。
       const photos = data.photos;
       const signals = data.signals;
-      replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywordsLoading: true });
+      replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywordsLoading: true });
 
       // ④ アプリ別検索ワード（隔離ルート・事実は渡すだけ・LLM は検索語化のみ）。best-effort・失敗は keywordsError。
       const items = photos.flatMap((p) => p.vision.visualFacts.items.map((f) => f.value)).filter(Boolean);
@@ -1037,13 +1051,13 @@ function ChatPageInner() {
         });
         const kwData = await kwRes.json() as { ok?: boolean; keywords?: StyleMatchKeywords; reason?: string };
         if (kwRes.ok && kwData.ok && kwData.keywords) {
-          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywords: kwData.keywords });
+          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywords: kwData.keywords });
         } else {
           // 芯が弱い(empty_signals)等は検索ワードなしで骨格のみ確定（エラー扱いにしない）。
-          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls });
+          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths });
         }
       } catch {
-        replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, keywordsError: true });
+        replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywordsError: true });
       }
     } catch (err) {
       const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
@@ -1322,6 +1336,13 @@ function lightenMessageForStorage(m: Message): Message {
   if (m.content.kind === "image" && m.content.dataUrl && m.content.dataUrl.startsWith("data:")) {
     return { ...m, content: { ...m.content, dataUrl: "" } };
   }
+  // Style Match(理想写真を分析)の送信写真と結果カードは photoDataUrls に base64(data:・数MB)を持つ。
+  //   これを localStorage に載せると quota 超過で setItem が落ち、結果ごと保存に失敗する→reload で消える。
+  //   base64 を空配列に落として保存し、タグ/signals/検索ワード/理由だけ残す(写真は reload 後 placeholder=graceful)。
+  //   ※写真の永続化(Storage path 化で reload 後も写真復活)は第2段。ライブ表示は state 側 base64 のまま無改修。
+  if (m.content.kind === "photos-sent" || m.content.kind === "style-match") {
+    return { ...m, content: { ...m.content, photoDataUrls: [] } };
+  }
   return m;
 }
 
@@ -1364,6 +1385,44 @@ function AspirationImageBubble({ dataUrl, storagePath, caption }: { dataUrl?: st
       </div>
     </div>
   );
+}
+
+// 第2段(写真 Storage 化): 複数写真の表示URLを解決する共通フック(憧れ写真の signedUrlCache / getAspirationSignedUrl を流用)。
+//   ・ライブ表示は base64(photoDataUrls)を最優先で即時。
+//   ・base64 が無い index は storagePaths から署名URL を解決(キャッシュ流用・~1h 失効はリロードで再生成)。
+//   ・解決中/失敗/path 無しは "" → 呼び出し側で .filter(Boolean) して落とす(graceful)。
+//   index は photoDataUrls / storagePaths で揃っている前提(handleStyleMatch で同じ反復で push)。
+function useResolvedPhotoUrls(photoDataUrls?: string[], storagePaths?: string[]): string[] {
+  const live  = photoDataUrls ?? [];
+  const paths = storagePaths ?? [];
+  const count = Math.max(live.length, paths.length);
+  const seed = (): string[] => {
+    const arr: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const d = live[i];
+      if (d) { arr.push(d); continue; }
+      const p = paths[i];
+      arr.push(p ? signedUrlCache.get(p) ?? "" : "");
+    }
+    return arr;
+  };
+  const [urls, setUrls] = useState<string[]>(seed);
+  useEffect(() => {
+    setUrls(seed());
+    let cancelled = false;
+    paths.forEach((p, i) => {
+      if (live[i] || !p || signedUrlCache.get(p)) return;   // base64 優先・キャッシュ済みは seed で反映済み
+      void getAspirationSignedUrl(p).then((url) => {
+        if (cancelled || !url) return;
+        signedUrlCache.set(p, url);
+        setUrls((prev) => { const next = [...prev]; next[i] = url; return next; });
+      });
+    });
+    return () => { cancelled = true; };
+    // photoDataUrls / storagePaths の中身が変わったら再解決。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoDataUrls, storagePaths]);
+  return urls;
 }
 
 // 憧れ写真分析: [[SECTION:key]] → 日本語見出しの単一の真実源。
@@ -1494,7 +1553,7 @@ function Bubble({
     }
     // ★ 📷構造の送信バブル: 送った写真を通常サイズで並べる（自分が何を送ったか分かるように）。押すと拡大。
     if (msg.content.kind === "photos-sent") {
-      return <PhotosSentBubble photoDataUrls={msg.content.photoDataUrls} caption={msg.content.caption} />;
+      return <PhotosSentBubble photoDataUrls={msg.content.photoDataUrls} storagePaths={msg.content.storagePaths} caption={msg.content.caption} />;
     }
     // user 吹き出し:右寄り
     const text = msg.content.kind === "text" ? msg.content.text : "";
@@ -1666,6 +1725,7 @@ function AssistantContent({
       <StyleMatchCard
         signals={content.signals}
         photoDataUrls={content.photoDataUrls}
+        storagePaths={content.storagePaths}
         keywords={content.keywords}
         keywordsLoading={content.keywordsLoading}
         keywordsError={content.keywordsError}
@@ -1714,8 +1774,10 @@ function PhotoLightbox({ src, onClose }: { src: string | null; onClose: () => vo
 }
 
 // ★ 📷構造の送信バブル（送った写真を通常サイズで並べ、押すと拡大）。
-function PhotosSentBubble({ photoDataUrls, caption }: { photoDataUrls: string[]; caption?: string }) {
+function PhotosSentBubble({ photoDataUrls, storagePaths, caption }: { photoDataUrls: string[]; storagePaths?: string[]; caption?: string }) {
   const [zoom, setZoom] = useState<string | null>(null);
+  // ライブは base64・見返しは storagePaths→署名URL(graceful・第2段)。空(未解決/失敗)は filter で落とす。
+  const urls = useResolvedPhotoUrls(photoDataUrls, storagePaths).filter(Boolean);
   return (
     <div className="flex justify-end">
       <div className="max-w-[85%] space-y-1.5">
@@ -1725,7 +1787,7 @@ function PhotosSentBubble({ photoDataUrls, caption }: { photoDataUrls: string[];
           </div>
         )}
         <div className="flex flex-wrap justify-end gap-1.5">
-          {photoDataUrls.map((url, i) => (
+          {urls.map((url, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={i}
@@ -1857,12 +1919,14 @@ function ExtLink({ href, label }: { href: string; label: string }) {
 function StyleMatchCard({
   signals,
   photoDataUrls,
+  storagePaths,
   keywords,
   keywordsLoading,
   keywordsError,
 }: {
   signals: MoodboardSignals;
   photoDataUrls?: string[];
+  storagePaths?: string[];
   keywords?: StyleMatchKeywords;
   keywordsLoading?: boolean;
   keywordsError?: boolean;
@@ -1873,7 +1937,8 @@ function StyleMatchCard({
   const tags = signals.signals
     .filter((s) => s.strength !== "accent")
     .sort((a, b) => (a.strength === b.strength ? 0 : a.strength === "core" ? -1 : 1));
-  const thumbs = (photoDataUrls ?? []).filter(Boolean);
+  // ライブは base64・見返しは storagePaths→署名URL(graceful・第2段)。空(未解決/失敗)は filter で落とす。
+  const thumbs = useResolvedPhotoUrls(photoDataUrls, storagePaths).filter(Boolean);
 
   return (
     <div className="space-y-3 bg-gray-50 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
