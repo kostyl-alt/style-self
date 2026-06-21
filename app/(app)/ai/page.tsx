@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH, CHATGPT_PERSIST } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import { sjisPercentEncode } from "@/lib/utils/sjis";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
@@ -663,7 +663,8 @@ function ChatPageInner() {
           for (const m of messages) {
             const dt = feedbackDisplayText(m.content);
             if (dt === null) continue;
-            await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+            // ★ 第3段: 写真の base64 を落としてから保存(storagePaths のみ・DB肥大防止)。
+            await threadMessages.persistMessage(tid, lightenMessageForStorage(m) as unknown as PersistableMessage, dt);
           }
           setSidebarRefreshKey((k) => k + 1);  // ★ サイドバー即時反映(案2)
         } catch {
@@ -716,7 +717,8 @@ function ChatPageInner() {
       for (const m of currentMessages) {
         const dt = feedbackDisplayText(m.content);
         if (dt === null) continue;
-        await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+        // ★ 第3段: 写真の base64(photoDataUrls/dataUrl)を落としてから保存(storagePaths のみ・DB肥大防止)。
+        await threadMessages.persistMessage(tid, lightenMessageForStorage(m) as unknown as PersistableMessage, dt);
       }
       setSidebarRefreshKey((k) => k + 1);  // サイドバー即時反映
       router.replace(`/ai?thread=${tid}`);
@@ -767,7 +769,8 @@ function ChatPageInner() {
         for (const m of messages) {
           const dt = feedbackDisplayText(m.content);
           if (dt === null) continue;
-          const insertedId = await threadMessages.persistMessage(tid, m as unknown as PersistableMessage, dt);
+          // ★ 第3段: 写真の base64 を落としてから保存(storagePaths のみ・DB肥大防止)。
+          const insertedId = await threadMessages.persistMessage(tid, lightenMessageForStorage(m) as unknown as PersistableMessage, dt);
           if (target && m === target) targetMessageId = insertedId;
         }
         router.replace(`/ai?thread=${tid}`);
@@ -1043,6 +1046,8 @@ function ChatPageInner() {
 
       // ④ アプリ別検索ワード（隔離ルート・事実は渡すだけ・LLM は検索語化のみ）。best-effort・失敗は keywordsError。
       const items = photos.flatMap((p) => p.vision.visualFacts.items.map((f) => f.value)).filter(Boolean);
+      // 第3段: 検索ワードの 3 分岐で確定した最終 content を一箇所で確定→表示→(thread あれば)永続化する。
+      let finalContent: MessageContent;
       try {
         const kwRes = await fetch("/api/ai/style-match-keywords", {
           method:  "POST",
@@ -1051,13 +1056,40 @@ function ChatPageInner() {
         });
         const kwData = await kwRes.json() as { ok?: boolean; keywords?: StyleMatchKeywords; reason?: string };
         if (kwRes.ok && kwData.ok && kwData.keywords) {
-          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywords: kwData.keywords });
+          finalContent = { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywords: kwData.keywords };
         } else {
           // 芯が弱い(empty_signals)等は検索ワードなしで骨格のみ確定（エラー扱いにしない）。
-          replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths });
+          finalContent = { kind: "style-match", photos, signals, photoDataUrls, storagePaths };
         }
       } catch {
-        replaceMessage(setMessages, lid, { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywordsError: true });
+        finalContent = { kind: "style-match", photos, signals, photoDataUrls, storagePaths, keywordsError: true };
+      }
+      replaceMessage(setMessages, lid, finalContent);
+
+      // ★ 第3段(CHATGPT_PERSIST): thread があれば user(写真)+ assistant(分析結果)を DB 保存。
+      //   写真の base64 は lightenMessageForStorage で除去し storagePaths のみ保存(第2段の成果・DB肥大防止)。
+      //   復元時は storagePaths→署名URL(useResolvedPhotoUrls)で写真が出る。OFF/未設定 or thread 無し or
+      //   temporary は従来どおり保存しない(ephemeral・回帰ゼロ)。thread 作成の標準化は第4段。
+      if (CHATGPT_PERSIST && currentThreadId && !temporaryMode) {
+        const asstMsg: Message = { id: lid, role: "assistant", content: finalContent, createdAt: Date.now() };
+        const userPersist = lightenMessageForStorage(userMsg);
+        const asstPersist = lightenMessageForStorage(asstMsg);
+        const tid = currentThreadId;
+        // ★ 順序保証: user(写真)→ assistant(分析結果)を「直列」で保存する。並列(void 2連)だと 2つの POST が
+        //   競合し created_at の前後が不定 → リロード復元で上下が逆転する(GET は created_at 昇順)。await で
+        //   写真が先に挿入され先の created_at を得る。UI は止めないため void の async IIFE で逃がす。
+        void (async () => {
+          await threadMessages.persistMessage(
+            tid,
+            userPersist as unknown as PersistableMessage,
+            feedbackDisplayText(userPersist.content) ?? "📷 写真",
+          );
+          await threadMessages.persistMessage(
+            tid,
+            asstPersist as unknown as PersistableMessage,
+            feedbackDisplayText(asstPersist.content) ?? "理想写真の分析",
+          );
+        })();
       }
     } catch (err) {
       const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
@@ -1311,7 +1343,23 @@ function feedbackDisplayText(content: MessageContent): string | null {
   if (content.kind === "coordinate_v2") {
     return content.coordinate.summary || content.coordinate.direction || "(コーデ提案)";
   }
-  return null; // loading / intent-result / error / products / image は永続化しない
+  // ★ 第3段(CHATGPT_PERSIST): ephemeral を廃し全kind保存。OFF/未設定時は従来どおり null＝保存対象外(回帰ゼロ)。
+  //   ここで返すのは DB content 列(表示テキスト/検索用)のみ。写真の本体は metadata.message の storagePaths
+  //   (base64 は lightenMessageForStorage で除去済み)で忠実復元される。
+  if (CHATGPT_PERSIST) {
+    if (content.kind === "image")            return content.caption ?? "📷 写真";
+    if (content.kind === "photos-sent")      return content.caption ?? "📷 写真";
+    if (content.kind === "photos-structure") return "📷 写真の構造分析";
+    if (content.kind === "products")         return "🛍 商品候補";
+    if (content.kind === "style-match") {
+      const tags = content.signals.signals
+        .filter((s) => s.strength !== "accent")
+        .map((s) => s.value)
+        .slice(0, 8);
+      return tags.length ? `理想写真の分析｜${tags.join("・")}` : "理想写真の分析";
+    }
+  }
+  return null; // loading / intent-result / error は永続化しない
 }
 
 // ---- 履歴ヘルパ ----
@@ -1340,8 +1388,14 @@ function lightenMessageForStorage(m: Message): Message {
   //   これを localStorage に載せると quota 超過で setItem が落ち、結果ごと保存に失敗する→reload で消える。
   //   base64 を空配列に落として保存し、タグ/signals/検索ワード/理由だけ残す(写真は reload 後 placeholder=graceful)。
   //   ※写真の永続化(Storage path 化で reload 後も写真復活)は第2段。ライブ表示は state 側 base64 のまま無改修。
-  if (m.content.kind === "photos-sent" || m.content.kind === "style-match") {
+  if (m.content.kind === "photos-sent") {
     return { ...m, content: { ...m.content, photoDataUrls: [] } };
+  }
+  // style-match: base64(photoDataUrls)に加え、カードが描画に使わない photos[].vision(全写真の構造facts=重い)も
+  //   保存対象から外す。復元に要るのは signals / keywords / storagePaths のみ。重い metadata は保存 POST を
+  //   静かに失敗させる原因だった。photos は [] に(将来「買う条件」で必要なら、その時に再取得 or 保存)。
+  if (m.content.kind === "style-match") {
+    return { ...m, content: { ...m.content, photoDataUrls: [], photos: [] } };
   }
   return m;
 }

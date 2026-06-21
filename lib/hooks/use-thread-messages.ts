@@ -96,15 +96,25 @@ export function useThreadMessages(): UseThreadMessagesResult {
           }),
         });
         if (!res.ok) {
-          const data = await res.json() as { error?: string };
-          setError(data.error ?? `HTTP ${res.status}`);
+          // ★ エラー可視化: 握り潰さず原因をコンソールへ。payload サイズ起因(413 等)の切り分け用に概算バイト数も出す。
+          //   非 JSON ボディ(413 の HTML 等)で json() が throw しても status は残す。
+          let detail = `HTTP ${res.status}`;
+          try {
+            const data = await res.json() as { error?: string };
+            if (data.error) detail = data.error;
+          } catch { /* JSON でないボディ(413 等)はそのまま status を使う */ }
+          const approxBytes = JSON.stringify(metadata).length;
+          console.error(`[persistMessage] 保存失敗 (role=${message.role}, metadata≈${approxBytes}B): ${detail}`);
+          setError(detail);
           return null;
         }
         // ③-c-4: 挿入行の DB id を返す（feedback.message_id 突合用・配線A）。形が想定外でも握り潰し null。
         const data = await res.json() as { message?: { id?: string } };
         return data.message?.id ?? null;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "通信エラー");
+        const message_ = err instanceof Error ? err.message : "通信エラー";
+        console.error(`[persistMessage] 通信例外 (role=${message.role}): ${message_}`);
+        setError(message_);
         return null;
       }
     },

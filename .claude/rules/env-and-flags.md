@@ -46,6 +46,8 @@ ADMIN_EMAILS=
 | `TEMPORARY_CHAT_MODE` | 一時チャット（履歴非保存・育成非反映の ChatGPT 同等モード） |
 | `AUTOSAVE_THREAD` | チャット履歴 ChatGPT 型 第1段。ON時のみ1通目送信成功後に thread作成＋`?thread=id`をURLに載せ自動DB保存＆リロード復元（OFF/未設定で現状維持・temporary無改修・raceガード付） |
 | `ASPIRATION_PHOTO` | 憧れ写真分析（チャットで写真添付→分解） |
+| `STYLE_MATCH` | Style Match Result（理想写真→「買える言葉」→すぐ探せる。写真一覧/抽出タグ/検索ワード/外部検索ボタン。写真は aspiration-images に Storage 化＝第2段） |
+| `CHATGPT_PERSIST` | ChatGPT 型統一 第3段。ON時のみ feedbackDisplayText の ephemeral を廃し全kind（style-match/photos-sent/photos-structure/products/image）を thread があれば DB 保存＆履歴/リロード復元（写真は storagePaths のみ・base64 は載せない）。OFF/未設定で現状維持（ephemeral・回帰ゼロ）。thread 作成の標準化は第4段 |
 | `GENERAL_BRAIN_MODE` | 本対話モード（fashion ゲートを迂回し汎用応答） |
 | `PRODUCTS_ENABLED` | 実商品候補/購入導線（本番 false） |
 | `ENABLE_VISUALIZE` | コーデのビジュアル生成ボタン |

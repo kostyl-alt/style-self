@@ -143,7 +143,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       };
 
     if (insErr || !inserted) {
-      console.warn("[messages POST] insert error:", insErr?.message ?? "no data");
+      // ★ エラー可視化: サイズ起因(重い metadata)の切り分け用に概算バイト数も出す(握り潰さない)。
+      const metaBytes = metadata ? JSON.stringify(metadata).length : 0;
+      console.error(`[messages POST] insert error (role=${body.role}, metadata≈${metaBytes}B):`, insErr?.message ?? "no data");
       return NextResponse.json(
         { error: insErr?.message ?? "メッセージの保存に失敗しました" },
         { status: 500 },

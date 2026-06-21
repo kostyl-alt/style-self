@@ -99,6 +99,13 @@ export const AUTOSAVE_THREAD = process.env.NEXT_PUBLIC_AUTOSAVE_THREAD === "true
 //   ③買う条件/④検索ワード(LLM整形)/⑤外部検索ボタンは第2段以降。client 参照のため NEXT_PUBLIC_*。
 export const STYLE_MATCH = process.env.NEXT_PUBLIC_STYLE_MATCH === "true";
 
+// CHATGPT_PERSIST: ChatGPT 型統一 第3段。feedbackDisplayText の ephemeral(null) を廃し全kindを保存対象に。
+//   ON 時のみ、style-match / photos-sent / photos-structure / products / image も thread があれば DB 保存され、
+//   履歴・リロードで復元される（写真は第2段の storagePaths のみ保存し base64 は載せない＝DB肥大なし）。
+//   既定 OFF。OFF/未設定時は従来どおり ephemeral（保存対象外）＝完全現状維持（回帰ゼロ）。
+//   thread 作成の標準化は第4段。第3段は「thread がある時に全kind保存される」まで。client 参照のため NEXT_PUBLIC_*。
+export const CHATGPT_PERSIST = process.env.NEXT_PUBLIC_CHATGPT_PERSIST === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。
