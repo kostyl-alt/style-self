@@ -45,7 +45,8 @@ import {
   type StylistChatContext,
   type StylistChatHistoryItem,
 } from "@/lib/prompts/stylist-chat";
-import { MB_CONTEXT_OBJECT, FEEDBACK_LOOP, STYLE_SELF_QUERY_KNOWLEDGE_CHAT } from "@/lib/flags";
+import { MB_CONTEXT_OBJECT, FEEDBACK_LOOP, STYLE_SELF_QUERY_KNOWLEDGE_CHAT, CHAT_PHOTO, CLOSET_COORDINATE } from "@/lib/flags";
+import { buildBrandFacts } from "@/lib/knowledge/brand-facts";
 import { resolveGatedReply } from "@/lib/utils/parse-gated-reply";
 import { getMoodboardAnalysis } from "@/lib/utils/moodboard-analysis-service";
 import { getJudgmentRules } from "@/lib/utils/judgment-rules-service";
@@ -64,6 +65,7 @@ import {
   fetchBrandLearnContext,
   fetchKnowledgeOSContext,
   fetchKnowledgeOSViaSearchKnowledge,
+  fetchStyleSignals,
   stripCanonicalSlugs,
 } from "@/lib/stylist-chat/context";
 // ★ B-2(X2): MB 経路の判別に使用。MB prompt は冒頭が MB_PROMPT_SIGNATURE で始まる。
@@ -102,6 +104,7 @@ interface StylistChatRequest {
   history?:     unknown;
   moodboardId?: unknown;  // ★ Phase 2: MB context object 経路（指定時 moodboard_analysis を読んで短文応答）
   temporary?:   unknown;  // ★ 一時チャット: true のとき brand-learn で育成(style_signals/preference)を読まず発話のみでマッチ
+  worldview?:   unknown;  // ★ 手持ち服コーデ相談の追撃(B案): true のとき本人の世界観(signals)を注入し個別化を強める(closet 継続中だけ client が送る)
 }
 
 const MB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -153,6 +156,8 @@ export async function POST(request: NextRequest) {
     const intent = typeof body.intent === "string" ? body.intent : "";
     // ★ 一時チャット: 育成読込skip フラグ(brand-learn のみで使用・client 信頼は最小化)。
     const temporary = typeof body.temporary === "boolean" ? body.temporary : false;
+    // ★ 手持ち服コーデ相談の追撃(B案): client が closet 継続中だけ true を送る。feature flag と揃った時のみ世界観注入。
+    const wantWorldview = body.worldview === true && (CHAT_PHOTO || CLOSET_COORDINATE);
 
     // 方針C本体(案イ): 本対話モード = 分野横断の外部脳。
     //   fashion intent/persona/context/品質ゲート/エディタAI は一切触らず、ここで隔離して早期 return。
@@ -266,6 +271,28 @@ export async function POST(request: NextRequest) {
           })),
     ]);
     const ctx: StylistChatContext = { ...baseCtx, knowledgeOS: koResult.knowledgeOS };
+
+    // ★ 手持ち服コーデ相談の追撃(B案): worldview フラグ＋feature flag のとき、本人の世界観(style_signals)を
+    //   server 自前SELECT→buildBrandFacts で集約し ctx へ注入(第1段 closet-coordinate と同一・診断ポエム不使用)。
+    //   style-consult / coordinate intent のみ(追撃の着地先)。空ユーザーは graceful(注入しない)。
+    //   ⚠️ wantWorldview が false(通常チャット/相談)なら一切実行されず ctx は完全不変＝回帰ゼロ。
+    if (wantWorldview && (intent === "style-consult" || intent === "coordinate")) {
+      try {
+        const userSignals = await fetchStyleSignals(supabase, userId);
+        const pref = ctx.stylePreference;
+        const facts = buildBrandFacts({
+          signals: userSignals,
+          preference: { likedColors: pref?.likedColors, likedSilhouettes: pref?.likedSilhouettes, likedMaterials: pref?.likedMaterials },
+        });
+        const hasAny = [facts.colors, facts.silhouettes, facts.genres, facts.eras, facts.materials].some((a) => (a?.length ?? 0) > 0);
+        if (hasAny) {
+          ctx.worldviewSignals = {
+            colors: facts.colors, silhouettes: facts.silhouettes, genres: facts.genres, eras: facts.eras, materials: facts.materials,
+          };
+        }
+      } catch { /* graceful: 失敗時は世界観なしで従来どおり */ }
+    }
+
     const koRequestId = koResult.requestId;     // c-3 で永続化する核（OFF/MB/失敗時は null）
     const koSafeMode  = koResult.safeMode;       // query_knowledge 失敗/タイムアウト → 安全モード固定
 

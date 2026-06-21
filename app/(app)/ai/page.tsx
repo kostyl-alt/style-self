@@ -562,6 +562,11 @@ function ChatPageInner() {
           : (data.intent as string);
         // 直近 N=3 履歴を組立(client 側で slice・本体 7.4 抑制策の一段目)
         const recentHistory = isSwitchToOtherTarget ? [] : buildStylistHistory(messages);
+        // ★ 手持ち服コーデ相談の追撃(B案): 会話に factsSummary 付き photos-sent があれば(=closet 継続中・
+        //   buildStylistHistory と同じ検出)、worldview=true を per-turn 送り server に世界観注入させる。
+        //   通常チャット/相談はこの条件に当たらず false → server も注入せず完全不変。
+        const isClosetFollowup = (CHAT_PHOTO || CLOSET_COORDINATE)
+          && messages.some((m) => m.role === "user" && m.content.kind === "photos-sent" && !!m.content.factsSummary);
         try {
           const replyRes = await fetch("/api/ai/stylist-chat", {
             method:  "POST",
@@ -570,6 +575,8 @@ function ChatPageInner() {
               text:    trimmed,
               intent:  intentToSend,
               history: recentHistory,
+              // ★ closet 追撃のみ true(世界観個別化を強める)。通常は false=従来どおり。
+              worldview: isClosetFollowup,
               // ★ Phase 2: MB 添付中は moodboardId を送り、サーバが moodboard_analysis を読んで短文応答。
               moodboardId: isMbContextSend ? attachedMb!.id : undefined,
               // ★ 一時チャット: temporary 時は brand-learn で育成(style_signals/preference)を読まず発話のみでマッチ。

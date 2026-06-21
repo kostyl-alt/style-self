@@ -353,6 +353,15 @@ export interface StylistChatContext {
     targetImpressions:   string[];
     avoidImpressions:    string[];
   };
+  // ★ 手持ち服コーデ相談の追撃(B案)用: 本人が普段惹かれている方向(style_signals→buildBrandFacts で集約・事実)。
+  //   per-turn の worldview フラグ＋feature flag が揃った時だけ route が set。通常チャット/相談では undefined＝描画されない。
+  worldviewSignals?: {
+    colors?:      string[];
+    silhouettes?: string[];
+    genres?:      string[];
+    eras?:        string[];
+    materials?:   string[];
+  };
   // A-6 style-consult 用(Sprint 47 で追加された users.avoid_items text[])
   avoidItems?: string[];
   // A-6b brand-learn 用・未登録なら undefined
@@ -592,6 +601,21 @@ export function buildStylistChatUserMessage(opts: BuildStylistChatUserOpts): str
       lines.push(`・なりたい姿: ${truncate(ctx.idealSelf, 80)}`);
     }
     lines.push(`・段階A 判定 intent: ${intent}(${MVP1C_LABEL})`);
+  }
+
+  // ★ 手持ち服コーデ相談の追撃(B案): 本人が普段惹かれている方向(事実)を注入。worldviewSignals がある時だけ発火
+  //   (route が worldview フラグ＋feature flag の時だけ set)→ 通常チャット/相談は undefined で描画されず完全不変。
+  if (ctx.worldviewSignals) {
+    const w = ctx.worldviewSignals;
+    const parts: string[] = [];
+    if (w.colors?.length)      parts.push(`色: ${w.colors.slice(0, 4).join("、")}`);
+    if (w.silhouettes?.length) parts.push(`シルエット: ${w.silhouettes.slice(0, 4).join("、")}`);
+    if (w.genres?.length)      parts.push(`ジャンル: ${w.genres.slice(0, 4).join("、")}`);
+    if (w.eras?.length)        parts.push(`年代: ${w.eras.slice(0, 3).join("、")}`);
+    if (w.materials?.length)   parts.push(`素材: ${w.materials.slice(0, 3).join("、")}`);
+    if (parts.length > 0) {
+      lines.push(`・あなたが普段 惹かれている方向(事実・無難にせずこの方向に寄せて提案する): ${parts.join(" / ")}`);
+    }
   }
   lines.push("");
 
