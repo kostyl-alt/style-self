@@ -49,6 +49,8 @@ ADMIN_EMAILS=
 | `STYLE_MATCH` | Style Match Result（理想写真→「買える言葉」→すぐ探せる。写真一覧/抽出タグ/検索ワード/外部検索ボタン。写真は aspiration-images に Storage 化＝第2段） |
 | `CHATGPT_PERSIST` | ChatGPT 型統一 第3段。ON時のみ feedbackDisplayText の ephemeral を廃し全kind（style-match/photos-sent/photos-structure/products/image）を thread があれば DB 保存＆履歴/リロード復元（写真は storagePaths のみ・base64 は載せない）。OFF/未設定で現状維持（ephemeral・回帰ゼロ）。第4段=空thread発火防止（autosaveEnsureThread が保存対象1件以上で thread 作成＆保存成功後に URL 切替） |
 | `RESTORE_LAST_THREAD` | ChatGPT 型統一 第5段。ON時のみ cold open（素の /ai・?thread 無し）で最後の thread（last_message_at 最新）を復元（?thread=id へ replace→既存 load effect が復元）。「新しいチャット」は ?thread を落として新規（一度だけ復元する ref で再復元しない）。OFF/未設定で現状維持（常に新規・中央は空・回帰ゼロ）。?thread 直接指定/temporary/進行中は対象外 |
+| `CLOSET_COORDINATE` | 「手持ちの服でコーデ相談」新機能。ON時のみ＋メニューに「手持ちの服でコーデ相談」を表示→複数写真→各写真1枚ずつVision(photos-structure流用)→facts集約→新route closet-coordinate でLLM自由文(reply)提案。Style Match(理想写真→検索ワード)とは別の自由会話。写真はStorage path化＋ChatGPT型保存で復元。事実は決定的・言葉だけLLM。OFF/未設定で＋メニューに出さない（回帰ゼロ）。⚠️CHAT_PHOTO ON時は専用項目を隠す（写真＋文章で同じ） |
+| `CHAT_PHOTO` | チャットの写真添付をChatGPT型に（第1段=1枚＋文章）。ON時のみ＋メニューに普通の「写真」→選ぶと入力欄上に大きいサムネ＋×(pendingPhoto)→文章を打って送信で写真＋文章を一緒に送る→closet-coordinate(noteを主役に自由相談・コーデも質問も1ルート)。専用項目「手持ちの服でコーデ相談」はON時隠す・「理想写真を分析」(Style Match)は残す。OFF/未設定で「写真」を出さない（回帰ゼロ）。複数枚は第2段 |
 | `GENERAL_BRAIN_MODE` | 本対話モード（fashion ゲートを迂回し汎用応答） |
 | `PRODUCTS_ENABLED` | 実商品候補/購入導線（本番 false） |
 | `ENABLE_VISUALIZE` | コーデのビジュアル生成ボタン |

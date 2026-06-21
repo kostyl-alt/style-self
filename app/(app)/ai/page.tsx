@@ -37,7 +37,7 @@ import { resolveNavigateTarget } from "@/lib/overlay/navigate-map";
 import ThreadsSidebar from "@/components/chat/ThreadsSidebar";
 import { useThreadMessages, type PersistableMessage } from "@/lib/hooks/use-thread-messages";
 import { migrateLocalstorageIfNeeded } from "@/lib/utils/migrate-localstorage";
-import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH, CHATGPT_PERSIST, RESTORE_LAST_THREAD } from "@/lib/flags";
+import { PRODUCTS_ENABLED, ENABLE_VISUALIZE, ENABLE_CLOSET, isNavIntentVisible, MB_CONTEXT_OBJECT, FEEDBACK_LOOP, GENERAL_BRAIN_MODE, ASPIRATION_PHOTO, TEMPORARY_CHAT_MODE, AUTOSAVE_THREAD, STYLE_MATCH, CHATGPT_PERSIST, RESTORE_LAST_THREAD, CLOSET_COORDINATE, CHAT_PHOTO } from "@/lib/flags";
 import { processImageForUpload } from "@/lib/utils/image-pipeline";
 import { sjisPercentEncode } from "@/lib/utils/sjis";
 import CoordinateReplyCard from "@/components/chat/CoordinateReplyCard";
@@ -950,12 +950,20 @@ function ChatPageInner() {
   }
 
   // 段階2: 写真選択は即送信せずプレビューに保持（送信は送信ボタンで）。写真選択時は MB を解除（写真優先）。
-  function handlePhotoPick(file: File) {
-    setPendingPhoto((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return { file, previewUrl: URL.createObjectURL(file) };
-    });
-    setAttachedMb(null);
+  //   ⚠️ プレビューは他サムネ(Style Match/photos-sent)と同じく processImageForUpload の JPEG を表示する。
+  //     生ファイルをそのまま <img> に渡すと iPhone の HEIC をデコードできず壊れる(壊れた画像アイコン)。
+  //   ⚠️ objectURL の生成・破棄は副作用なので updater の外で行う(updater は純粋に・StrictMode 二重実行対策)。
+  async function handlePhotoPick(file: File) {
+    setAttachedMb(null);  // 写真優先(変換前に解除しておく)
+    let previewUrl: string;
+    try {
+      const processed = await processImageForUpload(file);  // HEIC→JPEG 等に統一(他サムネと同方式)
+      previewUrl = URL.createObjectURL(processed);
+    } catch {
+      previewUrl = URL.createObjectURL(file);  // graceful: 変換失敗時は生ファイルにフォールバック
+    }
+    if (pendingPhoto) URL.revokeObjectURL(pendingPhoto.previewUrl);  // 直前の preview を破棄(外で1回)
+    setPendingPhoto({ file, previewUrl });
   }
   function clearPendingPhoto() {
     setPendingPhoto((prev) => {
@@ -1156,13 +1164,138 @@ function ChatPageInner() {
     }
   }
 
+  // ★ 手持ちの服でコーデ相談（CLOSET_COORDINATE）。handleStyleMatch を雛形に流用。
+  //   複数写真→各写真 Storage化＋photos-structure(1枚ずつ vision→集約)で facts→新route closet-coordinate で
+  //   「これらに合うコーデ/買い足し」を自由文(reply)で提案。Style Match と違い決まった出力でなく会話文。
+  //   ⚠️ photos-structure/aggregate は読み取り流用(無改修)。事実は決定的・言葉だけ LLM。保存は ChatGPT 型で自動。
+  async function handleClosetCoordinate(files: File[], note?: string) {
+    if (loading || files.length === 0) return;
+    setLoading(true);
+    let loadingId: string | null = null;
+    try {
+      const images: { base64: string; mediaType: string }[] = [];
+      // 各写真を aspiration-images バケットへ上げ storage path を確保（base64 を DB に載せないため）。
+      const storagePaths: string[] = [];
+      let uid: string | null = null;
+      try {
+        const { data: { user } } = await createSupabaseBrowserClient().auth.getUser();
+        uid = user?.id ?? null;
+      } catch { /* graceful: 取得失敗時は upload せず base64 のみで表示 */ }
+      for (const file of files) {
+        try {
+          const processed = await processImageForUpload(file);
+          const { base64, mediaType } = await fileToBase64(processed);
+          images.push({ base64, mediaType });
+          let path = "";
+          if (uid) {
+            try { path = await uploadAspirationImage(uid, file); } catch { /* path 無し(graceful) */ }
+          }
+          storagePaths.push(path);
+        } catch { /* 1枚失敗は無視して継続 */ }
+      }
+      if (images.length === 0) {
+        setMessages((prev) => trimByMax([...prev, {
+          id: newMessageId(), role: "assistant", content: { kind: "error", message: "写真の処理に失敗しました" }, createdAt: Date.now(),
+        }]));
+        return;
+      }
+      const photoDataUrls = images.map((im) => `data:${im.mediaType};base64,${im.base64}`);
+      // caption: 相談文(note=ユーザーの文章)があればそれを user バブルに出す(ChatGPT 型)。無ければ既定ラベル。
+      const trimmedNote = note?.trim() ?? "";
+      const userMsg: Message = {
+        id:        newMessageId(),
+        role:      "user",
+        content:   { kind: "photos-sent", photoDataUrls, storagePaths, caption: trimmedNote || `👕 手持ちの服${images.length}枚でコーデ相談` },
+        createdAt: Date.now(),
+      };
+      const lid = newMessageId();
+      loadingId = lid;
+      setMessages((prev) => trimByMax([...prev, userMsg, {
+        id: lid, role: "assistant", content: { kind: "loading" }, createdAt: Date.now(),
+      }]));
+
+      // ① 各写真を1枚ずつ vision→集約（photos-structure 流用・無改修）。
+      const res = await fetch("/api/ai/photos-structure", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ images }),
+      });
+      const data = await res.json() as {
+        ok?: boolean; photos?: { index: number; vision: MoodboardItemVision }[]; signals?: MoodboardSignals; reason?: string; error?: string;
+      };
+      if (!res.ok || !data.ok || !data.photos || !data.signals) {
+        replaceMessage(setMessages, lid, {
+          kind:    "error",
+          message: data.error ?? (data.reason === "auth_required" ? "ログインが必要です" : "写真の分析に失敗しました"),
+        });
+        return;
+      }
+      const signals = data.signals;
+      const items = data.photos.flatMap((p) => p.vision.visualFacts.items.map((f) => f.value)).filter(Boolean);
+
+      // ② facts→新route で自由文のコーデ提案（事実は渡すだけ・言葉だけ LLM）。
+      const ccRes = await fetch("/api/ai/closet-coordinate", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ signals, items, ...(trimmedNote ? { note: trimmedNote } : {}) }),
+      });
+      const ccData = await ccRes.json() as { ok?: boolean; reply?: string; reason?: string; error?: string };
+      let finalContent: MessageContent;
+      if (ccRes.ok && ccData.ok && ccData.reply) {
+        finalContent = { kind: "reply", text: ccData.reply };
+      } else if (ccData.reason === "empty_facts") {
+        finalContent = { kind: "reply", text: "写真からは服の特徴が読み取りにくかったです。別の角度や明るい場所で撮った写真だと、よりよく提案できます。" };
+      } else {
+        finalContent = { kind: "error", message: ccData.error ?? (ccData.reason === "auth_required" ? "ログインが必要です" : "コーデ提案の生成に失敗しました") };
+      }
+      replaceMessage(setMessages, lid, finalContent);
+
+      // ★ ChatGPT 型保存: thread があれば user(写真)→assistant(提案)を直列保存（写真は base64 落として storagePaths のみ）。
+      if (CHATGPT_PERSIST && currentThreadId && !temporaryMode) {
+        const asstMsg: Message = { id: lid, role: "assistant", content: finalContent, createdAt: Date.now() };
+        const userPersist = lightenMessageForStorage(userMsg);
+        const asstPersist = lightenMessageForStorage(asstMsg);
+        const tid = currentThreadId;
+        void (async () => {
+          await threadMessages.persistMessage(
+            tid,
+            userPersist as unknown as PersistableMessage,
+            feedbackDisplayText(userPersist.content) ?? "👕 手持ちの服",
+          );
+          await threadMessages.persistMessage(
+            tid,
+            asstPersist as unknown as PersistableMessage,
+            feedbackDisplayText(asstPersist.content) ?? "コーデ相談",
+          );
+        })();
+      }
+    } catch (err) {
+      const errContent: MessageContent = { kind: "error", message: err instanceof Error ? err.message : "写真の処理に失敗しました" };
+      if (loadingId) {
+        replaceMessage(setMessages, loadingId, errContent);
+      } else {
+        setMessages((prev) => trimByMax([...prev, { id: newMessageId(), role: "assistant", content: errContent, createdAt: Date.now() }]));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 送信ディスパッチャ: 写真があれば aspiration（補足テキストを note で渡す）、無ければ従来の通常チャット。
   function handleComposerSubmit(e?: React.FormEvent) {
     e?.preventDefault();
     if (loading) return;
     if (pendingPhoto) {
       const { file, previewUrl } = pendingPhoto;
-      void handleAspirationPhoto(file, text);
+      // ★ 第1段(CHAT_PHOTO): 写真＋文章を「写真を見て相談」(closet-coordinate・vision)へ。文章は note=主役。
+      //   OFF時は従来どおり aspiration(憧れ写真)へ＝回帰ゼロ。
+      if (CHAT_PHOTO) {
+        const note = text;
+        setText("");  // ChatGPT 型: 送信で入力欄をクリア
+        void handleClosetCoordinate([file], note);
+      } else {
+        void handleAspirationPhoto(file, text);
+      }
       URL.revokeObjectURL(previewUrl);
       setPendingPhoto(null);
       return;
@@ -1289,7 +1422,7 @@ function ChatPageInner() {
           <div className="flex items-center gap-2">
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={pendingPhoto.previewUrl} alt="選択した写真" className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+              <img src={pendingPhoto.previewUrl} alt="選択した写真" className="h-24 w-24 object-cover rounded-xl border border-gray-200" />
               <button
                 type="button"
                 onClick={clearPendingPhoto}
@@ -1310,6 +1443,8 @@ function ChatPageInner() {
             onPhotoSelect={STYLE_MATCH ? undefined : (ASPIRATION_PHOTO ? handlePhotoPick : undefined)}
             onPhotosStructure={STYLE_MATCH ? undefined : handlePhotosStructure}
             onStyleMatch={STYLE_MATCH ? handleStyleMatch : undefined}
+            onChatPhoto={CHAT_PHOTO ? handlePhotoPick : undefined}
+            onClosetCoordinate={CLOSET_COORDINATE && !CHAT_PHOTO ? handleClosetCoordinate : undefined}
           />
           <textarea
             value={text}

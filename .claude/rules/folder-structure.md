@@ -26,7 +26,7 @@ paths:
   - `layout.tsx`(BottomNav) / トップ `app/page.tsx`(認証状態でリダイレクト)
 - **`(auth)/`** 未認証: `login` / `signup` / `callback/route.ts`
 - **`api/`**
-  - `ai/`: AI機能 route 群 — `coordinate` `abstract-coordinate` `analyze`(診断) `analyze-item`(画像) `analyze-look`(参考写真) `style-consult` `culture-explain` `learn-insight` `profile-fit` `purchase-check` `trend-translate` `virtual-coordinate`(+`concepts`/`translate`) / **`stylist-chat`**(チャット段階B・自然文/coordinate_v2) / **`aspiration-photo`**(写真相談・1枚)
+  - `ai/`: AI機能 route 群 — `coordinate` `abstract-coordinate` `analyze`(診断) `analyze-item`(画像) `analyze-look`(参考写真) `style-consult` `culture-explain` `learn-insight` `profile-fit` `purchase-check` `trend-translate` `virtual-coordinate`(+`concepts`/`translate`) / **`stylist-chat`**(チャット段階B・自然文/coordinate_v2) / **`aspiration-photo`**(写真相談・1枚) / `photos-structure`(複数写真→1枚ずつVision→signals集約・決定的) / `style-match-keywords`(Style Match第2段・facts→検索ワードLLM) / `closet-coordinate`(手持ち服コーデ相談・facts→自由文提案LLM・CLOSET_COORDINATE)
   - `overlay/intent`: チャット段階A（自然言語→intent分類・Haiku）
   - `moodboards/[id]/`: `analyze`(board単位解析・brief生成・GET/POST) / `items/analyze`(per-image Vision) / `items/from-url`(URL→画像追加)
   - `threads/`: 対話AIスタイリストのスレッドCRUD（`[id]` / `[id]/messages` / `[id]/feedback`・親thread経由EXISTS二重防御・user_id 非受領）
@@ -48,7 +48,7 @@ paths:
 - `utils/`: `silhouette-map` `body-rules` `zozo-link` `season` `knowledge-merge` `url-extract` `history-helper` `color-aliases` `product-match` `admin-check` `worldview-matcher` `strip-raw-json-reply`(生JSON安全網) `parse-coordinate-reply` `strip-canonical-slugs` `moodboard-analysis-service` `moodboard-essentials`(必須要素8) `vision-analyzer`(per-image Vision) `moodboard-aggregate`(Layer2 決定的集約 repeated/accent・純関数) `moodboard-brand-translation`(A2 決定的ブランド翻訳 signals主軸→matchBrands・純関数) `judgment-rules-service`
 - `dictionaries/`: `material`(14素材) `color`(15色) `line`(10シルエット) `ratio`(8比率) `index`(re-export) `inject`(getMaterialContext 等)
 - `validators/`: `coordinate` `analyze` `purchase-check` `analyze-item`（validateAndFix* 群）
-- `prompts/`: 各AI機能のプロンプト — `coordinate` `analyze` `analyze-item` `style-consult` `stylist-chat`(チャット段階B・persona+coordinate_v2契約) `overlay-intent`(分類) `moodboard-analysis`(MB board解析) `moodboard-prompt`(MB→長文prompt) `editor-prompt`(コーデ評価AI) `virtual-coordinate` `concept-translate` `abstract-coordinate` `purchase` `brand-recommend` `trend-translate`/`trend-extract` `learn-insight` `culture-explain` `extract-product-info` `analyze-product-image`/`analyze-product-text` `normalize-product`/`normalize-interpretation` `knowledge-extract` 等
+- `prompts/`: 各AI機能のプロンプト — `coordinate` `analyze` `analyze-item` `style-consult` `stylist-chat`(チャット段階B・persona+coordinate_v2契約) `overlay-intent`(分類) `moodboard-analysis`(MB board解析) `moodboard-prompt`(MB→長文prompt) `editor-prompt`(コーデ評価AI) `virtual-coordinate` `concept-translate` `abstract-coordinate` `purchase` `brand-recommend` `trend-translate`/`trend-extract` `learn-insight` `culture-explain` `extract-product-info` `analyze-product-image`/`analyze-product-text` `normalize-product`/`normalize-interpretation` `knowledge-extract` `style-match-keywords`(検索ワード) `closet-coordinate`(手持ち服コーデ相談・facts→自由文) 等
 
 ## types/
 `index.ts`(アプリ型) `database.ts`(DB型) `chat-thread.ts` `moodboard.ts`(MoodboardRow/Item/Analysis/Brief/ItemVision 等) `coordinate-reply.ts` `chat-ui.ts` `product-candidate.ts` 等

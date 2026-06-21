@@ -114,6 +114,20 @@ export const CHATGPT_PERSIST = process.env.NEXT_PUBLIC_CHATGPT_PERSIST === "true
 //   ?thread=id 直接指定・temporary・進行中(messages 非空)は対象外。client 参照のため NEXT_PUBLIC_*。
 export const RESTORE_LAST_THREAD = process.env.NEXT_PUBLIC_RESTORE_LAST_THREAD === "true";
 
+// CLOSET_COORDINATE: 「手持ちの服でコーデ相談」新機能。複数の手持ち服写真→各写真を1枚ずつ Vision 理解
+//   (photos-structure 流用)→facts 集約→「これらに合うコーデ/買い足しアイテム」を LLM 自由文で提案(reply)。
+//   Style Match(理想写真→検索ワード=決まった出力)とは別の、自由会話のコーデ相談。写真は Storage path 化＋
+//   ChatGPT 型保存で会話に残る。事実は決定的(vision/signals)・言葉だけ LLM。
+//   既定 OFF。OFF/未設定時は ＋メニューに出さない=完全現状維持(回帰ゼロ)。client 参照のため NEXT_PUBLIC_*。
+export const CLOSET_COORDINATE = process.env.NEXT_PUBLIC_CLOSET_COORDINATE === "true";
+
+// CHAT_PHOTO: チャットの写真添付を ChatGPT 型に。第1段=まず1枚＋文章。ON時のみ＋メニューに普通の「写真」を出し、
+//   選ぶと入力欄上に大きいサムネ＋×(休眠中の pendingPhoto を復活)→文章を打って送信で写真＋文章を一緒に送る→
+//   写真を Vision 理解(facts)→closet-coordinate で「ユーザーの文章に自由に答える」(コーデも自由相談も1ルート)。
+//   ⚠️専用項目「手持ちの服でコーデ相談」は CHAT_PHOTO ON 時は出さない(写真＋文章で同じ)。「理想写真を分析」(Style Match)は別価値で残す。
+//   既定 OFF。OFF/未設定時は＋メニューに「写真」を出さない=完全現状維持(回帰ゼロ)。client 参照のため NEXT_PUBLIC_*。
+export const CHAT_PHOTO = process.env.NEXT_PUBLIC_CHAT_PHOTO === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

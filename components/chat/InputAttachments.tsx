@@ -15,7 +15,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Image as ImageIcon, LayoutGrid, FolderPlus } from "lucide-react";
+import { Plus, Image as ImageIcon, LayoutGrid, FolderPlus, Shirt } from "lucide-react";
 import { ENABLE_CLOSET, PRODUCTS_ENABLED } from "@/lib/flags";
 
 interface InputAttachmentsProps {
@@ -25,6 +25,8 @@ interface InputAttachmentsProps {
   onPhotoSelect?:  (file: File) => void;   // 将来用・現状は notice のみ
   onPhotosStructure?: (files: File[]) => void;  // ★ 複数写真→構造+共通点（指定時のみ📷ボタン表示・既存📎とは別）
   onStyleMatch?: (files: File[]) => void;  // ★ Style Match Result（指定時のみ「理想写真を分析する」ボタン表示・既存📎/📷とは別・additive）
+  onClosetCoordinate?: (files: File[]) => void;  // ★ 手持ちの服でコーデ相談（指定時のみ＋メニューに表示・複数枚・additive）
+  onChatPhoto?: (file: File) => void;  // ★ ChatGPT型「写真」（指定時のみ＋メニューに表示・選ぶと pendingPhoto に積む＝即送信しない・1枚）
 }
 
 type Notice = { id: number; text: string };
@@ -35,12 +37,16 @@ export default function InputAttachments({
   onPhotoSelect,
   onPhotosStructure,
   onStyleMatch,
+  onClosetCoordinate,
+  onChatPhoto,
   // onUrlSubmit は今回未使用(将来 Sprint C で実装)
 }: InputAttachmentsProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
   const styleMatchInputRef = useRef<HTMLInputElement>(null);
+  const closetCoordInputRef = useRef<HTMLInputElement>(null);
+  const chatPhotoInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isUrlOpen, setIsUrlOpen] = useState(false);
   const [urlText, setUrlText] = useState("");
@@ -96,6 +102,28 @@ export default function InputAttachments({
     e.target.value = "";  // 同じ写真を再選択できるように
   }
 
+  function handleChatPhotoClick(): void {
+    chatPhotoInputRef.current?.click();
+  }
+
+  function handleChatPhotoChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0];
+    if (file && onChatPhoto) onChatPhoto(file);
+    e.target.value = "";  // 同じファイルを再選択できるように
+  }
+
+  function handleClosetCoordinateClick(): void {
+    closetCoordInputRef.current?.click();
+  }
+
+  function handleClosetCoordinateChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const list = e.target.files;
+    if (list && list.length > 0 && onClosetCoordinate) {
+      onClosetCoordinate(Array.from(list));
+    }
+    e.target.value = "";  // 同じ写真を再選択できるように
+  }
+
   function handleUrlClick(): void {
     setIsUrlOpen(true);
   }
@@ -141,8 +169,14 @@ export default function InputAttachments({
             {/* 外側クリックで閉じる */}
             <div className="fixed inset-0 z-30" onClick={() => setIsPlusOpen(false)} aria-hidden="true" />
             <div className="absolute bottom-full left-0 mb-2 z-40 w-56 bg-white border border-gray-100 rounded-2xl shadow-lg py-1.5 overflow-hidden">
+              {onChatPhoto && (
+                <MenuRow icon={<ImageIcon className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleChatPhotoClick(); }}>写真</MenuRow>
+              )}
               {onStyleMatch && (
                 <MenuRow icon={<ImageIcon className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleStyleMatchClick(); }}>理想写真を分析</MenuRow>
+              )}
+              {onClosetCoordinate && (
+                <MenuRow icon={<Shirt className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleClosetCoordinateClick(); }}>手持ちの服でコーデ相談</MenuRow>
               )}
               <MenuRow icon={<LayoutGrid className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); handleMbClick(); }}>ムードボードから選ぶ</MenuRow>
               <MenuRow icon={<FolderPlus className="w-4 h-4 text-gray-500" />} onClick={() => { setIsPlusOpen(false); router.push("/moodboard"); }}>ムードボードを作る</MenuRow>
@@ -187,6 +221,25 @@ export default function InputAttachments({
         multiple
         hidden
         onChange={handleStyleMatchChange}
+      />
+
+      {/* ★ 手持ちの服でコーデ相談 用（複数選択可） */}
+      <input
+        ref={closetCoordInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={handleClosetCoordinateChange}
+      />
+
+      {/* ★ ChatGPT型「写真」用（第1段=1枚・pendingPhoto に積む） */}
+      <input
+        ref={chatPhotoInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handleChatPhotoChange}
       />
 
       {/* URL 入力簡易モーダル */}
