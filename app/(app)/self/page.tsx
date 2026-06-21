@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import HistoryTab from "@/components/history/HistoryTab";
 import {
-  ENABLE_BODY, ENABLE_PREFERENCE, ENABLE_HISTORY, ENABLE_POSTS,
+  ENABLE_BODY, ENABLE_PREFERENCE, ENABLE_HISTORY, ENABLE_POSTS, WORLDVIEW_RESET,
 } from "@/lib/flags";
 import MyPostsTab from "@/components/posts/MyPostsTab";
 import type {
@@ -179,6 +179,81 @@ function aggregateAxis(rows: SignalAttributes[], key: keyof SignalAttributes, to
     .slice(0, top);
 }
 
+// 世界観リセット(WORLDVIEW_RESET): 本人の style_signals を全削除して育て直す。
+//   ⚠️ 確認モーダル必須・不可逆・本人限定(API は auth.uid())。成功で onDone→親が空表示(育成CTA)に戻す＝フィードバック。
+function WorldviewResetButton({ onDone }: { onDone: () => void }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetting, setResetting]     = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  async function handleReset() {
+    setResetting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/style-signals", { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        setError(d.error ?? "リセットに失敗しました");
+        setResetting(false);
+        return;
+      }
+      setConfirmOpen(false);
+      setResetting(false);
+      onDone();  // 親が rows=[] → 「まだ世界観が育っていません」＋育成CTA に切替(完了フィードバック)
+    } catch {
+      setError("通信エラー");
+      setResetting(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="pt-2 border-t border-gray-100 text-right">
+        <button
+          type="button"
+          onClick={() => { setError(null); setConfirmOpen(true); }}
+          className="text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600 transition-colors"
+        >
+          世界観をリセット
+        </button>
+      </div>
+      {confirmOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => !resetting && setConfirmOpen(false)} aria-hidden="true" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-3 pointer-events-auto">
+              <p className="text-sm font-semibold text-gray-900">世界観をリセットしますか?</p>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                これまで憧れ写真から学習した「あなたの方向」(色・シルエット等)が<strong>すべて消えます</strong>。取り消せません。
+                <br />好み登録・体型・会話・ムードボードは消えません。リセット後、また憧れ写真を送ると育っていきます。
+              </p>
+              {error && <p className="text-xs text-rose-600">{error}</p>}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={resetting}
+                  onClick={() => setConfirmOpen(false)}
+                  className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                >
+                  やめる
+                </button>
+                <button
+                  type="button"
+                  disabled={resetting}
+                  onClick={handleReset}
+                  className="text-xs px-3 py-1.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50"
+                >
+                  {resetting ? "リセット中…" : "リセットする"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function StyleTrendSection() {
   const [rows, setRows] = useState<SignalAttributes[] | null>(null);
   useEffect(() => {
@@ -219,6 +294,7 @@ function StyleTrendSection() {
         <p className="text-[10px] tracking-[0.3em] text-gray-400 uppercase mb-1">Your Taste</p>
         <p className="text-sm text-gray-700">好きな写真 {photoCount} 枚から育ち始めています。</p>
         <p className="text-xs text-gray-500 mt-1">あと数枚 相談すると、好みの傾向がここに見えてきます。</p>
+        {WORLDVIEW_RESET && <WorldviewResetButton onDone={() => setRows([])} />}
       </div>
     );
   }
@@ -247,6 +323,7 @@ function StyleTrendSection() {
           </div>
         ))}
       </div>
+      {WORLDVIEW_RESET && <WorldviewResetButton onDone={() => setRows([])} />}
     </div>
   );
 }

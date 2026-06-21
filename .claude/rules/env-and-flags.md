@@ -51,6 +51,7 @@ ADMIN_EMAILS=
 | `RESTORE_LAST_THREAD` | ChatGPT 型統一 第5段。ON時のみ cold open（素の /ai・?thread 無し）で最後の thread（last_message_at 最新）を復元（?thread=id へ replace→既存 load effect が復元）。「新しいチャット」は ?thread を落として新規（一度だけ復元する ref で再復元しない）。OFF/未設定で現状維持（常に新規・中央は空・回帰ゼロ）。?thread 直接指定/temporary/進行中は対象外 |
 | `CLOSET_COORDINATE` | 「手持ちの服でコーデ相談」新機能。ON時のみ＋メニューに「手持ちの服でコーデ相談」を表示→複数写真→各写真1枚ずつVision(photos-structure流用)→facts集約→新route closet-coordinate でLLM自由文(reply)提案。Style Match(理想写真→検索ワード)とは別の自由会話。写真はStorage path化＋ChatGPT型保存で復元。事実は決定的・言葉だけLLM。OFF/未設定で＋メニューに出さない（回帰ゼロ）。⚠️CHAT_PHOTO ON時は専用項目を隠す（写真＋文章で同じ） |
 | `CHAT_PHOTO` | チャットの写真添付をChatGPT型に（第1段=1枚＋文章）。ON時のみ＋メニューに普通の「写真」→選ぶと入力欄上に大きいサムネ＋×(pendingPhoto)→文章を打って送信で写真＋文章を一緒に送る→closet-coordinate(noteを主役に自由相談・コーデも質問も1ルート)。専用項目「手持ちの服でコーデ相談」はON時隠す・「理想写真を分析」(Style Match)は残す。OFF/未設定で「写真」を出さない（回帰ゼロ）。複数枚は第2段 |
+| `WORLDVIEW_RESET` | 「世界観をリセット」ボタン（/self 好み(診断)タブの Your Taste 内）。ON時のみ表示→確認モーダル→本人の style_signals を全削除し世界観を育て直す（DELETE /api/style-signals・auth.uid()本人限定・物理削除・不可逆）。消すのは style_signals のみ（好み登録/体型/会話/MB は残す）。空になると closet/追撃/brand-learn の個別化が graceful(無難寄り)に戻るだけ・Style Match無影響。OFF/未設定でボタン非表示（回帰ゼロ） |
 | `GENERAL_BRAIN_MODE` | 本対話モード（fashion ゲートを迂回し汎用応答） |
 | `PRODUCTS_ENABLED` | 実商品候補/購入導線（本番 false） |
 | `ENABLE_VISUALIZE` | コーデのビジュアル生成ボタン |

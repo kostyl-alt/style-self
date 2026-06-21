@@ -128,6 +128,13 @@ export const CLOSET_COORDINATE = process.env.NEXT_PUBLIC_CLOSET_COORDINATE === "
 //   既定 OFF。OFF/未設定時は＋メニューに「写真」を出さない=完全現状維持(回帰ゼロ)。client 参照のため NEXT_PUBLIC_*。
 export const CHAT_PHOTO = process.env.NEXT_PUBLIC_CHAT_PHOTO === "true";
 
+// WORLDVIEW_RESET: 「世界観をリセット」ボタン(/self 好みタブの Your Taste 内)。ON時のみ表示。
+//   本人の style_signals(憧れ写真で育った事実)を全削除して世界観を育て直す。確認モーダル必須・不可逆・本人限定。
+//   消すのは style_signals のみ(好み登録/体型/会話/MB は触らない)。空になると個別化は graceful(無難寄り)に戻るだけ。
+//   API(DELETE /api/style-signals)は auth.uid() で本人分のみ削除＝flag に関わらず安全。flag は UI 露出の制御。
+//   既定 OFF。OFF/未設定時はボタン非表示＝現状維持(回帰ゼロ)。client 参照のため NEXT_PUBLIC_*。
+export const WORLDVIEW_RESET = process.env.NEXT_PUBLIC_WORLDVIEW_RESET === "true";
+
 // navigate intent が現在の表示モードで到達可能か。チャットの AI 提案
 // （AssistantActions / SuggestionChips / NavigateConfirm 等）のフィルタに使う。
 // diagnose / worldview-profile / moodboard / coordinate 等は常に可視。

@@ -30,6 +30,7 @@ paths:
   - `overlay/intent`: チャット段階A（自然言語→intent分類・Haiku）
   - `moodboards/[id]/`: `analyze`(board単位解析・brief生成・GET/POST) / `items/analyze`(per-image Vision) / `items/from-url`(URL→画像追加)
   - `threads/`: 対話AIスタイリストのスレッドCRUD（`[id]` / `[id]/messages` / `[id]/feedback`・親thread経由EXISTS二重防御・user_id 非受領）
+  - `style-signals/`: 世界観リセット（DELETE=本人の style_signals 全削除・auth.uid()本人限定・物理削除不可逆・WORLDVIEW_RESET ボタンから）
   - `admin/`: `sync-rakuten` `sync-trends` `products`(+`[id]`) `knowledge-keywords` `fetch-product-info` `analyze-product-image` `analyze-product-text`
   - `knowledge/`: `rules` `sources`(+`[id]`, `[id]/analyze`)
   - その他: `brands/{list,recommend}` `coordinate`(保存) `history`(+`[id]`) `inspirations` `products/match` `profile` `trends` `wardrobe` `worldview`
