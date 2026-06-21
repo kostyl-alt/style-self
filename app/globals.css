@@ -25,3 +25,13 @@ body {
     text-wrap: balance;
   }
 }
+
+/* iOS Safari は font-size 16px 未満の入力欄をタップすると自動ズームする(「操作する度に画面が大きくなる」の正体)。
+   全入力欄を 16px 以上に固定して自動ズームを止める(viewport の user-scalable=no は使わない=アクセシビリティ優先)。
+   !important は Tailwind の text-sm(14px・クラス指定で要素セレクタより詳細度が高い)を上書きするため。
+   ※コード調査済み: 16px 超の入力欄は無いので flat 16px で縮む箇所なし。 */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
