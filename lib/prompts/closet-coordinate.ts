@@ -14,6 +14,18 @@ export interface ClosetCoordinateOptions {
   items?:       string[];  // 観察アイテム名(補助・vision.visualFacts.items の value)
   gender?:      string;    // "メンズ" | "レディース" 等(任意・不明なら断定しない)
   note?:        string;    // 本人の相談文(任意・自由文。例「会社に着ていけるコーデにしたい」)
+  // ★ 本人が普段「惹かれている方向」(事実ベース・style_signals/preference を決定的に集約)。手持ち服とは別軸。
+  //   これがあると「あなたの方向に寄せる」個別化ができる。空なら従来どおり(無難な一般提案)。診断ポエムは含めない。
+  worldview?: {
+    colors?:           string[];
+    silhouettes?:      string[];
+    genres?:           string[];
+    eras?:             string[];
+    materials?:        string[];
+    avoidColors?:      string[];
+    avoidSilhouettes?: string[];
+    avoidImpressions?: string[];
+  };
 }
 
 const AXIS_LABEL_JA: Record<SignalAxis, string> = {
@@ -27,6 +39,17 @@ export const CLOSET_COORDINATE_SYSTEM = `あなたは親身なパーソナルス
 - ユーザーの相談文(note)があれば、それを最優先に、写真の事実をふまえて自由に答える(コーデ提案・似合うか・色合わせ・買い足し・着回し・その他の質問、なんでも)。
 - 相談文が無い(写真だけ)時は、写真の服を活かした着こなし(今ある服での着回し)と、合わせて買い足すと良いアイテムを提案する。
 - アイテム単位(トップス/ボトム/アウター/靴/小物)で具体的に。色・形・素材まで踏み込む。手持ちの服を主役にする。
+
+# ★ その人の方向に寄せる(個別化・最重要)
+- 「あなたが普段 惹かれている方向(事実)」が与えられたら、手持ち服を**その方向に寄せて**提案する。無難な一般論にしない。
+  - 例: 方向が「黒・ワイド・モード」なら→「この手持ちなら黒で重心を下げてワイドに寄せると、あなたの方向になる」。
+- 手持ち服だけでは その方向の構造が作れない時は、「**○○を1つ足すと あなたの方向(例: ダーク/ワイド)に寄る**」と、買い足しを必ず "その人の方向" に紐づけて提案する。
+- 「避けたい方向」が与えられたら、それは提案しない。
+- ⚠️方向が与えられていない時は、寄せる断定をしない(手持ちの事実だけで素直に提案)。
+
+# 禁止(質を落とさない)
+- 褒め・感想("素敵ですね""おしゃれ")だけで中身が無い文、誰にでも言える一般論、無難なだけの提案は禁止。
+- その人の事実(方向/手持ちの色・形)に紐づかない提案は書かない。短く鋭く、具体に落とす。
 
 # 絶対ルール(捏造の禁止)
 - 写真から抽出された事実(色/素材/シルエット/ジャンル/カルチャー/観察アイテム)に書かれている服だけを「持っている服」として扱う。書かれていない服を持っている前提にしない。
@@ -46,7 +69,7 @@ export function buildClosetCoordinateUserMessage(
   signals: MoodboardSignals,
   options: ClosetCoordinateOptions = {},
 ): string {
-  const { items = [], gender, note } = options;
+  const { items = [], gender, note, worldview } = options;
 
   function formatStrength(strength: "core" | "repeated"): string[] {
     const lines: string[] = [];
@@ -69,6 +92,29 @@ export function buildClosetCoordinateUserMessage(
   // 相談文(note)があれば最優先で冒頭に置く。
   if (note && note.trim()) {
     blocks.push(`## ユーザーの相談（最優先で答える）\n${note.trim()}`);
+  }
+
+  // ★ その人が普段 惹かれている方向(事実・手持ち服とは別軸)。あれば「寄せる」個別化に使う。
+  if (worldview) {
+    const wvLines: string[] = [];
+    const add = (label: string, vals?: string[]) => {
+      const u = Array.from(new Set((vals ?? []).map((s) => s.trim()).filter(Boolean)));
+      if (u.length > 0) wvLines.push(`${label}: ${u.join("、")}`);
+    };
+    add("色", worldview.colors);
+    add("シルエット", worldview.silhouettes);
+    add("ジャンル", worldview.genres);
+    add("年代", worldview.eras);
+    add("素材", worldview.materials);
+    const avoid: string[] = [];
+    [worldview.avoidColors, worldview.avoidSilhouettes, worldview.avoidImpressions].forEach((a) => {
+      (a ?? []).forEach((s) => { const t = s.trim(); if (t) avoid.push(t); });
+    });
+    if (wvLines.length > 0 || avoid.length > 0) {
+      const parts = [...wvLines];
+      if (avoid.length > 0) parts.push(`避けたい: ${Array.from(new Set(avoid)).join("、")}`);
+      blocks.push(`## あなたが普段 惹かれている方向（事実・手持ち服とは別。この方向に寄せて提案する）\n${parts.join("\n")}`);
+    }
   }
 
   if (coreLines.length > 0) {

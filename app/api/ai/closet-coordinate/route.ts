@@ -14,8 +14,10 @@ import { callClaude } from "@/lib/claude";
 import {
   CLOSET_COORDINATE_SYSTEM,
   buildClosetCoordinateUserMessage,
+  type ClosetCoordinateOptions,
 } from "@/lib/prompts/closet-coordinate";
-import { stripCanonicalSlugs } from "@/lib/stylist-chat/context";
+import { stripCanonicalSlugs, fetchStyleConsultContext, fetchStyleSignals } from "@/lib/stylist-chat/context";
+import { buildBrandFacts } from "@/lib/knowledge/brand-facts";
 import type { MoodboardSignals } from "@/types/moodboard";
 
 export const dynamic = "force-dynamic";
@@ -55,10 +57,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json<ClosetCoordinateResponse>({ ok: true, reason: "empty_facts" });
     }
 
-    // 3) LLM 1回(事実は渡すだけ・会話で提案)。質優先で既定 Sonnet。
+    // ★ 第1段(世界観で個別化): 本人の事実ベース世界観を server 自前SELECT(auth.uid())で取得し prompt に注入。
+    //   ・style_signals(惹かれる構造の事実) + style_preference(好み/避けたい) を buildBrandFacts で決定的に集約。
+    //   ・診断ポエム(worldview_profiles)は使わない(育成方針に整合)。空(未育成)なら undefined → 従来の無難提案(graceful)。
+    let worldview: ClosetCoordinateOptions["worldview"] | undefined;
+    try {
+      const [userSignals, consult] = await Promise.all([
+        fetchStyleSignals(supabase, authData.user.id),
+        fetchStyleConsultContext(supabase, authData.user.id),
+      ]);
+      const pref = consult.stylePreference;
+      const facts = buildBrandFacts({
+        signals: userSignals,
+        preference: { likedColors: pref?.likedColors, likedSilhouettes: pref?.likedSilhouettes, likedMaterials: pref?.likedMaterials },
+      });
+      const wv = {
+        colors: facts.colors, silhouettes: facts.silhouettes, genres: facts.genres, eras: facts.eras, materials: facts.materials,
+        avoidColors: pref?.dislikedColors, avoidSilhouettes: pref?.dislikedSilhouettes, avoidImpressions: pref?.avoidImpressions,
+      };
+      const hasAny = [wv.colors, wv.silhouettes, wv.genres, wv.eras, wv.materials, wv.avoidColors, wv.avoidSilhouettes, wv.avoidImpressions]
+        .some((a) => Array.isArray(a) && a.length > 0);
+      worldview = hasAny ? wv : undefined;
+    } catch { worldview = undefined; }  // graceful: 取得失敗は世界観なしで従来どおり
+
+    // 4) LLM 1回(事実は渡すだけ・会話で提案)。質優先で既定 Sonnet。
     const userMessage = buildClosetCoordinateUserMessage(
       signals ?? ({ schemaVersion: 1, imageCount: 0, signals: [] } as unknown as MoodboardSignals),
-      { items, gender, note },
+      { items, gender, note, ...(worldview ? { worldview } : {}) },
     );
     const raw = await callClaude({
       systemPrompt: CLOSET_COORDINATE_SYSTEM,

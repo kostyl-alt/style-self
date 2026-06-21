@@ -224,7 +224,8 @@ export async function fetchBrandLearnContext(
 }
 
 // Step4-a: style_signals を best-effort で読む(RLS 本人・列絞り)。失敗/空は [] を返し brand-learn を壊さない。
-async function fetchStyleSignals(
+// ★ export: closet-coordinate(手持ち服コーデ相談)が本人の世界観(事実)集約に流用する(server 自前SELECT)。
+export async function fetchStyleSignals(
   supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<SignalAttributes[]> {
