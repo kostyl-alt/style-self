@@ -698,6 +698,11 @@ function ChatPageInner() {
   async function autosaveEnsureThread(currentMessages: Message[]): Promise<boolean> {
     if (!AUTOSAVE_THREAD || currentThreadId || temporaryMode) return false;
     if (currentMessages.length === 0) return false;
+    // ★ 第4段(空thread発火防止): 保存対象(feedbackDisplayText が non-null)が1件も無ければ thread を作らない。
+    //   作って URL を ?thread= に切り替えると localStorage フォールバックまで殺し「中身ゼロthread」で会話が消える。
+    //   (例: CHATGPT_PERSIST OFF で style-match だけの会話=保存対象ゼロ。従来はここで空threadを作っていた。)
+    const persistable = currentMessages.filter((m) => feedbackDisplayText(m.content) !== null);
+    if (persistable.length === 0) return false;
     try {
       const firstUser = currentMessages.find((m) => m.role === "user" && m.content.kind === "text");
       const title = firstUser && firstUser.content.kind === "text"
@@ -714,11 +719,19 @@ function ChatPageInner() {
       if (!tid) return false;
       // ★ race ガード: URL を切り替える前に「再ロードしない thread」として登録。
       skipLoadThreadIdRef.current = tid;
-      for (const m of currentMessages) {
+      let savedCount = 0;
+      for (const m of persistable) {
         const dt = feedbackDisplayText(m.content);
-        if (dt === null) continue;
+        if (dt === null) continue;  // 二重防御(persistable で済だが念のため)
         // ★ 第3段: 写真の base64(photoDataUrls/dataUrl)を落としてから保存(storagePaths のみ・DB肥大防止)。
-        await threadMessages.persistMessage(tid, lightenMessageForStorage(m) as unknown as PersistableMessage, dt);
+        const id = await threadMessages.persistMessage(tid, lightenMessageForStorage(m) as unknown as PersistableMessage, dt);
+        if (id) savedCount++;
+      }
+      // ★ 第4段(保存成功を確認してから URL 切替): 1件も保存できなければ URL を切り替えない。
+      //   中身ゼロの thread に飛ばさず localStorage フォールバックを維持する(進行中の会話を守る)。
+      if (savedCount === 0) {
+        skipLoadThreadIdRef.current = null;  // 切替しないので race ガードも解除
+        return false;
       }
       setSidebarRefreshKey((k) => k + 1);  // サイドバー即時反映
       router.replace(`/ai?thread=${tid}`);
